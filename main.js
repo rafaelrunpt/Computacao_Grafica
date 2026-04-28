@@ -3,6 +3,7 @@ import { criarMapa, verificaColisao } from './mapa.js';
 import { player } from './jogador.js';
 import { verificarEncontro, estadoJogo } from './combate.js';
 import { renderizarMinimapa } from './minimapa.js';
+import { carregarAssets } from './assets.js'; // Novo módulo de assets
 
 // --------------------------------------------------------
 // 1. CONFIGURAÇÃO BASE (O Palco)
@@ -14,6 +15,9 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+// Desativamos a limpeza automática para gerir múltiplas câmaras (jogo + minimapa)
+renderer.autoClear = false;
 document.body.appendChild(renderer.domElement);
 
 const mainCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -25,100 +29,135 @@ window.addEventListener('resize', () => {
 });
 
 // --------------------------------------------------------
-// 2. CONSTRUIR O MUNDO E ILUMINAÇÃO
+// 2. ILUMINAÇÃO (Sol que segue o jogador)
 // --------------------------------------------------------
-criarMapa(scene); // O Maestro chama o construtor do mapa
-scene.add(player); // O Maestro coloca o jogador no palco
-
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
 
 const sunLight = new THREE.DirectionalLight(0xffffff, 1);
-sunLight.position.set(15, 30, 15);
 sunLight.castShadow = true;
-sunLight.shadow.mapSize.width = 2048;
-sunLight.shadow.mapSize.height = 2048;
+sunLight.shadow.mapSize.set(1024, 1024);
+sunLight.shadow.bias = -0.001;
+sunLight.shadow.normalBias = 0.05;
 sunLight.shadow.camera.near = 0.5;
-sunLight.shadow.camera.far = 100;
-sunLight.shadow.camera.left = -20;
-sunLight.shadow.camera.right = 20;
-sunLight.shadow.camera.top = 20;
-sunLight.shadow.camera.bottom = -20;
+sunLight.shadow.camera.far = 50;
+sunLight.shadow.camera.left = -15;
+sunLight.shadow.camera.right = 15;
+sunLight.shadow.camera.top = 15;
+sunLight.shadow.camera.bottom = -15;
 scene.add(sunLight);
+scene.add(sunLight.target);
 
 // --------------------------------------------------------
-// 3. INPUTS DO TECLADO
+// 3. INPUTS E ESTADO DO JOGO
 // --------------------------------------------------------
 const keys = { w: false, a: false, s: false, d: false };
+let mapaAberto = false; 
 const moveSpeed = 0.15;
+const rotationSpeed = 0.2; // Suavidade da rotação do boneco
 
 window.addEventListener('keydown', (e) => {
-    if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true;
+    const key = e.key.toLowerCase();
+    if (keys.hasOwnProperty(key)) keys[key] = true;
+    
+    // Abrir/Fechar mapa grande com a tecla M
+    if (key === 'm' && !estadoJogo.emCombate) {
+        mapaAberto = !mapaAberto;
+    }
 });
+
 window.addEventListener('keyup', (e) => {
-    if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false;
+    const key = e.key.toLowerCase();
+    if (keys.hasOwnProperty(key)) keys[key] = false;
 });
 
 // --------------------------------------------------------
-// 4. O LOOP PRINCIPAL (Onde a magia acontece a 60 FPS)
+// 4. LOOP DE ANIMAÇÃO
 // --------------------------------------------------------
 function animate() {
     requestAnimationFrame(animate);
 
-    // --- LÓGICA DE MOVIMENTO E ROTAÇÃO ---
-    if (!estadoJogo.emCombate) {
+    // --- LÓGICA DE MOVIMENTO (ESTILO POKÉMON) ---
+    if (!estadoJogo.emCombate && !mapaAberto) {
         let dirX = 0;
         let dirZ = 0;
 
-        // Descobrir a direção do vetor (1, -1 ou 0)
-        if (keys.w) dirZ -= 1;
-        if (keys.s) dirZ += 1;
-        if (keys.a) dirX -= 1;
-        if (keys.d) dirX += 1;
+        if (keys.w) dirZ -= 1; // Norte
+        if (keys.s) dirZ += 1; // Sul
+        if (keys.a) dirX -= 1; // Oeste
+        if (keys.d) dirX += 1; // Este
 
-        // Se o jogador estiver a tentar mover-se
         if (dirX !== 0 || dirZ !== 0) {
-            
-            // 1. ROTAÇÃO: Faz a cabeça/corpo rodar para a direção do movimento
-            // Math.atan2 calcula o ângulo em radianos baseado nos eixos X e Z
-            const angulo = Math.atan2(dirX, dirZ);
-            player.rotation.y = angulo;
+            // 1. Rotação Suave para a direção do movimento
+            const targetAngle = Math.atan2(dirX, dirZ);
+            let angleDiff = targetAngle - player.rotation.y;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            player.rotation.y += angleDiff * rotationSpeed;
 
-            // 2. Normalizar a velocidade (para não andar mais rápido nas diagonais)
+            // 2. Cálculo do Movimento Normalizado
             const length = Math.sqrt(dirX * dirX + dirZ * dirZ);
             const moveX = (dirX / length) * moveSpeed;
             const moveZ = (dirZ / length) * moveSpeed;
 
-            let proximoX = player.position.x + moveX;
-            let proximoZ = player.position.z + moveZ;
-
-            // 3. Aplicar movimento com deslize nas paredes
-            if (!verificaColisao(proximoX, player.position.z)) {
-                player.position.x = proximoX;
+            // 3. Colisões e Aplicação de Posição
+            if (!verificaColisao(player.position.x + moveX, player.position.z)) {
+                player.position.x += moveX;
             }
-            if (!verificaColisao(player.position.x, proximoZ)) {
-                player.position.z = proximoZ;
+            if (!verificaColisao(player.position.x, player.position.z + moveZ)) {
+                player.position.z += moveZ;
             }
 
-            // 4. Avisar o sistema de combate que demos um passo
+            // 4. Verificar encontros na relva
             verificarEncontro(player.position.x, player.position.z);
         }
     }
 
-    // --- ATUALIZAR CÂMARA PRINCIPAL ---
-    // Mantém-se sempre atrás e acima do jogador
-    mainCamera.position.set(player.position.x, player.position.y + 6, player.position.z + 8);
+    // --- ATUALIZAÇÃO DA CÂMARA (ESTILO POKÉMON X/Y) ---
+    // Offset fixo diagonal (Atrás e acima do jogador)
+    const cameraOffset = new THREE.Vector3(0, 10, 8);
+    const targetCameraPos = player.position.clone().add(cameraOffset);
+    
+    // Seguimento fluido
+    mainCamera.position.lerp(targetCameraPos, 0.1);
     mainCamera.lookAt(player.position);
 
-    // --- DESENHAR OS DOIS ECRÃS ---
-    // 1. Desenhar o mundo normal em ecrã inteiro
-    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
-    renderer.setScissorTest(false);
-    renderer.render(scene, mainCamera);
+    // --- ATUALIZAÇÃO DO SOL ---
+    sunLight.position.set(player.position.x + 10, 20, player.position.z + 10);
+    sunLight.target.position.copy(player.position);
 
-    // 2. Desenhar o Minimapa no canto (Chamando a função do minimapa.js)
-    renderizarMinimapa(renderer, scene, window.innerWidth, window.innerHeight);
+    // --- RENDERIZAÇÃO ---
+    // Limpar o frame anterior (obrigatório desligar a tesoura antes)
+    renderer.setScissorTest(false); 
+    renderer.clear();
+
+    if (mapaAberto) {
+        // Renderizar apenas o mapa grande no centro
+        renderizarMinimapa(renderer, scene, window.innerWidth, window.innerHeight, player.position, true);
+    } else {
+        // 1. Ecrã Principal do Jogo
+        renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+        renderer.render(scene, mainCamera);
+
+        // 2. Minimapa Quadrado no canto inferior esquerdo
+        renderizarMinimapa(renderer, scene, window.innerWidth, window.innerHeight, player.position, false);
+    }
 }
 
-// Iniciar o jogo
-animate();
+// --------------------------------------------------------
+// 5. INICIALIZAÇÃO (Esperar pelos Assets)
+// --------------------------------------------------------
+carregarAssets().then(() => {
+    console.log("Assets 3D carregados com sucesso.");
+    
+    // Gerar o mapa (agora com acesso aos modelos 3D clonados)
+    criarMapa(scene);
+    
+    // Adicionar o jogador (Corpo + Cabeça) à cena
+    scene.add(player);
+    
+    // Começar o jogo
+    animate();
+}).catch(err => {
+    console.error("Erro crítico ao carregar os assets do jogo:", err);
+});

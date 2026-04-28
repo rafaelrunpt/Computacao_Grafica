@@ -27,5 +27,5 @@ head.position.y = 1.05;
 player.add(body);
 player.add(head);
 
-// 6. Colocar o grupo inteiro no ponto de partida inicial do mapa
-player.position.set(3, 0, 5);
+// Colocar o grupo inteiro no centro do Caminho da Vila (Canto Inferior Direito)
+player.position.set(22, 0, 26);

@@ -5,11 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Retro RPG - Three.js</title>
     <style>
-        body { margin: 0; overflow: hidden; }
+        body { margin: 0; overflow: hidden; background-color: #000; }
         canvas { display: block; }
+        
+        /* A nossa nova moldura QUADRADA para o Minimapa */
+        #minimap-border {
+            position: absolute;
+            bottom: 20px; /* Alinhado exatamente com o margin do renderer.setViewport */
+            left: 20px;   
+            width: 150px; /* O tamanho exato do nosso minimapa no minimapa.js */
+            height: 150px;
+            
+            /* Estilo Retro */
+            border: 3px solid #033e06; 
+            border-radius: 4px; /* Cantos ligeiramente arredondados para não ser tão agressivo */
+            box-shadow: 4px 4px 10px rgba(0, 39, 14, 0.8); /* Sombra para destacar do fundo */
+            
+            pointer-events: none; /* Deixa os cliques passarem por ela */
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
+    <div id="minimap-border"></div>
     <script type="importmap">
         {
             "imports": {
