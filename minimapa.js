@@ -1,27 +1,28 @@
 import * as THREE from 'three';
-import { mapGrid, tileSize } from './mapa.js';
+import { mapBounds } from './mapa.js';
 
 export const minimapCamera = new THREE.OrthographicCamera(-8, 8, 8, -8, 1, 100);
 
 export function renderizarMinimapa(renderer, scene, windowWidth, windowHeight, playerPos, mapaAberto) {
     const border = document.getElementById('minimap-border');
 
-    // Dimensões totais do mapa
-    const mapWidth = mapGrid[0].length * tileSize;
-    const mapHeight = mapGrid.length * tileSize;
+    // 1. Calcular largura, altura e o CENTRO do mapa em tempo real
+    const mapWidth = mapBounds.maxX - mapBounds.minX;
+    const mapHeight = mapBounds.maxZ - mapBounds.minZ;
+    const centerX = mapBounds.minX + mapWidth / 2;
+    const centerZ = mapBounds.minZ + mapHeight / 2;
 
     if (mapaAberto) {
         if(border) border.style.display = 'none'; 
 
-        // LÓGICA DO MAPA GRANDE CENTRADO
         minimapCamera.left = -mapWidth / 2;
         minimapCamera.right = mapWidth / 2;
         minimapCamera.top = mapHeight / 2;
         minimapCamera.bottom = -mapHeight / 2;
         minimapCamera.updateProjectionMatrix();
 
-        minimapCamera.position.set(mapWidth / 2, 20, mapHeight / 2);
-        minimapCamera.lookAt(mapWidth / 2, 0, mapHeight / 2);
+        minimapCamera.position.set(centerX, 50, centerZ); 
+        minimapCamera.lookAt(centerX, 0, centerZ);
 
         const bigMapSize = Math.min(windowWidth, windowHeight) * 0.8;
         const xPos = (windowWidth - bigMapSize) / 2;
@@ -35,8 +36,7 @@ export function renderizarMinimapa(renderer, scene, windowWidth, windowHeight, p
     } else {
         if(border) border.style.display = 'block'; 
 
-        // LÓGICA DO MINIMAPA LOCAL (Canto Inferior Esquerdo)
-        const viewSize = 8; // O "zoom" da nossa câmara
+        const viewSize = 8; 
         
         minimapCamera.left = -viewSize;
         minimapCamera.right = viewSize;
@@ -44,31 +44,34 @@ export function renderizarMinimapa(renderer, scene, windowWidth, windowHeight, p
         minimapCamera.bottom = -viewSize;
         minimapCamera.updateProjectionMatrix();
 
-        // CAMERA CLAMPING (nao sair dos limites) 
-    
-        
-        const minX = viewSize; 
-        const maxX = mapWidth - viewSize - 1;
-        const minZ = viewSize;
-        const maxZ = mapHeight - viewSize - 1;
-        
+        // 2. Limites novos da câmara (Camera Clamping) baseados no centro do mapa
+        const minCamX = mapBounds.minX + viewSize; 
+        const maxCamX = mapBounds.maxX - viewSize;
+        const minCamZ = mapBounds.minZ + viewSize;
+        const maxCamZ = mapBounds.maxZ - viewSize;
 
-        const camX = Math.max(minX, Math.min(maxX, playerPos.x));
-        const camZ = Math.max(minZ, Math.min(maxZ, playerPos.z));
+        let camX = playerPos.x;
+        let camZ = playerPos.z;
 
-        minimapCamera.position.set(camX, 20, camZ);
+        // Tranca a câmara para não mostrar o azul (vazio)
+        if (maxCamX > minCamX) camX = Math.max(minCamX, Math.min(maxCamX, playerPos.x));
+        else camX = centerX; // Proteção caso o teu mapa seja muito pequeno
+        
+        if (maxCamZ > minCamZ) camZ = Math.max(minCamZ, Math.min(maxCamZ, playerPos.z));
+        else camZ = centerZ;
+
+        minimapCamera.position.set(camX, 50, camZ);
         minimapCamera.lookAt(camX, 0, camZ);
 
         const size = 150; 
         const margin = 20;
-        const borderThickness = 3;
+        const borderThickness = 3; 
 
         const xPos = margin + borderThickness;
         const yPos = margin + borderThickness;
 
         renderer.setViewport(xPos, yPos, size, size);
         renderer.setScissor(xPos, yPos, size, size);
-        
         renderer.setScissorTest(true);
         
         renderer.render(scene, minimapCamera);

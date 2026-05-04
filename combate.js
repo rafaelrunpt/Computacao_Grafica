@@ -1,53 +1,70 @@
-import { mapGrid, tileSize } from './mapa.js';
+import { grassZones } from './mapa.js';
 
-// Usamos um objeto para guardar o estado, assim o main.js consegue ler as alterações
-export const estadoJogo = {
-    emCombate: false
-};
+export const estadoJogo = { emCombate: false };
 
-export function verificarEncontro(jogadorX, jogadorZ) {
+// ---- UI de combate ----
+const overlayEl = document.createElement('div');
+overlayEl.style.cssText = `
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0);
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+    transition: background 0.4s;
+    z-index: 10;
+`;
+document.body.appendChild(overlayEl);
+
+const msgEl = document.createElement('div');
+msgEl.style.cssText = `
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 28px;
+    font-weight: bold;
+    text-shadow: 2px 2px 8px #000;
+    opacity: 0;
+    transition: opacity 0.3s;
+    text-align: center;
+    line-height: 1.5;
+`;
+overlayEl.appendChild(msgEl);
+
+export function verificarEncontro(x, z) {
     if (estadoJogo.emCombate) return;
 
-    // 1. Descobrir em que bloco da grelha o jogador está a pisar
-    const gridX = Math.round(jogadorX / tileSize);
-    const gridZ = Math.round(jogadorZ / tileSize);
-
-    // Proteção para não dar erro se o jogador sair dos limites do mapa
-    if (gridZ < 0 || gridZ >= mapGrid.length || gridX < 0 || gridX >= mapGrid[0].length) return;
-
-    const tileAtual = mapGrid[gridZ][gridX];
-
-    // 2. Se o bloco for 3 (Relva Alta), rolamos os dados!
-    if (tileAtual === 3) {
-        // Chance de 1.5% a cada "frame" de movimento para encontrar um monstro
-        if (Math.random() < 0.015) {
-            iniciarTransicao();
+    for (const zona of grassZones) {
+        if (x >= zona.min.x && x <= zona.max.x && z >= zona.min.z && z <= zona.max.z) {
+            if (Math.random() < 0.01) {
+                iniciarCombate();
+            }
+            return;
         }
     }
 }
 
-function iniciarTransicao() {
+function iniciarCombate() {
     estadoJogo.emCombate = true;
 
-    // Transição estilo Pokémon clássico (O ecrã pisca a preto e branco invertendo as cores)
-    let piscas = 0;
-    const tempoPisca = 100; // milissegundos
-    
-    const intervalo = setInterval(() => {
-        document.body.style.filter = piscas % 2 === 0 ? 'invert(100%)' : 'none';
-        piscas++;
-
-        // Fim da transição (piscou 6 vezes)
-        if (piscas > 6) {
-            clearInterval(intervalo);
-            document.body.style.filter = 'none';
-            
-            // Aqui é onde mais tarde faremos load da Arena e da UI.
-            // Por agora, damos um alerta e devolvemos o controlo ao jogador.
-            setTimeout(() => {
-                alert("BOO encontraste um shaco");
-                estadoJogo.emCombate = false; 
-            }, 100);
+    // flash branco + mensagem
+    let flashes = 0;
+    const flashInterval = setInterval(() => {
+        overlayEl.style.background = flashes % 2 === 0
+            ? 'rgba(255,255,255,0.6)'
+            : 'rgba(0,0,0,0)';
+        flashes++;
+        if (flashes >= 6) {
+            clearInterval(flashInterval);
+            overlayEl.style.background = 'rgba(0,0,0,0.75)';
+            msgEl.style.opacity = '1';
+            msgEl.innerHTML = '⚔️ Um Shaco Selvagem Apareceu! ⚔️<br><span style="font-size:16px;opacity:0.8">Prepara-te para combate...</span>';
         }
-    }, tempoPisca);
+    }, 120);
+
+    // libertar após 3 segundos
+    setTimeout(() => {
+        msgEl.style.opacity = '0';
+        overlayEl.style.background = 'rgba(0,0,0,0)';
+        setTimeout(() => {
+            estadoJogo.emCombate = false;
+        }, 400);
+    }, 3000);
 }

@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { criarMapa, verificaColisao } from './mapa.js';
-import { player } from './jogador.js';
+import { criarMapa, verificaColisao, shopDoorInteract, riverMesh } from './mapa.js';
+import { player, updatePlayerAnimation } from './jogador.js';
 import { verificarEncontro, estadoJogo } from './combate.js';
 import { renderizarMinimapa } from './minimapa.js';
-import { carregarAssets } from './assets.js'; // Novo módulo de assets
 
 // --------------------------------------------------------
 // 1. CONFIGURAÇÃO BASE (O Palco)
 // --------------------------------------------------------
 const scene = new THREE.Scene();
+const clock = new THREE.Clock();
 scene.background = new THREE.Color(0x87ceeb);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -31,7 +31,8 @@ window.addEventListener('resize', () => {
 // --------------------------------------------------------
 // 2. ILUMINAÇÃO (Sol que segue o jogador)
 // --------------------------------------------------------
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+// Luz ambiente reduzida para dar profundidade e contraste às ondinhas!
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
 scene.add(ambientLight);
 
 const sunLight = new THREE.DirectionalLight(0xffffff, 1);
@@ -41,20 +42,39 @@ sunLight.shadow.bias = -0.001;
 sunLight.shadow.normalBias = 0.05;
 sunLight.shadow.camera.near = 0.5;
 sunLight.shadow.camera.far = 50;
-sunLight.shadow.camera.left = -15;
-sunLight.shadow.camera.right = 15;
-sunLight.shadow.camera.top = 15;
-sunLight.shadow.camera.bottom = -15;
+sunLight.shadow.camera.left = -50;
+sunLight.shadow.camera.right = 50;
+sunLight.shadow.camera.top = 50;
+sunLight.shadow.camera.bottom = -50;
 scene.add(sunLight);
 scene.add(sunLight.target);
 
 // --------------------------------------------------------
 // 3. INPUTS E ESTADO DO JOGO
 // --------------------------------------------------------
-const keys = { w: false, a: false, s: false, d: false };
+const keys = { w: false, a: false, s: false, d: false, e: false };
 let mapaAberto = false; 
 const moveSpeed = 0.15;
 const rotationSpeed = 0.2; // Suavidade da rotação do boneco
+
+// --------------------------------------------------------
+// INTERAÇÃO COM A LOJA
+// --------------------------------------------------------
+const promptEl = document.createElement('div');
+promptEl.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.65);color:#fff;padding:8px 18px;border-radius:8px;font-family:sans-serif;font-size:16px;display:none;pointer-events:none;';
+document.body.appendChild(promptEl);
+
+function showPrompt(msg) {
+    promptEl.textContent = msg;
+    promptEl.style.display = 'block';
+}
+function hidePrompt() {
+    promptEl.style.display = 'none';
+}
+function enterShop() {
+    console.log('A entrar na loja...');
+    // Aqui vai a lógica de transição para a loja
+}
 
 window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
@@ -72,10 +92,21 @@ window.addEventListener('keyup', (e) => {
 });
 
 // --------------------------------------------------------
+// CONFIGURAÇÃO DE CORES DA ÁGUA
+// --------------------------------------------------------
+const corBase = new THREE.Color(0x004488);   // Azul Escuro (vales das ondas)
+const corCrista = new THREE.Color(0x1ca3ec); // Azul Claro (topos das ondas)
+const corMistura = new THREE.Color();
+
+// --------------------------------------------------------
 // 4. LOOP DE ANIMAÇÃO
 // --------------------------------------------------------
 function animate() {
     requestAnimationFrame(animate);
+
+    // Calcular o tempo (deltaTime) no início de cada frame
+    const deltaTime = clock.getDelta();
+    let isMoving = false; // Começamos por assumir que está parado
 
     // --- LÓGICA DE MOVIMENTO (ESTILO POKÉMON) ---
     if (!estadoJogo.emCombate && !mapaAberto) {
@@ -88,6 +119,9 @@ function animate() {
         if (keys.d) dirX += 1; // Este
 
         if (dirX !== 0 || dirZ !== 0) {
+            // Informamos que o jogador se está a tentar mover
+            isMoving = true;
+
             // 1. Rotação Suave para a direção do movimento
             const targetAngle = Math.atan2(dirX, dirZ);
             let angleDiff = targetAngle - player.rotation.y;
@@ -111,7 +145,43 @@ function animate() {
             // 4. Verificar encontros na relva
             verificarEncontro(player.position.x, player.position.z);
         }
+
+        // --- INTERAÇÃO COM A PORTA DA LOJA ---
+        const playerRadius = 0.25;
+        const playerBox = new THREE.Box3(
+            new THREE.Vector3(player.position.x - playerRadius, 0, player.position.z - playerRadius),
+            new THREE.Vector3(player.position.x + playerRadius, 1.7, player.position.z + playerRadius)
+        );
+        if (shopDoorInteract && playerBox.intersectsBox(shopDoorInteract)) {
+            showPrompt('Pressiona E para entrar');
+            if (keys.e) enterShop();
+        } else {
+            hidePrompt();
+        }
     }
+
+    // --- ATUALIZAR ANIMAÇÃO DO JOGADOR ---
+    // Mesmo que isMoving seja false, passamos o deltaTime para ele animar o estado "Idle" (parado)
+    updatePlayerAnimation(isMoving, deltaTime);
+
+   // --- ANIMAÇÃO DO RIO (Fluxo Esquerda -> Direita) ---
+   if (riverMesh) {
+    const t = clock.getElapsedTime();
+    const pos = riverMesh.geometry.attributes.position;
+    
+    for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        
+        // Movimento da onda. O - t * 2.0 fá-la andar da esquerda para a direita
+        const ondaX = Math.sin(x * 0.6 - t * 2.0) * 0.025; 
+        const ondaY = Math.cos(y * 1.5 + t * 0.5) * 0.015;
+        
+        pos.setZ(i, ondaX + ondaY);
+    }
+    pos.needsUpdate = true;
+    riverMesh.geometry.computeVertexNormals(); // Recalcular as sombras nas ondas
+}
 
     // --- ATUALIZAÇÃO DA CÂMARA (ESTILO POKÉMON X/Y) ---
     // Offset fixo diagonal (Atrás e acima do jogador)
@@ -145,19 +215,8 @@ function animate() {
 }
 
 // --------------------------------------------------------
-// 5. INICIALIZAÇÃO (Esperar pelos Assets)
+// 5. INICIALIZAÇÃO
 // --------------------------------------------------------
-carregarAssets().then(() => {
-    console.log("Assets 3D carregados com sucesso.");
-    
-    // Gerar o mapa (agora com acesso aos modelos 3D clonados)
-    criarMapa(scene);
-    
-    // Adicionar o jogador (Corpo + Cabeça) à cena
-    scene.add(player);
-    
-    // Começar o jogo
-    animate();
-}).catch(err => {
-    console.error("Erro crítico ao carregar os assets do jogo:", err);
-});
+criarMapa(scene);
+scene.add(player);
+animate();
