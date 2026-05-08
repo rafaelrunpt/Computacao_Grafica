@@ -5,36 +5,112 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Retro RPG - Three.js</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; }
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Georgia', serif; }
         canvas { display: block; }
-        
-        /* A nossa nova moldura QUADRADA para o Minimapa */
+
+        /* ============================================ */
+        /*  BÚSSOLA — moldura circular do minimapa      */
+        /* ============================================ */
         #minimap-border {
             position: absolute;
-            bottom: 20px; /* Alinhado exatamente com o margin do renderer.setViewport */
-            left: 20px;   
-            width: 150px; /* O tamanho exato do nosso minimapa no minimapa.js */
-            height: 150px;
-            
-            /* Estilo Retro */
-            border: 3px solid #023124; 
-            border-radius: 4px; /* Cantos ligeiramente arredondados para não ser tão agressivo */
-            box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.8); /* Sombra para destacar do fundo */
-            
-            pointer-events: none; /* Deixa os cliques passarem por ela */
+            bottom: 20px;
+            left: 20px;
+            width: 180px;
+            height: 180px;
+            pointer-events: none;
             z-index: 10;
         }
+
+        /* Anel exterior dourado, com gradiente radial em formato de coroa */
+        #minimap-border::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            box-sizing: border-box;
+            background:
+                radial-gradient(circle at 50% 50%,
+                    transparent 0,
+                    transparent 58px,
+                    rgba(0,0,0,0.92) 58px,
+                    rgba(40,24,8,0.96) 62px,
+                    #5a3a12 70px,
+                    #b08020 78px,
+                    #d4a830 82px,
+                    #8a5a18 86px,
+                    #2a1808 90px);
+            box-shadow:
+                0 0 28px rgba(220,160,40,0.55),
+                0 6px 18px rgba(0,0,0,0.85),
+                inset 0 0 20px rgba(0,0,0,0.6);
+        }
+
+        /* Anel interior — dourado fino à volta da janela do mapa */
+        #minimap-border::after {
+            content: '';
+            position: absolute;
+            inset: 30px;
+            border-radius: 50%;
+            border: 2px solid #d4a830;
+            box-shadow:
+                inset 0 0 14px rgba(0,0,0,0.85),
+                0 0 8px rgba(220,150,40,0.5);
+            pointer-events: none;
+        }
+
+        /* Marcas N / L / S / O */
+        .compass-mark {
+            position: absolute;
+            color: #f2d070;
+            font-weight: bold;
+            font-size: 14px;
+            letter-spacing: 1px;
+            text-shadow:
+                0 0 6px rgba(255,200,80,0.9),
+                0 1px 2px rgba(0,0,0,1);
+            z-index: 12;
+            pointer-events: none;
+            font-family: 'Georgia', serif;
+        }
+        .dir-n { top: 6px;    left: 50%;  transform: translateX(-50%); }
+        .dir-s { bottom: 6px; left: 50%;  transform: translateX(-50%); color: #c89060; }
+        .dir-e { right: 8px;  top: 50%;   transform: translateY(-50%); color: #c89060; }
+        .dir-w { left: 8px;   top: 50%;   transform: translateY(-50%); color: #c89060; }
+
+        /* Pequenos pontinhos diagonais (NE, NO, SE, SO) */
+        .compass-tick {
+            position: absolute;
+            width: 4px; height: 4px;
+            background: #d4a830;
+            border-radius: 50%;
+            box-shadow: 0 0 4px rgba(220,150,40,0.8);
+            z-index: 11;
+        }
+        .tick-ne { top: 22px;   right: 22px;   }
+        .tick-nw { top: 22px;   left: 22px;    }
+        .tick-se { bottom: 22px; right: 22px;  }
+        .tick-sw { bottom: 22px; left: 22px;   }
     </style>
 </head>
 <body>
-    <div id="minimap-border"></div>
+    <div id="minimap-border">
+        <span class="compass-mark dir-n">N</span>
+        <span class="compass-mark dir-e">L</span>
+        <span class="compass-mark dir-s">S</span>
+        <span class="compass-mark dir-w">O</span>
+        <span class="compass-tick tick-ne"></span>
+        <span class="compass-tick tick-nw"></span>
+        <span class="compass-tick tick-se"></span>
+        <span class="compass-tick tick-sw"></span>
+    </div>
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
             }
         }
     </script>
-    <script type="module" src="main.js"></script>
+    <script type="module" src="src/core/main.js"></script>
 </body>
 </html>
