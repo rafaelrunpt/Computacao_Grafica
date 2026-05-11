@@ -1,17 +1,25 @@
 import * as THREE from 'three';
-import { criarMapa, verificaColisao, shopDoorInteract, castleEnterBox, guardianInteractBox, removerGuardiao, updateGuardiao, matWater, matBattleGrass, matCorruptHalo, matContTrunk, matContLeaves, matContRock, zonasSulLimpas, getBridgeHeight } from '../world/mapa.js';
-import { player, updatePlayerAnimation } from '../entities/jogador.js';
+import { criarMapa, verificaColisao, shopDoorInteract, castleEnterBox, guardianInteractBox, removerGuardiao, updateGuardiao, matWater, matBattleGrass, matCorruptHalo, matContTrunk, matContLeaves, matContRock, zonasSulLimpas, getBridgeHeight, getBauInteractBox, abrirBau, bauJaAberto, updateBau, bauJaColetado, coletarBau } from '../world/mapa.js';
+import { player, updatePlayerAnimation, setCoroaVisivel, updateCoroaAnimacao } from '../entities/jogador.js';
+import { adicionarItem, registarOnEquipChange, CATALOGO } from '../systems/inventario.js';
+import { mostrarRecompensa } from '../ui/popup-recompensa.js';
 import { verificarEncontro, estadoJogo } from '../systems/combate.js';
 import { renderizarMinimapa } from '../world/minimapa.js';
 import { lojaScene, lojaColliders, lojaSaidaBox } from '../world/loja.js';
 import { caseloScene, caseloColliders, caseloSaidaBox, caseloMiniCam, bossCrystal } from '../world/castelo.js';
-import { renderer, mainCamera, lojaCamera, caseloCamera } from './renderer.js';
+import { combateScene, updateCombateScene } from '../world/combate-scene.js';
+import { renderer, mainCamera, lojaCamera, caseloCamera, combateCamera } from './renderer.js';
 import { keys, registarCallbackInput } from './input.js';
 import { ganharXP, playerStats } from '../systems/player-stats.js';
 import { buildAvatarScene, syncAvatarMaterials, avatarRenderer, avatarScene, avatarCam, showPrompt, hidePrompt } from '../ui/hud.js';
 import { abrirDialogoGuardiao, isDialogoAberto } from '../ui/npc-dialog.js';
+import { abrirInventario, fecharInventario, isInventarioAberto } from '../ui/inventario-ui.js';
 import { estado, lojaPlayer, caseloPlayer, setWorldScene, entrarLoja, sairLoja, entrarCaselo, sairCaselo } from './transicoes.js';
 import moderator from '../systems/moderator.js'; // Ativa ferramentas de debug
+import { isPauseAberto, togglePause } from '../ui/pause-menu.js';
+import { tickFps } from '../ui/fps-counter.js';
+import { inicializarAudio, switchMusic, getCurrentTrack, playSFX } from '../systems/audio.js';
+import { isTelaInicialAberta, updateTitleCamera, titleCamera, onTelaInicialFechar } from '../ui/tela-inicial.js';
 
 export { ganharXP, playerStats };
 
@@ -32,8 +40,8 @@ const sunLight = new THREE.DirectionalLight(0xffffff, 1);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(2048, 2048);
 // Valores refinados para eliminar shadow acne e linhas na ponte
-sunLight.shadow.bias = -0.0001; 
-sunLight.shadow.normalBias = 0.08; 
+sunLight.shadow.bias = -0.0001;
+sunLight.shadow.normalBias = 0.08;
 sunLight.shadow.camera.near   =   1;
 sunLight.shadow.camera.far    = 300;
 sunLight.shadow.camera.left   = -120;
@@ -61,88 +69,51 @@ lojaMiniCam.lookAt(0, 0, 0);
 // ---- injetar cena do mundo nas transições ----
 setWorldScene(scene);
 
-// ---- toggleMapa ----
+// ---- sincronizar coroa equipada com o boneco 3D ----
+function sincronizarCoroa() {
+    setCoroaVisivel(playerStats.equipped?.cabeca === 'coroa_magica');
+}
+registarOnEquipChange(sincronizarCoroa);
+sincronizarCoroa();
+
+// ---- toggleMapa / toggleInventario ----
 let mapaAberto = false;
-registarCallbackInput(() => {
-    if (estado.cena === 'mundo' && !estadoJogo.emCombate) mapaAberto = !mapaAberto;
-});
-
-// --------------------------------------------------------
-// SISTEMA DE ÁUDIO
-// --------------------------------------------------------
-const listener = new THREE.AudioListener();
-mainCamera.add(listener);
-
-const sounds = {
-    mundo: new THREE.Audio(listener),
-    dark:  new THREE.Audio(listener),
-    shop:  new THREE.Audio(listener)
-};
-
-let currentTrack = null;
-let activeFades = new Map(); 
-const audioLoader = new THREE.AudioLoader();
-
-function loadTrack(name, path) {
-    audioLoader.load(path, (buffer) => {
-        sounds[name].setBuffer(buffer);
-        sounds[name].setLoop(true);
-        sounds[name].setVolume(0);
-    }, undefined, (err) => console.warn(`Aviso: ${path} não encontrado.`));
-}
-
-loadTrack('mundo', '../../assets/music/tema_mundo.mp3');
-loadTrack('dark',  '../../assets/music/darkwoods.mp3');
-loadTrack('shop',  '../../assets/music/shop.mp3');
-
-function switchMusic(nextTrackName, fadeTime = 1.5) {
-    if (currentTrack === nextTrackName) return;
-    const nextTrack = sounds[nextTrackName];
-    if (!nextTrack || !nextTrack.buffer) return;
-
-    if (currentTrack) {
-        fadeOut(sounds[currentTrack], fadeTime);
-    }
-
-    fadeIn(nextTrack, fadeTime);
-    currentTrack = nextTrackName;
-}
-
-function fadeIn(audio, duration) {
-    if (activeFades.has(audio)) {
-        clearInterval(activeFades.get(audio));
-        activeFades.delete(audio);
-    }
-    if (!audio.isPlaying) audio.play();
-    let vol = audio.getVolume();
-    const interval = 50;
-    const step = 0.3 / (duration * 1000 / interval);
-    const timer = setInterval(() => {
-        vol += step;
-        if (vol >= 0.3) { vol = 0.3; clearInterval(timer); activeFades.delete(audio); }
-        audio.setVolume(vol);
-    }, interval);
-    activeFades.set(audio, timer);
-}
-
-function fadeOut(audio, duration) {
-    if (activeFades.has(audio)) {
-        clearInterval(activeFades.get(audio));
-        activeFades.delete(audio);
-    }
-    let vol = audio.getVolume();
-    const interval = 50;
-    const step = vol / (duration * 1000 / interval);
-    const timer = setInterval(() => {
-        vol -= step;
-        if (vol <= 0) {
-            vol = 0; audio.stop();
-            clearInterval(timer); activeFades.delete(audio);
+registarCallbackInput(
+    () => {
+        if (estado.cena === 'mundo' && !estadoJogo.emCombate && !isInventarioAberto() && !isPauseAberto()) mapaAberto = !mapaAberto;
+    },
+    () => {
+        // I abre o inventário só fora do combate, sem mapa nem diálogo aberto
+        if (estadoJogo.emCombate) return;
+        if (mapaAberto) return;
+        if (isDialogoAberto()) return;
+        if (isPauseAberto()) return;
+        if (isInventarioAberto()) fecharInventario();
+        else abrirInventario();
+    },
+    (e) => {
+        // ESC/P — pausa. Não abre se outra UI sobreposta estiver aberta (deixa-a fechar primeiro)
+        if (!isPauseAberto()) {
+            if (isInventarioAberto() || isDialogoAberto() || mapaAberto) return;
         }
-        audio.setVolume(vol);
-    }, interval);
-    activeFades.set(audio, timer);
-}
+        if (e) e.stopPropagation?.();
+        togglePause();
+    }
+);
+
+// --------------------------------------------------------
+// ÁUDIO (gerido em systems/audio.js)
+// --------------------------------------------------------
+inicializarAudio(mainCamera, {
+    mundo: '../../assets/music/tema_mundo.mp3',
+    dark:  '../../assets/music/darkwoods.mp3',
+    shop:  '../../assets/music/shop.mp3',
+    batalha: '../../assets/music/batalha.mp3',
+}, {
+    fechadura: '../../assets/sounds/fechadura.mp3',
+    abrir_bau: '../../assets/sounds/abrir_bau.mp3',
+    transicao_batalha: '../../assets/sounds/transicao_batalha.mp3',
+});
 
 // --------------------------------------------------------
 // COLISÕES INTERIORES
@@ -173,7 +144,7 @@ function verificaColisaoCaselo(nx, nz) {
 function animateMundo(deltaTime) {
     let isMoving = false;
 
-    if (!estadoJogo.emCombate && !mapaAberto && !isDialogoAberto()) {
+    if (!estadoJogo.emCombate && !mapaAberto && !isDialogoAberto() && !isInventarioAberto()) {
         let dirX = 0, dirZ = 0;
         if (keys.w) dirZ -= 1;
         if (keys.s) dirZ += 1;
@@ -181,10 +152,11 @@ function animateMundo(deltaTime) {
         if (keys.d) dirX += 1;
 
         if (dirX !== 0 || dirZ !== 0) {
-            const estaNaZonaDark = player.position.z < -3; 
+            const estaNaZonaDark = player.position.z < -3;
             const trackDesejada = estaNaZonaDark ? 'dark' : 'mundo';
-            if (!currentTrack) switchMusic(trackDesejada);
-            else if (currentTrack !== 'shop' && currentTrack !== trackDesejada) switchMusic(trackDesejada, 2.0);
+            const atual = getCurrentTrack();
+            if (!atual) switchMusic(trackDesejada);
+            else if (atual !== 'shop' && atual !== trackDesejada) switchMusic(trackDesejada, 2.0);
 
             isMoving = true;
             const targetAngle = Math.atan2(dirX, dirZ);
@@ -218,10 +190,40 @@ function animateMundo(deltaTime) {
         } else if (castleEnterBox && pb.intersectsBox(castleEnterBox)) {
             showPrompt('E — Entrar no castelo');
             if (keys.e) entrarCaselo();
+        } else if (getBauInteractBox() && pb.intersectsBox(getBauInteractBox())) {
+            if (!bauJaColetado()) {
+                if (!bauJaAberto()) {
+                    showPrompt('E — Abrir baú misterioso');
+                    if (keys.e) {
+                        keys.e = false;
+                        if (abrirBau()) {
+                            playSFX('fechadura');
+                        }
+                    }
+                } else {
+                    showPrompt('E — Coletar recompensa');
+                    if (keys.e) {
+                        keys.e = false;
+                        if (coletarBau()) {
+                            playSFX('abrir_bau');
+                            adicionarItem('coroa_magica', 1);
+                            const item = CATALOGO['coroa_magica'];
+                            mostrarRecompensa({
+                                icone: item.icone,
+                                nome: item.nome,
+                                descricao: item.descricao,
+                            });
+                            hidePrompt();
+                        }
+                    }
+                }
+            } else { hidePrompt(); }
         } else { hidePrompt(); }
     }
 
     updatePlayerAnimation(isMoving, deltaTime);
+    updateCoroaAnimacao(deltaTime);
+    updateBau(deltaTime);
     updateGuardiao(deltaTime);
     player.position.y += getBridgeHeight(player.position.x, player.position.z);
 
@@ -238,7 +240,7 @@ function animateMundo(deltaTime) {
         mainCamera.position.lerp(_camTarget, 1 - Math.pow(0.01, deltaTime));
         mainCamera.lookAt(player.position.x, 0.6, player.position.z);
     }
-    
+
     sunLight.target.updateMatrixWorld();
 
     if (mapaAberto) {
@@ -252,8 +254,10 @@ function animateMundo(deltaTime) {
 
 function animateLoja(deltaTime) {
     let isMoving = false, dirX = 0, dirZ = 0;
-    if (keys.w) dirZ -= 1; if (keys.s) dirZ += 1;
-    if (keys.a) dirX -= 1; if (keys.d) dirX += 1;
+    if (!isInventarioAberto()) {
+        if (keys.w) dirZ -= 1; if (keys.s) dirZ += 1;
+        if (keys.a) dirX -= 1; if (keys.d) dirX += 1;
+    }
 
     if (dirX !== 0 || dirZ !== 0) {
         isMoving = true;
@@ -300,8 +304,10 @@ function animateLoja(deltaTime) {
 
 function animateCaselo(deltaTime) {
     let isMoving = false, dirX = 0, dirZ = 0;
-    if (keys.w) dirZ -= 1; if (keys.s) dirZ += 1;
-    if (keys.a) dirX -= 1; if (keys.d) dirX += 1;
+    if (!isInventarioAberto()) {
+        if (keys.w) dirZ -= 1; if (keys.s) dirZ += 1;
+        if (keys.a) dirX -= 1; if (keys.d) dirX += 1;
+    }
 
     if (dirX !== 0 || dirZ !== 0) {
         isMoving = true;
@@ -349,9 +355,42 @@ function animateCaselo(deltaTime) {
     renderer.setScissorTest(false);
 }
 
+function animateCombate(deltaTime) {
+    // sem WASD nem colisões — combate é controlado pela UI (botões)
+    updatePlayerAnimation(false, deltaTime);
+    updateCombateScene(deltaTime);
+
+    // esconde o minimapa enquanto se está em combate
+    const border = document.getElementById('minimap-border');
+    if (border) border.style.display = 'none';
+
+    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+    renderer.setScissorTest(false);
+    renderer.render(combateScene, moderator.freeCam ? mainCamera : combateCamera);
+}
+
 function animate() {
     requestAnimationFrame(animate);
-    const deltaTime = clock.getDelta();
+    let deltaTime = clock.getDelta();
+    tickFps();
+
+    // TELA INICIAL — câmara orbital cinematográfica sobre o mundo
+    if (isTelaInicialAberta()) {
+        updateTitleCamera(deltaTime);
+        // mantém shaders animados para a água/zonas brilharem
+        matWater.uniforms.uTime.value      += deltaTime;
+        matBattleGrass.uniforms.uTime.value += deltaTime;
+        matCorruptHalo.uniforms.uTime.value += deltaTime;
+        renderer.setScissorTest(false);
+        renderer.clear();
+        renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+        renderer.render(scene, titleCamera);
+        return;
+    }
+
+    // PAUSA — mantém render mas congela lógica/animações
+    if (isPauseAberto()) deltaTime = 0;
+
     buildAvatarScene();
     syncAvatarMaterials();
 
@@ -361,14 +400,42 @@ function animate() {
 
     renderer.setScissorTest(false);
     renderer.clear();
-    
-    if      (estado.cena === 'mundo')  animateMundo(deltaTime);
-    else if (estado.cena === 'loja')   animateLoja(deltaTime);
-    else                               animateCaselo(deltaTime);
-    
+
+    // garante que o minimapa volta a aparecer fora do combate
+    if (estado.cena !== 'combate') {
+        const border = document.getElementById('minimap-border');
+        if (border && border.style.display === 'none') border.style.display = 'block';
+    }
+
+    if (isPauseAberto()) {
+        // Render passivo da cena actual, sem actualizar lógica
+        if (estado.cena === 'mundo') {
+            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+            renderer.render(scene, mainCamera);
+        } else if (estado.cena === 'loja') {
+            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+            renderer.render(lojaScene, lojaCamera);
+        } else if (estado.cena === 'caselo') {
+            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+            renderer.render(caseloScene, caseloCamera);
+        } else if (estado.cena === 'combate') {
+            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+            renderer.render(combateScene, combateCamera);
+        }
+    } else if (estado.cena === 'mundo')   animateMundo(deltaTime);
+    else if (estado.cena === 'loja')    animateLoja(deltaTime);
+    else if (estado.cena === 'caselo')  animateCaselo(deltaTime);
+    else if (estado.cena === 'combate') animateCombate(deltaTime);
+
     avatarRenderer.render(avatarScene, avatarCam);
 }
 
 criarMapa(scene);
 scene.add(player);
+
+// ao fechar a tela inicial: arranca a música ambiente do mundo
+onTelaInicialFechar(() => {
+    switchMusic('mundo', 2.5);
+});
+
 animate();

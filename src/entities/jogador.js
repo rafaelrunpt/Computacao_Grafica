@@ -124,6 +124,63 @@ hatGroup.rotation.x = -0.05; // Inclina o chapéu todo um bocadinho para trás
 headGroup.add(head, leftEye, rightEye, hair, hatGroup);
 
 // ---------------------------------------------------------
+// 4b. COROA MÁGICA (oculta por defeito; mostra-se ao equipar)
+// ---------------------------------------------------------
+const matCoroaOuro = new THREE.MeshStandardMaterial({
+    color: 0xffd24a, emissive: 0x4a3000, emissiveIntensity: 0.4,
+    roughness: 0.25, metalness: 0.9,
+});
+const matCoroaPedra = new THREE.MeshStandardMaterial({
+    color: 0x88aaff, emissive: 0x3050ff, emissiveIntensity: 1.4,
+    roughness: 0.1, metalness: 0.4,
+});
+
+export const coroaGroup = new THREE.Group();
+coroaGroup.name = 'coroaGroup';
+coroaGroup.visible = false;
+
+// aro da coroa
+const aroGeo = new THREE.TorusGeometry(0.32, 0.05, 12, 28);
+const aro = new THREE.Mesh(aroGeo, matCoroaOuro);
+aro.rotation.x = Math.PI / 2;
+aro.castShadow = true;
+coroaGroup.add(aro);
+
+// pontas (5 cones à volta)
+const pontaGeo = new THREE.ConeGeometry(0.06, 0.18, 8);
+const nPontas = 5;
+for (let i = 0; i < nPontas; i++) {
+    const a = (i / nPontas) * Math.PI * 2;
+    const p = new THREE.Mesh(pontaGeo, matCoroaOuro);
+    p.position.set(Math.cos(a) * 0.32, 0.08, Math.sin(a) * 0.32);
+    p.castShadow = true;
+    coroaGroup.add(p);
+}
+
+// pedra mágica frontal
+const pedra = new THREE.Mesh(new THREE.IcosahedronGeometry(0.07, 0), matCoroaPedra);
+pedra.position.set(0, 0.02, 0.32);
+coroaGroup.add(pedra);
+
+// halo subtil em torno da pedra
+const haloGeo = new THREE.SphereGeometry(0.11, 16, 16);
+const matHalo = new THREE.MeshBasicMaterial({ color: 0x88aaff, transparent: true, opacity: 0.18 });
+const halo = new THREE.Mesh(haloGeo, matHalo);
+halo.position.copy(pedra.position);
+coroaGroup.add(halo);
+
+// pousada por cima do boné
+coroaGroup.position.y = 0.40;
+
+headGroup.add(coroaGroup);
+
+export function setCoroaVisivel(v) { coroaGroup.visible = !!v; }
+// userData para animação suave da pedra
+coroaGroup.userData.pedra = pedra;
+coroaGroup.userData.halo  = halo;
+coroaGroup.userData.t     = 0;
+
+// ---------------------------------------------------------
 // 5. JUNTAR TUDO NO BONECO
 // ---------------------------------------------------------
 player.add(leftLeg, rightLeg, bodyGroup, leftArmGroup, rightArmGroup, headGroup);
@@ -140,6 +197,14 @@ player.position.set(3, 0, 5);
 // 6. ANIMAÇÃO
 // ---------------------------------------------------------
 let walkTime = 0; 
+
+export function updateCoroaAnimacao(deltaTime) {
+    if (!coroaGroup.visible) return;
+    coroaGroup.userData.t += deltaTime;
+    const pulse = 1.0 + Math.sin(coroaGroup.userData.t * 4) * 0.25;
+    coroaGroup.userData.pedra.material.emissiveIntensity = 1.0 + 0.6 * pulse;
+    coroaGroup.userData.halo.scale.setScalar(0.9 + 0.2 * pulse);
+}
 
 export function updatePlayerAnimation(isMoving, deltaTime) {
     const walkSpeed = 25; 

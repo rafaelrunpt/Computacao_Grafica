@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { player } from '../entities/jogador.js';
 import { lojaScene, lojaSpawnPos } from '../world/loja.js';
 import { caseloScene, caseloSpawnPos } from '../world/castelo.js';
+import { combateScene, posPlayerCombate, resetCombateScene } from '../world/combate-scene.js';
 import { hidePrompt } from '../ui/hud.js';
+import { switchMusic } from '../systems/audio.js';
 
 // ---- estado da cena ----
 export const estado = { cena: 'mundo', ePressBloqueado: false };
@@ -27,6 +29,9 @@ export function fade(toOpacity, callback) {
 export const lojaPlayer   = { x: 0, z: 0, rotY: 0 };
 export const caseloPlayer = { x: 0, z: 0, rotY: 0 };
 
+// ---- posição do player no mundo antes de entrar em combate (para regressar ao mesmo sítio) ----
+const _mundoSnapshot = { x: 0, z: 0, rotY: 0 };
+
 // ---- referência à cena do mundo (injetada em init) ----
 let _worldScene = null;
 export function setWorldScene(scene) { _worldScene = scene; }
@@ -40,7 +45,7 @@ export function entrarLoja() {
         lojaPlayer.x = lojaSpawnPos.x;
         lojaPlayer.z = lojaSpawnPos.z;
         lojaPlayer.rotY = Math.PI;
-        _worldScene.remove(player);
+        if (player.parent) player.parent.remove(player);
         lojaScene.add(player);
         estado.cena = 'loja';
         fade(0, () => { estado.ePressBloqueado = false; });
@@ -52,7 +57,7 @@ export function sairLoja() {
     estado.ePressBloqueado = true;
     hidePrompt();
     fade(1, () => {
-        lojaScene.remove(player);
+        if (player.parent) player.parent.remove(player);
         _worldScene.add(player);
         player.position.set(-25, 0, 25);
         player.rotation.y = -Math.PI / 2;
@@ -204,7 +209,7 @@ export function entrarCaselo() {
         caseloPlayer.x = caseloSpawnPos.x;
         caseloPlayer.z = caseloSpawnPos.z;
         caseloPlayer.rotY = Math.PI;
-        _worldScene.remove(player);
+        if (player.parent) player.parent.remove(player);
         caseloScene.add(player);
         estado.cena = 'caselo';
         fade(0, () => { estado.ePressBloqueado = false; });
@@ -216,11 +221,79 @@ export function sairCaselo() {
     estado.ePressBloqueado = true;
     hidePrompt();
     fade(1, () => {
-        caseloScene.remove(player);
+        if (player.parent) player.parent.remove(player);
         _worldScene.add(player);
         player.position.set(0, 0, -70);
         player.rotation.y = Math.PI;
         estado.cena = 'mundo';
         fade(0, () => { estado.ePressBloqueado = false; });
     });
+}
+
+// --------------------------------------------------------
+// COMBATE
+// --------------------------------------------------------
+export function entrarCombate(onAfterEnter) {
+    if (estado.cena === 'combate') return;
+    hidePrompt();
+    _mundoSnapshot.x    = player.position.x;
+    _mundoSnapshot.z    = player.position.z;
+    _mundoSnapshot.rotY = player.rotation.y;
+
+    fade(1, () => {
+        if (player.parent) player.parent.remove(player);
+        resetCombateScene();
+        combateScene.add(player);
+        player.position.copy(posPlayerCombate);
+        player.rotation.y = Math.PI / 2;
+        estado.cena = 'combate';
+        fade(0, () => { if (onAfterEnter) onAfterEnter(); });
+    });
+}
+
+export function sairCombate(onAfterExit) {
+    if (estado.cena !== 'combate') return;
+    fade(1, () => {
+        if (player.parent) player.parent.remove(player);
+        _worldScene.add(player);
+        player.position.set(_mundoSnapshot.x, 0, _mundoSnapshot.z);
+        player.rotation.y = _mundoSnapshot.rotY;
+        estado.cena = 'mundo';
+        fade(0, () => { if (onAfterExit) onAfterExit(); });
+    });
+}
+
+export function getMundoSnapshot() {
+    return _mundoSnapshot;
+}
+
+/**
+ * Função utilitária para mudar de cena (usada pelo debug ou eventos especiais)
+ */
+export function mudarCena(target) {
+    if (estado.cena === target) return;
+    
+    // Reset manual do bloqueio para o debug
+    estado.ePressBloqueado = false;
+
+    if (target === 'mundo') {
+        if (estado.cena === 'loja') sairLoja();
+        else if (estado.cena === 'caselo') sairCaselo();
+    } else if (target === 'loja') {
+        if (estado.cena === 'caselo') {
+            if (player.parent) player.parent.remove(player);
+            _worldScene.add(player);
+            estado.cena = 'mundo';
+        }
+        switchMusic('shop', 1.0);
+        entrarLoja();
+    } else if (target === 'caselo') {
+        if (estado.cena === 'loja') {
+            if (player.parent) player.parent.remove(player);
+            _worldScene.add(player);
+            estado.cena = 'mundo';
+        }
+        switchMusic('dark', 1.0);
+        entrarCaselo();
+    }
 }

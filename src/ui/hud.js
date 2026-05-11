@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { player } from '../entities/jogador.js';
+import { player, coroaGroup } from '../entities/jogador.js';
 import { playerStats, registarCallbacksStats } from '../systems/player-stats.js';
 
 // ---- prompt de interação ----
@@ -12,6 +12,7 @@ export function hidePrompt()    { promptEl.style.display = 'none'; }
 
 // ---- HUD ----
 const hudEl = document.createElement('div');
+hudEl.id = 'game-hud';
 hudEl.style.cssText = `
     position: fixed; top: 10px; left: 10px;
     display: flex; align-items: center; gap: 6px;
@@ -53,6 +54,7 @@ avatarScene.add(new THREE.AmbientLight(0xffffff, 0.6));
 let _avatarBuilt = false;
 let _avatarOriginalMeshes = [];
 let _avatarSyncCounter = 0;
+let _avatarCoroaClone = null;
 
 export function buildAvatarScene() {
     if (_avatarBuilt) return;
@@ -65,6 +67,9 @@ export function buildAvatarScene() {
     const clone = headGroup.clone(true);
     clone.position.set(0, 0, 0);
     avatarScene.add(clone);
+
+    // localizar a coroa clonada para sincronizar visibilidade
+    _avatarCoroaClone = clone.getObjectByName('coroaGroup') || null;
 
     const origMeshes = [], cloneMeshes = [];
     headGroup.traverse(c => { if (c.isMesh) origMeshes.push(c); });
@@ -81,6 +86,9 @@ export function buildAvatarScene() {
 }
 
 export function syncAvatarMaterials() {
+    // visibilidade da coroa no avatar acompanha a do boneco principal
+    if (_avatarCoroaClone) _avatarCoroaClone.visible = coroaGroup.visible;
+
     if (++_avatarSyncCounter % 10 !== 0) return;
     for (const { orig, clone } of _avatarOriginalMeshes) {
         if (!orig.material || !clone.material) continue;
@@ -90,7 +98,7 @@ export function syncAvatarMaterials() {
     }
 }
 
-// painel direito: nível + barra XP
+// painel direito: nível + barra XP + barra HP
 const infoEl = document.createElement('div');
 infoEl.style.cssText = 'display:flex;flex-direction:column;gap:3px;min-width:90px;';
 
@@ -107,7 +115,17 @@ xpBarWrap.appendChild(xpBarFill);
 const xpLabelEl = document.createElement('div');
 xpLabelEl.style.cssText = 'color:#c0a0e0;font-size:11px;text-shadow:0 1px 3px #000;letter-spacing:0.5px;';
 
-infoEl.append(levelEl, xpBarWrap, xpLabelEl);
+const hpBarWrap = document.createElement('div');
+hpBarWrap.style.cssText = 'width:100%;height:6px;background:rgba(0,0,0,0.55);border-radius:3px;border:1px solid #6a2020;overflow:hidden;';
+
+const hpBarFill = document.createElement('div');
+hpBarFill.style.cssText = 'height:100%;width:100%;background:linear-gradient(90deg,#d04040,#ff8080);border-radius:3px;transition:width 0.3s ease;box-shadow:0 0 4px #d04040;';
+hpBarWrap.appendChild(hpBarFill);
+
+const hpLabelEl = document.createElement('div');
+hpLabelEl.style.cssText = 'color:#ffb0b0;font-size:11px;text-shadow:0 1px 3px #000;letter-spacing:0.5px;';
+
+infoEl.append(levelEl, xpBarWrap, xpLabelEl, hpBarWrap, hpLabelEl);
 hudEl.append(avatarCanvas, infoEl);
 document.body.appendChild(hudEl);
 
@@ -116,8 +134,12 @@ export function atualizarHUD() {
     levelEl.textContent = `NÍVEL  ${playerStats.level}`;
     xpBarFill.style.width = pct + '%';
     xpLabelEl.textContent = `${playerStats.xp} / ${playerStats.xpToNext} XP`;
+
+    const hpPct = Math.min(100, (playerStats.hp / playerStats.maxHp) * 100);
+    hpBarFill.style.width = hpPct + '%';
+    hpLabelEl.textContent = `${playerStats.hp} / ${playerStats.maxHp} HP${playerStats.derrotado ? ' (em recuperação)' : ''}`;
 }
 
 // ligar stats → hud
-registarCallbacksStats(atualizarHUD, () => atualizarHUD());
+registarCallbacksStats(atualizarHUD, () => atualizarHUD(), atualizarHUD);
 atualizarHUD();

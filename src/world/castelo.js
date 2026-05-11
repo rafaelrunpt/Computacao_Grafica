@@ -1,4 +1,4 @@
-import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import * as THREE from 'three';
 
 // ---- dimensões da sala do boss ----
 const W = 22;   // largura
@@ -157,13 +157,12 @@ export const caseloSaidaBox = new THREE.Box3(
 
 // ---- colisores interiores ----
 export const caseloColliders = [
-    // paredes
-    new THREE.Box3(new THREE.Vector3(-W/2-0.1, 0, -D/2-0.1), new THREE.Vector3(-W/2+0.7, H, D/2+0.1)),
-    new THREE.Box3(new THREE.Vector3( W/2-0.7, 0, -D/2-0.1), new THREE.Vector3( W/2+0.1, H, D/2+0.1)),
-    new THREE.Box3(new THREE.Vector3(-W/2, 0, -D/2-0.1),     new THREE.Vector3( W/2, H, -D/2+0.7)),
-    // parede sul: gap central para a porta — saída só via interação E (caseloSaidaBox)
-    new THREE.Box3(new THREE.Vector3(-W/2, 0, D/2-0.6),      new THREE.Vector3(-2.3, H, D/2+0.1)),
-    new THREE.Box3(new THREE.Vector3( 2.3, 0, D/2-0.6),      new THREE.Vector3( W/2, H, D/2+0.1)),
+    // paredes (ajustadas para bater certo com os 0.6 de espessura visual)
+    new THREE.Box3(new THREE.Vector3(-W/2-0.1, 0, -D/2-0.1), new THREE.Vector3(-W/2+0.3, H, D/2+0.1)),
+    new THREE.Box3(new THREE.Vector3( W/2-0.3, 0, -D/2-0.1), new THREE.Vector3( W/2+0.1, H, D/2+0.1)),
+    new THREE.Box3(new THREE.Vector3(-W/2, 0, -D/2-0.1),     new THREE.Vector3( W/2, H, -D/2+0.3)),
+    // parede sul: fechada para movimento — saída só via interação E (caseloSaidaBox)
+    new THREE.Box3(new THREE.Vector3(-W/2, 0, D/2-0.5),      new THREE.Vector3( W/2, H, D/2+0.5)),
     // altar
     new THREE.Box3(new THREE.Vector3(-3.1, 0, -D/2+1.5),     new THREE.Vector3( 3.1, 2, -D/2+5.5)),
     // pilares

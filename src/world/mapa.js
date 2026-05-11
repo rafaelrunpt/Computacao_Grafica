@@ -1,5 +1,5 @@
-import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export const mapBounds = { minX: -100, maxX: 100, minZ: -100, maxZ: 100 };
 
@@ -21,7 +21,7 @@ export function updateGuardiao(deltaTime) {
     if (_guardianPhase === 0) _guardianPhase = 1;
 
     if (_guardianPhase === 1) {
-        const targetRot = -Math.PI / 2; // Virado para a direita (-x do ponto de vista do mundo, mas é a direita do guarda)
+        const targetRot = Math.PI / 2; // Virado para a direita (X+) do ponto de vista do mundo
         let diff = targetRot - _guardianMesh.rotation.y;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff >  Math.PI) diff -= Math.PI * 2;
@@ -235,6 +235,10 @@ const matMountain  = new THREE.MeshStandardMaterial({ color: 0x6a6a72, roughness
 const matSnow      = new THREE.MeshStandardMaterial({ color: 0xdde8f0, roughness: 0.8, flatShading: true });
 
 export let castleEnterBox = null;
+
+// re-exporta a API do baú (implementação em world/bau.js)
+export { abrirBau, bauJaAberto, updateBau, getBauInteractBox, registarOnBauAbrir, bauJaColetado, coletarBau } from './bau.js';
+import { criarBau as _criarBau } from './bau.js';
 
 // ---- shader de batalha — solo roxo  ----
 export const matBattleGrass = new THREE.ShaderMaterial({
@@ -933,6 +937,80 @@ function criarRio(scene) {
         new THREE.Vector3(BX - BW / 2 + 0.4, -2, RZ - arcWidth / 2 - 0.8),
         new THREE.Vector3(BX + BW / 2 - 0.4,  4, RZ + arcWidth / 2 + 0.8)
     );
+
+    // ---- bocas do rio: rochedos a tapar a entrada nas montanhas ----
+    // posicionadas DENTRO da zona jogável, antes das montanhas (que começam em x=±98)
+    criarBocaDoRio(scene,  93, RZ, RW); // este
+    criarBocaDoRio(scene, -93, RZ, RW); // oeste
+}
+
+// dique de rochas a tapar uma das pontas do rio, antes da montanha.
+// O rio continua atrás visualmente mas o canal fica bloqueado por um aglomerado
+// de rochedos altos e neblina, dando a ilusão de nascente/embocadura natural.
+function criarBocaDoRio(scene, cx, cz, riverWidth) {
+    const matBoulder = new THREE.MeshStandardMaterial({ color: 0x7a716a, roughness: 0.95, flatShading: true });
+    const matBoulderEscuro = new THREE.MeshStandardMaterial({ color: 0x4a443e, roughness: 1.0, flatShading: true });
+
+    const grupo = new THREE.Group();
+
+    // ---- 1) Dique de rochedos atravessado no rio (z ao longo da largura) ----
+    const z0 = cz - riverWidth/2 - 1.2;
+    const z1 = cz + riverWidth/2 + 1.2;
+    const passos = 7;
+    for (let i = 0; i < passos; i++) {
+        const t = i / (passos - 1);
+        const z = z0 + (z1 - z0) * t;
+        // raio maior nas extremidades (margens), menor no centro para dar perfil de "U"
+        const baseR = 1.6 + Math.abs(t - 0.5) * 2.4;
+        const r = baseR + (Math.random() - 0.5) * 0.5;
+        const escuro = (i + 1) % 3 === 0;
+        const geo = new THREE.DodecahedronGeometry(r, 0);
+        const m = new THREE.Mesh(geo, escuro ? matBoulderEscuro : matBoulder);
+        // pequena variação em x para o dique não ser uma linha perfeita
+        const dx = (Math.random() - 0.5) * 1.2;
+        const yScale = 1.1 + Math.random() * 0.5;
+        m.position.set(cx + dx, r * yScale * 0.7 - 0.2, z + (Math.random() - 0.5) * 0.6);
+        m.rotation.set(Math.random()*0.6, Math.random()*Math.PI*2, Math.random()*0.6);
+        m.scale.y = yScale;
+        m.castShadow = true;
+        m.receiveShadow = true;
+        grupo.add(m);
+
+        addCollider(new THREE.Box3(
+            new THREE.Vector3(m.position.x - r*0.7, 0, m.position.z - r*0.7),
+            new THREE.Vector3(m.position.x + r*0.7, r*2.2, m.position.z + r*0.7)
+        ));
+    }
+
+    // ---- 2) Rocha grande dominante atrás (lado da montanha) ----
+    const dir = Math.sign(cx) || 1;
+    const grande = new THREE.Mesh(new THREE.DodecahedronGeometry(3.8, 0), matBoulder);
+    grande.position.set(cx + dir * 2.2, 2.6, cz + (Math.random() - 0.5) * 0.6);
+    grande.rotation.set(Math.random()*0.5, Math.random()*Math.PI*2, Math.random()*0.5);
+    grande.scale.set(1.0, 1.4, 1.1);
+    grande.castShadow = true; grande.receiveShadow = true;
+    grupo.add(grande);
+    addCollider(new THREE.Box3(
+        new THREE.Vector3(grande.position.x - 3, 0, grande.position.z - 3),
+        new THREE.Vector3(grande.position.x + 3, 5.5, grande.position.z + 3)
+    ));
+
+    // ---- 3) Neblina/borrifo (duas camadas) por cima do dique ----
+    const matMist = new THREE.MeshBasicMaterial({
+        color: 0xeaf0f6, transparent: true, opacity: 0.28, depthWrite: false,
+    });
+    const mist = new THREE.Mesh(new THREE.SphereGeometry(3.0, 16, 12), matMist);
+    mist.position.set(cx, 1.4, cz);
+    mist.scale.set(1.0, 0.6, 1.6);
+    grupo.add(mist);
+
+    const mist2 = new THREE.Mesh(new THREE.SphereGeometry(4.0, 16, 12), matMist.clone());
+    mist2.material.opacity = 0.14;
+    mist2.position.set(cx + dir * 0.6, 1.8, cz);
+    mist2.scale.set(1.1, 0.5, 1.7);
+    grupo.add(mist2);
+
+    scene.add(grupo);
 }
 
 // ---- terrenos ----
@@ -1101,6 +1179,12 @@ function criarCastelo(scene) {
     addCollider(new THREE.Box3(new THREE.Vector3(CX+2,     0, CZ+D/2-1), new THREE.Vector3(CX+W/2+2, H, CZ+D/2+1)));
     addCollider(new THREE.Box3(new THREE.Vector3(CX-W/2-2, 0, CZ-D/2-2), new THREE.Vector3(CX-W/2+1, H, CZ+D/2+2)));
     addCollider(new THREE.Box3(new THREE.Vector3(CX+W/2-1, 0, CZ-D/2-2), new THREE.Vector3(CX+W/2+2, H, CZ+D/2+2)));
+
+    // barreira no vão da porta — bloqueia entrada por colisão (só passa via interacção E)
+    addCollider(new THREE.Box3(
+        new THREE.Vector3(CX - 2, 0, CZ + D/2 - 0.4),
+        new THREE.Vector3(CX + 2, H, CZ + D/2 + 0.4)
+    ));
 }
 
 // ---- guardião da ponte ----
@@ -1191,6 +1275,32 @@ function criarGuardiao(scene) {
 }
 
 // ---- mapa principal ----
+// estruturas grandes do mapa que NUNCA devem ter árvores/rochas em cima
+const _estruturas = [
+    { x: SHOP_CX, z: SHOP_CZ, r: 9 },   // loja
+    { x: 0,       z: -80,     r: 16 },  // castelo + muralhas
+    { x: 0,       z: 4.5,     r: 4 },   // guardião / saída da ponte
+    { x: 70,      z: 70,      r: 4 },   // baú
+    ];const _propsColocadas = []; // {x,z,r}
+const MIN_DIST_ARVORES   = 3.2; // distância mínima entre árvores
+const MIN_DIST_ROCHA_ARV = 2.2; // árvore→rocha
+function _longeDeEstruturas(x, z, margem = 0) {
+    for (const e of _estruturas) {
+        const dx = x - e.x, dz = z - e.z;
+        if (dx*dx + dz*dz < (e.r + margem) * (e.r + margem)) return false;
+    }
+    return true;
+}
+function _longeDeProps(x, z, raioProprio) {
+    for (const p of _propsColocadas) {
+        const dx = x - p.x, dz = z - p.z;
+        const min = p.r + raioProprio;
+        if (dx*dx + dz*dz < min * min) return false;
+    }
+    return true;
+}
+function _registaProp(x, z, r) { _propsColocadas.push({ x, z, r }); }
+
 export function criarMapa(scene) {
     criarTerrenoNorte(scene);
     criarTerrenoSul(scene);
@@ -1216,47 +1326,66 @@ export function criarMapa(scene) {
 
     // árvores norte — densa, cobre toda a área afastada dos caminhos
     let placed = 0;
-    for (let i = 0; i < 600 && placed < 200; i++) {
+    for (let i = 0; i < 1500 && placed < 200; i++) {
         const x = (rand() * 2 - 1) * 94;
         const z = 5 + rand() * 90;
-        if (naFaixaCaminho(x, z) || zonaLivre(x, z, 8)) continue;
+        if (naFaixaCaminho(x, z)) continue;
+        if (!_longeDeEstruturas(x, z)) continue;
+        if (!_longeDeProps(x, z, MIN_DIST_ARVORES / 2)) continue;
         const zoneRef = _findZoneAt(x, z, [znB1, znB2, znB3]);
         criarArvore(scene, x, z, !!zoneRef, zoneRef);
+        _registaProp(x, z, MIN_DIST_ARVORES / 2);
         placed++;
     }
 
     // árvores sul — ainda mais densas e escuras
     placed = 0;
-    for (let i = 0; i < 700 && placed < 250; i++) {
+    for (let i = 0; i < 1800 && placed < 250; i++) {
         const x = (rand() * 2 - 1) * 94;
         const z = -(5 + rand() * 90);
         if (naFaixaCaminho(x, z)) continue;
+        if (!_longeDeEstruturas(x, z)) continue;
+        if (!_longeDeProps(x, z, MIN_DIST_ARVORES / 2)) continue;
         const zoneRef = _findZoneAt(x, z, [zsB1, zsB2, zsB3, zsB4]);
         criarArvore(scene, x, z, !!zoneRef, zoneRef);
+        _registaProp(x, z, MIN_DIST_ARVORES / 2);
         placed++;
     }
 
     // rochas norte
     placed = 0;
-    for (let i = 0; i < 150 && placed < 50; i++) {
+    for (let i = 0; i < 400 && placed < 50; i++) {
         const x = (rand() * 2 - 1) * 90;
         const z = 5 + rand() * 88;
-        if (naFaixaCaminho(x, z) || zonaLivre(x, z, 9)) continue;
-        criarRocha(scene, x, z, 0.3 + rand() * 0.5, emZonaBatalha(x, z));
+        if (naFaixaCaminho(x, z)) continue;
+        if (!_longeDeEstruturas(x, z)) continue;
+        if (!_longeDeProps(x, z, MIN_DIST_ROCHA_ARV / 2)) continue;
+        const r = 0.3 + rand() * 0.5;
+        criarRocha(scene, x, z, r, emZonaBatalha(x, z));
+        _registaProp(x, z, Math.max(r, MIN_DIST_ROCHA_ARV / 2));
         placed++;
     }
 
     // rochas sul
     placed = 0;
-    for (let i = 0; i < 150 && placed < 50; i++) {
+    for (let i = 0; i < 400 && placed < 50; i++) {
         const x = (rand() * 2 - 1) * 90;
         const z = -(5 + rand() * 88);
         if (naFaixaCaminho(x, z)) continue;
-        criarRocha(scene, x, z, 0.3 + rand() * 0.6, emZonaBatalha(x, z));
+        if (!_longeDeEstruturas(x, z)) continue;
+        if (!_longeDeProps(x, z, MIN_DIST_ROCHA_ARV / 2)) continue;
+        const r = 0.3 + rand() * 0.6;
+        criarRocha(scene, x, z, r, emZonaBatalha(x, z));
+        _registaProp(x, z, Math.max(r, MIN_DIST_ROCHA_ARV / 2));
         placed++;
     }
 
     criarMontanhas(scene);
+
+    // baú escondido (canto do mapa, longe dos caminhos e da zona corrupta)
+    const _bauBoxes = _criarBau(scene, 70, 70);
+    colliders.push({ box: _bauBoxes.colliderBox, isRiver: false });
+
     console.log('Mapa criado.');
 }
 
