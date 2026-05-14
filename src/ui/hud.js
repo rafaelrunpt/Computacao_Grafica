@@ -125,9 +125,22 @@ hpBarWrap.appendChild(hpBarFill);
 const hpLabelEl = document.createElement('div');
 hpLabelEl.style.cssText = 'color:#ffb0b0;font-size:11px;text-shadow:0 1px 3px #000;letter-spacing:0.5px;';
 
-infoEl.append(levelEl, xpBarWrap, xpLabelEl, hpBarWrap, hpLabelEl);
+const cintilasEl = document.createElement('div');
+cintilasEl.style.cssText = 'color:#a0c8ff;font-size:12px;font-weight:bold;text-shadow:0 1px 3px #000,0 0 8px #4488dd;letter-spacing:1px;display:flex;align-items:center;gap:5px;margin-top:3px;';
+cintilasEl.innerHTML = '<span style="font-size:14px;color:#cde2ff;">✦</span><span id="hud-cintilas-val">0</span> Cintilas';
+
+infoEl.append(levelEl, xpBarWrap, xpLabelEl, hpBarWrap, hpLabelEl, cintilasEl);
 hudEl.append(avatarCanvas, infoEl);
 document.body.appendChild(hudEl);
+
+import('../systems/currency.js').then(({ onCintilasChange, getCintilas }) => {
+    const el = document.getElementById('hud-cintilas-val');
+    if (el) el.textContent = String(getCintilas());
+    onCintilasChange((total) => {
+        const e = document.getElementById('hud-cintilas-val');
+        if (e) e.textContent = String(total);
+    });
+});
 
 export function atualizarHUD() {
     const pct = Math.min(100, (playerStats.xp / playerStats.xpToNext) * 100);

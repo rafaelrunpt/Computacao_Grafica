@@ -1,14 +1,21 @@
 import { grassZones, limparZonaBatalha } from '../world/mapa.js';
 import { ganharXP, playerStats, receberDano, recuperarTotal, getAtkEfetivo } from './player-stats.js';
 import { entrarCombate, sairCombate, getMundoSnapshot } from '../core/transicoes.js';
+import { notificarVitoria as notificarVitoriaQuest } from './merchant-quest.js';
 import { combateInimigo } from '../world/combate-scene.js';
 import { getItens, usarItem } from './inventario.js';
 import { playSFX, switchMusic } from './audio.js';
 import { player } from '../entities/jogador.js';
 import {
     mostrarCombateUI, esconderCombateUI, setCombateHandlers,
-    setHpInimigo, setHpPlayer, setLog, setBotoesAtivos, preencherItens
+    setHpInimigo, setHpPlayer, setLog, setBotoesAtivos, preencherItens,
+    setAtaqueSlots
 } from '../ui/combate-ui.js';
+import {
+    getSlotAtaque, getCooldownSlot, podeUsarSlot,
+    aplicarCooldown, tickCooldowns, resetCooldowns, resolverAtaque,
+} from './ataques.js';
+import { lancarAnimacaoAtaque } from '../ui/combate-anims.js';
 
 export const estadoJogo = { emCombate: false, combateX: 0, combateZ: 0 };
 
@@ -154,19 +161,63 @@ function bloquearTurno(ms, fim) {
 }
 
 // ---- ações ----
-function acaoAtacar() {
-    if (turnoBloqueado) return;
-    const dano = getAtkEfetivo() + Math.floor(Math.random() * 4);
-    inimigoAtual.hp = Math.max(0, inimigoAtual.hp - dano);
-    setLog(`Atacaste o ${inimigoAtual.nome}! Causaste ${dano} de dano.`);
-    pulsarInimigo();
-    refreshHpUI();
+function atualizarSlotsUI() {
+    setAtaqueSlots(
+        { ataque: getSlotAtaque(0), cooldown: getCooldownSlot(0) },
+        { ataque: getSlotAtaque(1), cooldown: getCooldownSlot(1) },
+        { ataque: getSlotAtaque(2), cooldown: getCooldownSlot(2) },
+        { ataque: getSlotAtaque(3), cooldown: getCooldownSlot(3) },
+    );
+}
 
-    if (inimigoAtual.hp <= 0) {
-        bloquearTurno(900, finalizarVitoria);
+function acaoAtacarSlot(idx) {
+    if (turnoBloqueado) return;
+    const at = getSlotAtaque(idx);
+    if (!at) return;
+    if (!podeUsarSlot(idx)) {
+        setLog(`${at.nome} ainda em recarga.`);
         return;
     }
-    bloquearTurno(800, turnoInimigo);
+
+    const resultado = resolverAtaque(idx, getAtkEfetivo());
+    aplicarCooldown(idx);
+    atualizarSlotsUI();
+
+    setLog(`Usaste ${at.nome}...`);
+
+    const danoTotal = resultado.falhou ? 0 : resultado.totalDano;
+    const danoPorHit = resultado.hitsTotais > 0 ? Math.floor(danoTotal / Math.max(1, resultado.hitsAcertos)) : 0;
+    const novaHp = Math.max(0, inimigoAtual.hp - danoTotal);
+    const vaiVencer = !resultado.falhou && novaHp <= 0;
+
+    const animDur = (at.anim && at.anim.dur) || 800;
+
+    const aplicarImpacto = (parcial) => {
+        if (resultado.falhou) {
+            setLog(`Falhaste — ${at.nome} não acertou.`);
+            return;
+        }
+        inimigoAtual.hp = Math.max(0, inimigoAtual.hp - parcial);
+        if (resultado.hitsTotais > 1) {
+            setLog(`${at.nome}! ${resultado.hitsAcertos}/${resultado.hitsTotais} acertos — ${danoTotal} dano.`);
+        } else {
+            setLog(`${at.nome}! ${danoTotal} de dano.`);
+        }
+        refreshHpUI();
+    };
+
+    lancarAnimacaoAtaque(at, resultado.falhou, {
+        onImpacto1: () => {
+            if (resultado.hitsTotais > 1) {
+                aplicarImpacto(danoPorHit);
+            } else {
+                aplicarImpacto(danoTotal);
+            }
+        },
+        onImpacto2: resultado.hitsTotais > 1 ? () => aplicarImpacto(danoTotal - danoPorHit) : null,
+    });
+
+    bloquearTurno(animDur + 100, vaiVencer ? finalizarVitoria : turnoInimigo);
 }
 
 function acaoItem(item) {
@@ -209,6 +260,8 @@ function turnoInimigo() {
         bloquearTurno(900, finalizarDerrota);
         return;
     }
+    tickCooldowns();
+    atualizarSlotsUI();
     setBotoesAtivos(true);
 }
 
@@ -248,6 +301,7 @@ function finalizarVitoria() {
         if (f <= 0) {
             clearInterval(fadeId);
             ganharXP(inimigoBase.xpDrop);
+            notificarVitoriaQuest();
             // limpa a zona corrompida onde estávamos no mundo
             const snap = getMundoSnapshot();
             limparZonaBatalha(snap.x, snap.z);
@@ -268,10 +322,9 @@ function finalizarFuga() {
 }
 
 function sairDaArena() {
+    esconderCombateUI();
+    estadoJogo.emCombate = false;
     sairCombate(() => {
-        esconderCombateUI();
-        estadoJogo.emCombate = false;
-        
         // Restaurar música do mundo baseada na posição
         const estaNaZonaDark = player.position.z < -3;
         switchMusic(estaNaZonaDark ? 'dark' : 'mundo', 1.5);
@@ -295,14 +348,16 @@ function iniciarCombate() {
 
         entrarCombate(() => {
             // já estamos na arena, com a câmara estática a apontar para os dois
+            resetCooldowns();
             mostrarCombateUI(inimigoAtual.nome);
             refreshHpUI();
             setLog(`Um ${inimigoAtual.nome} apareceu! O que vais fazer?`);
             setCombateHandlers({
-                onAtacar: acaoAtacar,
-                onItem:   acaoItem,
-                onFugir:  acaoFugir,
+                onAtacarSlot: acaoAtacarSlot,
+                onItem:       acaoItem,
+                onFugir:      acaoFugir,
             });
+            atualizarSlotsUI();
             preencherItens(getItens(), acaoItem);
         });
     });

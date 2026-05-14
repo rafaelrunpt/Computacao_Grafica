@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { player } from '../entities/jogador.js';
 import { lojaScene, lojaSpawnPos } from '../world/loja.js';
 import { caseloScene, caseloSpawnPos } from '../world/castelo.js';
+import { tavernScene, tavernSpawnPos } from '../world/tavern.js';
 import { combateScene, posPlayerCombate, resetCombateScene } from '../world/combate-scene.js';
 import { hidePrompt } from '../ui/hud.js';
 import { switchMusic } from '../systems/audio.js';
@@ -26,8 +27,9 @@ export function fade(toOpacity, callback) {
 }
 
 // ---- posições dos jogadores por cena ----
-export const lojaPlayer   = { x: 0, z: 0, rotY: 0 };
-export const caseloPlayer = { x: 0, z: 0, rotY: 0 };
+export const lojaPlayer   = { x: 0, y: 0, z: 0, rotY: 0 };
+export const caseloPlayer = { x: 0, y: 0, z: 0, rotY: 0 };
+export const tavernPlayer = { x: 0, y: 0, z: 0, rotY: 0 };
 
 // ---- posição do player no mundo antes de entrar em combate (para regressar ao mesmo sítio) ----
 const _mundoSnapshot = { x: 0, z: 0, rotY: 0 };
@@ -43,6 +45,7 @@ export function entrarLoja() {
     hidePrompt();
     fade(1, () => {
         lojaPlayer.x = lojaSpawnPos.x;
+        lojaPlayer.y = lojaSpawnPos.y;
         lojaPlayer.z = lojaSpawnPos.z;
         lojaPlayer.rotY = Math.PI;
         if (player.parent) player.parent.remove(player);
@@ -207,6 +210,7 @@ export function entrarCaselo() {
     hidePrompt();
     iniciarTransicaoCastelo(() => {
         caseloPlayer.x = caseloSpawnPos.x;
+        caseloPlayer.y = caseloSpawnPos.y;
         caseloPlayer.z = caseloSpawnPos.z;
         caseloPlayer.rotY = Math.PI;
         if (player.parent) player.parent.remove(player);
@@ -230,6 +234,38 @@ export function sairCaselo() {
     });
 }
 
+// ---- entrar / sair taverna (Gobble Inn) ----
+export function entrarTavern() {
+    if (estado.ePressBloqueado) return;
+    estado.ePressBloqueado = true;
+    hidePrompt();
+    fade(1, () => {
+        tavernPlayer.x = tavernSpawnPos.x;
+        tavernPlayer.y = tavernSpawnPos.y;
+        tavernPlayer.z = tavernSpawnPos.z;
+        tavernPlayer.rotY = Math.PI;
+        if (player.parent) player.parent.remove(player);
+        tavernScene.add(player);
+        estado.cena = 'tavern';
+        fade(0, () => { estado.ePressBloqueado = false; });
+    });
+}
+
+export function sairTavern() {
+    if (estado.ePressBloqueado) return;
+    estado.ePressBloqueado = true;
+    hidePrompt();
+    fade(1, () => {
+        if (player.parent) player.parent.remove(player);
+        _worldScene.add(player);
+        // Reaparece em frente à entrada do inn (este, fora dos postes)
+        player.position.set(-37, 0, 36.5);
+        player.rotation.y = -Math.PI / 2;
+        estado.cena = 'mundo';
+        fade(0, () => { estado.ePressBloqueado = false; });
+    });
+}
+
 // --------------------------------------------------------
 // COMBATE
 // --------------------------------------------------------
@@ -237,6 +273,7 @@ export function entrarCombate(onAfterEnter) {
     if (estado.cena === 'combate') return;
     hidePrompt();
     _mundoSnapshot.x    = player.position.x;
+    _mundoSnapshot.y    = player.position.y;
     _mundoSnapshot.z    = player.position.z;
     _mundoSnapshot.rotY = player.rotation.y;
 
@@ -256,7 +293,7 @@ export function sairCombate(onAfterExit) {
     fade(1, () => {
         if (player.parent) player.parent.remove(player);
         _worldScene.add(player);
-        player.position.set(_mundoSnapshot.x, 0, _mundoSnapshot.z);
+        player.position.set(_mundoSnapshot.x, _mundoSnapshot.y, _mundoSnapshot.z);
         player.rotation.y = _mundoSnapshot.rotY;
         estado.cena = 'mundo';
         fade(0, () => { if (onAfterExit) onAfterExit(); });
@@ -297,3 +334,6 @@ export function mudarCena(target) {
         entrarCaselo();
     }
 }
+
+    
+

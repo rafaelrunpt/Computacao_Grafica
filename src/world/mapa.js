@@ -1,12 +1,58 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { makeTerrainShader, terraTex, matBattleGrass, matContRock, matCorruptHalo } from './shaders.js';
+import { criarRio, getBridgePassage } from './rio.js';
+import { Bau } from './bau.js';
+
+export { matBattleGrass, matWater, matContTrunk, matContLeaves, matContRock, matCorruptHalo } from './shaders.js';
+export { getBridgeHeight } from './rio.js';
 
 export const mapBounds = { minX: -100, maxX: 100, minZ: -100, maxZ: 100 };
 
 const colliders = [];
-let bridgePassage = null;
+
+// ---- Spatial grid de colisão ----
+// Divide o mapa em células de 8×8 unidades. Em vez de testar todos os
+// colliders (O(n)), só testamos os da célula em que o jogador está (O(k), k<<n).
+const _CELL = 8;
+const _grid = new Map();
+let _gridDirty = true; // rebuild na próxima verificaColisao
+
+export function invalidateColliderGrid() { _gridDirty = true; }
+
+function _buildGrid() {
+    _grid.clear();
+    for (let i = 0; i < colliders.length; i++) {
+        const b = colliders[i].box;
+        const x0 = Math.floor(b.min.x / _CELL), x1 = Math.floor(b.max.x / _CELL);
+        const z0 = Math.floor(b.min.z / _CELL), z1 = Math.floor(b.max.z / _CELL);
+        for (let cx = x0; cx <= x1; cx++) {
+            for (let cz = z0; cz <= z1; cz++) {
+                const key = cx * 10000 + cz;
+                let bucket = _grid.get(key);
+                if (!bucket) { bucket = []; _grid.set(key, bucket); }
+                bucket.push(i);
+            }
+        }
+    }
+    _gridDirty = false;
+}
+
+// Reutilizados em verificaColisao — sem alocações por frame
+const _pb = new THREE.Box3();
+const _pbMin = new THREE.Vector3();
+const _pbMax = new THREE.Vector3();
+const _bridgePt = new THREE.Vector3();
 export const grassZones = [];       // Box3[] — zonas onde há encontros
 export const battleZoneObjects = []; // [{box, meshes[], scene}] — para limpar após vitória
+// objectos candidatos a fade-out quando tapam o jogador (assets sólidos — não
+// árvores, que podem ficar opacas). Mantido aqui para evitar raycast recursivo
+// contra toda a cena no loop principal.
+export const fadeables = [];
+// objectos para frontal culling — escondidos (visible=false) quando estão
+// atrás da câmara, tirando-os do render E do shadow pass. Inclui tudo o que
+// é pesado: árvores, rochas, montanhas, GLBs grandes, ponte, guardião.
+export const cullables = [];
 export let shopDoorInteract = null;
 export let guardianInteractBox = null;
 let _guardianMesh = null;
@@ -86,147 +132,6 @@ export function updateGuardiao(deltaTime) {
     }
 }
 
-let riverMesh = null;
-
-// ---- texturas base ----
-const loader3 = new THREE.TextureLoader();
-
-function loadTex(path, rx, ry) {
-    return loader3.load(path, t => {
-        t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        t.repeat.set(rx, ry);
-        t.anisotropy = 16;
-    });
-}
-
-// escala de tile: 1 tile a cada 6 unidades de mundo
-const TS = 6;
-const W_MAP = 200, H_MAP_HALF = 95; // dimensões de cada metade
-
-const grassTex = loadTex('../../assets/textures/relva.png', W_MAP/TS, H_MAP_HALF/TS);
-const terraTex = loadTex('../../assets/textures/terra.png',    W_MAP/TS, H_MAP_HALF/TS);
-const areiaTex = loadTex('../../assets/textures/areia.png',    W_MAP/TS, H_MAP_HALF/TS);
-const madeiraTex = loader3.load('../../assets/textures/madeira.png', t => {
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 16;
-});
-const madeira2Tex = loader3.load('../../assets/textures/madeira2.png', t => {
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 16;
-});
-
-// shader de terreno via onBeforeCompile — herda sombras/luzes do MeshStandardMaterial
-function makeTerrainShader(grassCol, pathColor) {
-    const mat = new THREE.MeshStandardMaterial({
-        map: grassTex,   // textura base para o pipeline standard (sombras, etc.)
-        color: new THREE.Color(grassCol),
-        roughness: 0.9,
-    });
-
-    const extraUniforms = {
-        uGrass:    { value: grassTex },
-        uDirt:     { value: terraTex },
-        uSand:     { value: areiaTex },
-        uGrassCol: { value: new THREE.Color(grassCol) },
-        uDirtCol:  { value: new THREE.Color(pathColor) },
-        uRiverZ:   { value: 0.0 },
-        // caminhos verticais (x fixo, correm ao longo de Z)
-        uVPath0X: { value:  0.0 }, uVPath0W: { value: 3.2 }, uVPath0Z0: { value:-100.0 }, uVPath0Z1: { value: 100.0 },
-        uVPath1X: { value:999.0 }, uVPath1W: { value: 3.2 }, uVPath1Z0: { value:   0.0 }, uVPath1Z1: { value:   0.0 },
-        uVPath2X: { value:999.0 }, uVPath2W: { value: 3.2 }, uVPath2Z0: { value:   0.0 }, uVPath2Z1: { value:   0.0 },
-        // caminhos horizontais (z fixo, correm ao longo de X)
-        uHPath0Z: { value:999.0 }, uHPath0W: { value: 3.2 }, uHPath0X0: { value:  0.0 }, uHPath0X1: { value:   0.0 },
-        uHPath1Z: { value:999.0 }, uHPath1W: { value: 3.2 }, uHPath1X0: { value:  0.0 }, uHPath1X1: { value:   0.0 },
-        uHPath2Z: { value:999.0 }, uHPath2W: { value: 3.2 }, uHPath2X0: { value:  0.0 }, uHPath2X1: { value:   0.0 },
-    };
-
-    mat.onBeforeCompile = (shader) => {
-        Object.assign(shader.uniforms, extraUniforms);
-
-        // passa posição mundo ao fragment
-        shader.vertexShader = shader.vertexShader.replace(
-            '#include <worldpos_vertex>',
-            `#include <worldpos_vertex>
-            vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;`
-        ).replace(
-            'void main() {',
-            'varying vec3 vWorldPos;\nvoid main() {'
-        );
-
-        shader.fragmentShader = shader.fragmentShader.replace(
-            'void main() {',
-            `varying vec3 vWorldPos;
-            uniform sampler2D uGrass, uDirt, uSand;
-            uniform vec3 uGrassCol, uDirtCol;
-            uniform float uRiverZ;
-            uniform float uVPath0X,uVPath0W,uVPath0Z0,uVPath0Z1;
-            uniform float uVPath1X,uVPath1W,uVPath1Z0,uVPath1Z1;
-            uniform float uVPath2X,uVPath2W,uVPath2Z0,uVPath2Z1;
-            uniform float uHPath0Z,uHPath0W,uHPath0X0,uHPath0X1;
-            uniform float uHPath1Z,uHPath1W,uHPath1X0,uHPath1X1;
-            uniform float uHPath2Z,uHPath2W,uHPath2X0,uHPath2X1;
-
-            float _hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
-            float _sn(vec2 p){
-                vec2 i=floor(p);vec2 f=fract(p);f=f*f*(3.0-2.0*f);
-                return mix(mix(_hash(i),_hash(i+vec2(1,0)),f.x),
-                           mix(_hash(i+vec2(0,1)),_hash(i+vec2(1,1)),f.x),f.y);
-            }
-            float _fbm(vec2 p){ float v=0.0,a=0.5; for(int i=0;i<4;i++){v+=a*_sn(p);p=p*2.1+vec2(1.7,9.2);a*=0.5;} return v; }
-
-            float vPathBlend(float wx, float wz, float cx, float hw, float z0, float z1) {
-                if (wz < z0-1.0 || wz > z1+1.0) return 0.0;
-                float d = abs(wx - cx);
-                float n = _fbm(vec2(wz*0.18+cx*0.07, wx*0.11)) * hw * 0.8;
-                float zf = smoothstep(z0-0.5,z0+3.0,wz)*smoothstep(z1+0.5,z1-3.0,wz);
-                return (1.0 - smoothstep(hw*0.5-0.3, hw*1.1+n, d)) * zf;
-            }
-            float hPathBlend(float wz, float wx, float wz_c, float hw, float x0, float x1) {
-                if (wx < x0-1.0 || wx > x1+1.0) return 0.0;
-                float d = abs(wz - wz_c);
-                float n = _fbm(vec2(wx*0.15+wz_c*0.09, wz*0.12)) * hw * 0.8;
-                float xf = smoothstep(x0-0.5,x0+3.0,wx)*smoothstep(x1+0.5,x1-3.0,wx);
-                return (1.0 - smoothstep(hw*0.5-0.3, hw*1.1+n, d)) * xf;
-            }
-            float sandBlend(float wz, float rz) {
-                float d = abs(wz - rz);
-                float n = _fbm(vec2(vWorldPos.x*0.12, wz*0.14+1.3)) * 2.5;
-                return 1.0 - smoothstep(2.8, 6.5+n, d);
-            }
-            void main() {`
-        ).replace(
-            '#include <map_fragment>',
-            `// blending das 3 texturas em coordenadas mundo
-            vec2 tuv = vWorldPos.xz / 6.0;
-            vec4 cGrass = texture2D(uGrass, tuv) * vec4(uGrassCol, 1.0);
-            vec4 cDirt  = texture2D(uDirt,  tuv) * vec4(uDirtCol,  1.0);
-            vec4 cSand  = texture2D(uSand,  tuv) * vec4(1.00, 0.87, 0.62, 1.0);
-
-            float dirtMask = 0.0;
-            float wx = vWorldPos.x, wz = vWorldPos.z;
-            dirtMask = max(dirtMask, vPathBlend(wx,wz, uVPath0X,uVPath0W,uVPath0Z0,uVPath0Z1));
-            dirtMask = max(dirtMask, vPathBlend(wx,wz, uVPath1X,uVPath1W,uVPath1Z0,uVPath1Z1));
-            dirtMask = max(dirtMask, vPathBlend(wx,wz, uVPath2X,uVPath2W,uVPath2Z0,uVPath2Z1));
-            dirtMask = max(dirtMask, hPathBlend(wz,wx, uHPath0Z,uHPath0W,uHPath0X0,uHPath0X1));
-            dirtMask = max(dirtMask, hPathBlend(wz,wx, uHPath1Z,uHPath1W,uHPath1X0,uHPath1X1));
-            dirtMask = max(dirtMask, hPathBlend(wz,wx, uHPath2Z,uHPath2W,uHPath2X0,uHPath2X1));
-            float sandMask = sandBlend(vWorldPos.z, uRiverZ);
-
-            vec4 blended = cGrass;
-            blended = mix(blended, cSand, sandMask);
-            blended = mix(blended, cDirt, dirtMask);
-            diffuseColor = blended;`
-        );
-
-        // guardar ref para poder atualizar uniforms depois
-        mat.userData.shader = shader;
-    };
-
-    // proxy para aceder a uniforms após compilação
-    mat.uniforms = extraUniforms;
-    return mat;
-}
-
 const matTerrainN = makeTerrainShader(0x9ec87a, 0xd4b882);
 const matTerrainS = makeTerrainShader(0x9ec87a, 0xd4b882);
 
@@ -235,165 +140,19 @@ const matMountain  = new THREE.MeshStandardMaterial({ color: 0x6a6a72, roughness
 const matSnow      = new THREE.MeshStandardMaterial({ color: 0xdde8f0, roughness: 0.8, flatShading: true });
 
 export let castleEnterBox = null;
+export let tavernEnterBox = null;
 
-// re-exporta a API do baú (implementação em world/bau.js)
-export { abrirBau, bauJaAberto, updateBau, getBauInteractBox, registarOnBauAbrir, bauJaColetado, coletarBau } from './bau.js';
-import { criarBau as _criarBau } from './bau.js';
-
-// ---- shader de batalha — solo roxo  ----
-export const matBattleGrass = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 } },
-    vertexShader: `
-        varying vec2 vUv;
-        varying float vEdge; // 0=centro, 1=borda
-        void main() {
-            vUv = uv;
-            // quanto mais longe do centro (0.5,0.5), mais perto da borda
-            vEdge = length(uv - 0.5) * 2.0;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-    `,
-    fragmentShader: `
-        uniform float uTime;
-        varying vec2 vUv;
-        varying float vEdge;
-
-        float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
-        float sn(vec2 p){
-            vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
-            return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),
-                       mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);
-        }
-        float fbm(vec2 p){
-            float v=0.0,a=0.5;
-            for(int i=0;i<3;i++){v+=a*sn(p);p=p*2.1+vec2(3.1,1.7);a*=0.5;}
-            return v;
-        }
-
-        void main(){
-            // Máscara circular distorcida com FBM — torna a borda irregular
-            vec2 centered = vUv - 0.5;
-            float angle = atan(centered.y, centered.x);
-            float dist  = length(centered);
-
-            // distorção orgânica da borda com ruído
-            float warp = fbm(vec2(angle * 2.0, uTime * 0.15) + 0.5) * 0.22;
-            float mask = smoothstep(0.50 + warp, 0.38 + warp, dist);
-
-            if (mask < 0.01) discard; // fora da zona — transparente
-
-            // ruído base para textura interna
-            float n  = fbm(vUv * 12.0 + vec2(uTime * 0.04, 0.0));
-            float n2 = fbm(vUv *  6.0 - vec2(0.0, uTime * 0.03) + 5.3);
-
-            // brilhos roxos que pulsam (indicam perigo)
-            float sparkle = pow(sn(vUv * 35.0 + uTime * 0.5), 7.0);
-            float pulse   = 0.5 + 0.5 * sin(uTime * 2.2);
-
-            vec3 dark    = vec3(0.18, 0.04, 0.28); // roxo escuro
-            vec3 mid     = vec3(0.38, 0.10, 0.55); // violeta
-            vec3 bright  = vec3(0.65, 0.20, 0.90); // púrpura vivo
-            vec3 spark   = vec3(0.85, 0.40, 1.00); // brilho mágico
-
-            vec3 col = mix(dark, mid,   n  * 0.6 + n2 * 0.4);
-            col      = mix(col, bright, sparkle * pulse * 0.7);
-            col      = mix(col, spark,  sparkle * 0.4);
-
-            // borda mais clara/brilhante para delimitar a zona
-            float borderGlow = smoothstep(0.36 + warp, 0.50 + warp, dist) * mask;
-            col = mix(col, vec3(0.80, 0.30, 1.00), borderGlow * 0.65 * (0.7 + 0.3 * pulse));
-
-            gl_FragColor = vec4(col, mask * 0.95);
-        }
-    `,
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-});
-
-// ---- shader de água: ondas vertex, FBM em camadas, brilho do sol, espuma nas margens ----
-export const matWater = new THREE.ShaderMaterial({
-    transparent: true,
-    uniforms: { uTime: { value: 0 } },
-    vertexShader: `
-        varying vec2 vUv;
-        varying float vWave;
-        uniform float uTime;
-        void main() {
-            vUv = uv;
-            vec3 pos = position;
-            // O plano está na xy local; após a rotação -PI/2 em x, z local vira y mundo.
-            // Vagas SÓ SOBEM a partir da base (sin*0.5+0.5 → 0..1) — assim nunca descem abaixo da areia.
-            float a = (sin(pos.x * 0.45 + uTime * 1.4) * 0.5 + 0.5) * 0.050;
-            float b = (sin(pos.x * 0.85 - pos.y * 0.6 + uTime * 1.9) * 0.5 + 0.5) * 0.030;
-            float c = (sin(pos.y * 1.6 + uTime * 0.8) * 0.5 + 0.5) * 0.018;
-            float wave = a + b + c;
-            pos.z += wave;
-            vWave = wave;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-        }
-    `,
-    fragmentShader: `
-        uniform float uTime;
-        varying vec2 vUv;
-        varying float vWave;
-
-        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        float sn(vec2 p) {
-            vec2 i = floor(p); vec2 f = fract(p); f = f*f*(3.0 - 2.0*f);
-            return mix(mix(hash(i),           hash(i + vec2(1, 0)), f.x),
-                       mix(hash(i + vec2(0,1)), hash(i + vec2(1, 1)), f.x), f.y);
-        }
-        float fbm(vec2 p) {
-            float v = 0.0, a = 0.5;
-            for (int i = 0; i < 5; i++) { v += a * sn(p); p = p * 2.05 + vec2(1.7, 9.2); a *= 0.5; }
-            return v;
-        }
-
-        void main() {
-            // Coordenadas esticadas para a forma do rio (longo em x, estreito em y)
-            vec2 p = vec2(vUv.x * 14.0, vUv.y * 3.0);
-
-            // Duas camadas FBM em direções opostas → textura caótica de água
-            float n1 = fbm(p + vec2(-uTime * 0.45, sin(uTime * 0.3) * 0.4));
-            float n2 = fbm(p * 1.7 + vec2(-uTime * 0.65 + 4.7, uTime * 0.18));
-            float w = mix(n1, n2, 0.5);
-
-            // Cintilações finas perpendiculares ao fluxo
-            float ripple = sin((vUv.x * 90.0 + n1 * 6.0) - uTime * 4.2) * 0.5 + 0.5;
-            ripple = pow(ripple, 16.0);
-
-            // Brilho do sol — banda lenta a deslocar-se ao longo do rio
-            float glint = pow(sn(vec2(vUv.x * 5.0 - uTime * 0.4, vUv.y * 2.5)), 8.0);
-
-            // Gradiente de cor com profundidade
-            vec3 deep    = vec3(0.02, 0.10, 0.30);
-            vec3 mid     = vec3(0.08, 0.40, 0.72);
-            vec3 surface = vec3(0.35, 0.78, 0.96);
-            vec3 col = mix(deep, mid, smoothstep(0.20, 0.55, w));
-            col = mix(col, surface, smoothstep(0.55, 0.85, w));
-
-            // Cintilações + brilho do sol
-            col += vec3(0.65, 0.88, 1.0) * ripple * 0.55;
-            col += vec3(1.0, 0.95, 0.7) * glint * 0.30;
-
-            // Sombra suave nos vales das vagas
-            col *= 1.0 + vWave * 4.0;
-
-            // Espuma nas margens (vUv.y perto de 0 ou 1)
-            float bankDist = 1.0 - abs(vUv.y - 0.5) * 2.0;
-            float foamMask = smoothstep(0.20, 0.0, bankDist);
-            float foamBreak = sn(vec2(vUv.x * 30.0 + uTime * 1.8, vUv.y * 8.0 + uTime * 0.4));
-            float foam = clamp(foamMask * (0.5 + foamBreak * 0.6), 0.0, 1.0);
-            col = mix(col, vec3(0.94, 0.98, 1.0), foam * 0.55);
-
-            gl_FragColor = vec4(col, 0.93);
-        }
-    `,
-});
+let _bau = null;
+export function getBauInteractBox()  { return _bau?.getInteractBox() ?? null; }
+export function bauJaAberto()        { return _bau?.jaAberto()       ?? false; }
+export function bauJaColetado()      { return _bau?.jaColetado()     ?? false; }
+export function abrirBau()           { return _bau?.abrir()          ?? false; }
+export function coletarBau()         { return _bau?.coletar()        ?? false; }
+export function updateBau(dt)        { _bau?.update(dt); }
+export function registarOnBauAbrir(fn) { _bau?.registarOnAbrir(fn); }
 
 // ---- utilitários ----
-function addCollider(box, isRiver = false) { colliders.push({ box, isRiver }); }
+function addCollider(box, isRiver = false) { colliders.push({ box, isRiver }); _gridDirty = true; }
 
 export function removerGuardiao() {
     if (!_guardianColliderBox) return;
@@ -449,17 +208,12 @@ function _findZoneAt(x, z, zones) {
     return null;
 }
 
-// ---- materiais contaminados — cor natural escurecida com tinge roxo subtil ----
-export const matContTrunk  = new THREE.MeshStandardMaterial({ color: 0x3a2830, emissive: 0x220033, emissiveIntensity: 0.3, roughness: 0.85 });
-export const matContLeaves = new THREE.MeshStandardMaterial({ color: 0x1e3020, emissive: 0x1a0028, emissiveIntensity: 0.35, roughness: 0.85 });
-export const matContRock   = new THREE.MeshStandardMaterial({ color: 0x5a5060, emissive: 0x1a0030, emissiveIntensity: 0.25, roughness: 0.95 });
-
 // ---- árvore GLB ----
 let treeTemplate = null;       // THREE.Group clonável, preenchido após o load
 const treePendingQueue = [];   // { scene, x, z, contaminada, zoneRef } — aguardam o load
 
 const treeLoader = new GLTFLoader();
-treeLoader.load('../../assets/models/tree.glb', (gltf) => {
+treeLoader.load('../../assets/models/ambiente/tree.glb', (gltf) => {
     treeTemplate = gltf.scene;
     for (const p of treePendingQueue) _spawnTree(p.scene, p.x, p.z, p.contaminada, p.zoneRef);
     treePendingQueue.length = 0;
@@ -507,6 +261,7 @@ function _spawnTree(scene, x, z, contaminada, zoneRef = null) {
         }
     });
     scene.add(tree);
+    cullables.push(tree);
     addCollider(new THREE.Box3(
         new THREE.Vector3(x - 0.3, 0, z - 0.3),
         new THREE.Vector3(x + 0.3, 1.8, z + 0.3)
@@ -536,6 +291,8 @@ function criarRocha(scene, x, z, r = 0.6, contaminada = false) {
     rock.rotation.y = Math.random() * Math.PI;
     rock.castShadow = true;
     scene.add(rock);
+    fadeables.push(rock);
+    cullables.push(rock);
     addCollider(new THREE.Box3().setFromObject(rock));
 }
 
@@ -614,66 +371,6 @@ function criarZonaBatalha(scene, cx, cz, raio, seed) {
 }
 
 // ---- zona corrupta (visual roxo, sem encontros) ----
-// matCorruptHalo: tonalidade roxa-escura que se espalha pelo terreno circundante
-const matCorruptHalo = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 } },
-    vertexShader: `
-        varying vec2 vUv;
-        void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-    `,
-    fragmentShader: `
-        uniform float uTime;
-        varying vec2 vUv;
-
-        float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        float sn(vec2 p){
-            vec2 i = floor(p); vec2 f = fract(p); f = f*f*(3.0-2.0*f);
-            return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),
-                       mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y);
-        }
-        float fbm(vec2 p){ float v=0.0,a=0.5; for(int i=0;i<4;i++){v+=a*sn(p);p=p*2.1+vec2(1.7,9.2);a*=0.5;} return v; }
-
-        void main() {
-            vec2 c = vUv - 0.5;
-            float dist = length(c);
-
-            // distorção orgânica da borda
-            float angle = atan(c.y, c.x);
-            float warp = fbm(vec2(angle * 1.5, uTime * 0.06) + 3.7) * 0.18;
-
-            // máscara: forte no centro, desvanece suavemente até à borda
-            float innerEdge = 0.18 + warp;
-            float outerEdge = 0.50 + warp * 0.5;
-            float mask = smoothstep(outerEdge, innerEdge, dist);
-
-            if (mask < 0.005) discard;
-
-            // ruído de textura para não parecer plano
-            float n = fbm(vUv * 8.0 + vec2(uTime * 0.02, 0.0));
-            float pulse = 0.5 + 0.5 * sin(uTime * 1.4);
-
-            // cor: preto com tinge roxa; mais escuro no centro
-            vec3 black  = vec3(0.02, 0.00, 0.04);
-            vec3 purple = vec3(0.22, 0.04, 0.32);
-            vec3 col = mix(black, purple, n * 0.5 + 0.15 * pulse);
-
-            // brilho subtil na borda de transição
-            float borderGlow = smoothstep(innerEdge + 0.04, outerEdge, dist) * mask;
-            col = mix(col, vec3(0.50, 0.10, 0.65), borderGlow * 0.4 * (0.6 + 0.4 * pulse));
-
-            gl_FragColor = vec4(col, mask * 0.82);
-        }
-    `,
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-});
-
-export { matCorruptHalo };
-
 function criarZonaCorrupta(scene, cx, cz, raio, seed) {
     const rand = seededRand(seed);
 
@@ -734,13 +431,15 @@ function criarZonaCorrupta(scene, cx, cz, raio, seed) {
 function criarShop(scene, cx, cz) {
     const loader = new GLTFLoader();
     const posX = cx , posZ = cz;
-    loader.load('../../assets/models/shop.glb', (gltf) => {
+    loader.load('../../assets/models/constructions/shop.glb', (gltf) => {
         const m = gltf.scene;
-        m.position.set(posX , 0, posZ);
-        m.scale.setScalar(0.08);
-        m.rotation.y = Math.PI / 2;
+        m.position.set(posX , 8.95, posZ);
+        m.scale.setScalar(0.5);
+        m.rotation.y = Math.PI / 0.000001;
         m.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
         scene.add(m);
+        fadeables.push(m);
+        cullables.push(m);
     }, undefined, e => console.error('Erro loja:', e));
 
     const hx = 6.5, hz = 8.0, hy = 4.0;
@@ -751,266 +450,100 @@ function criarShop(scene, cx, cz) {
     );
 }
 
-// ---- rio ----
-const BRIDGE_WIDTH = 5.2;
-const BRIDGE_ARC_WIDTH = 7.4;
-const BRIDGE_ARC_HEIGHT = 0.6;
-const BRIDGE_Z = 0;
+// ---- INN (Gobble Inn) — segunda construção da vila ----
+function criarInn(scene, cx, cz, scale = 0.1, rotationY = 0, yOffset = 0) {
+    const loader = new GLTFLoader();
+    const posX = cx, posZ = cz;
+    loader.load('../../assets/models/constructions/gobble-inn.glb', (gltf) => {
+        const m = gltf.scene;
+        m.position.set(posX, 0, posZ);
+        m.scale.setScalar(scale);
+        m.rotation.y = rotationY;
+        m.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
 
-export function getBridgeHeight(x, z) {
-    const dx = Math.abs(x);
-    const dz = Math.abs(z - BRIDGE_Z);
-    // Se estiver fora da largura da ponte ou fora do comprimento do arco
-    if (dx > BRIDGE_WIDTH / 2 || dz > BRIDGE_ARC_WIDTH / 2) return 0;
-    
-    // Mesma fórmula da criação: h = arcHeight * (1 - (2*z/W)^2) - 0.05
-    const h = BRIDGE_ARC_HEIGHT * (1 - Math.pow((2 * dz) / BRIDGE_ARC_WIDTH, 2)) - 0.05;
-    return Math.max(0, h + 0.15); // +0.15 para ficar sobre o tabuleiro
-}
+        // alinhar o fundo ao chão e aplicar offset Y opcional (negativo afunda)
+        m.updateMatrixWorld(true);
+        const bb0 = new THREE.Box3().setFromObject(m);
+        m.position.y -= bb0.min.y;
+        m.position.y += yOffset;
+        m.updateMatrixWorld(true);
 
-function criarRio(scene) {
-    const RW = 6, RL = 210, RZ = BRIDGE_Z;
-    riverMesh = new THREE.Mesh(new THREE.PlaneGeometry(RL, RW, 140, 16), matWater);
-    riverMesh.rotation.x = -Math.PI / 2;
-    riverMesh.position.set(0, 0.05, RZ);
-    riverMesh.receiveShadow = true;
-    scene.add(riverMesh);
+        scene.add(m);
+        fadeables.push(m);
+        cullables.push(m);
 
-    addCollider(new THREE.Box3(
-        new THREE.Vector3(-RL / 2, -1, RZ - RW / 2),
-        new THREE.Vector3(RL / 2, 2, RZ + RW / 2)
-    ), true);
+        // bbox total apenas para referência (não usado para colisão)
+        const bboxFull = new THREE.Box3().setFromObject(m);
+        console.log('[Inn] bbox total (referência):',
+            `x:[${bboxFull.min.x.toFixed(2)}, ${bboxFull.max.x.toFixed(2)}]`,
+            `z:[${bboxFull.min.z.toFixed(2)}, ${bboxFull.max.z.toFixed(2)}]`,
+            `y:[${bboxFull.min.y.toFixed(2)}, ${bboxFull.max.y.toFixed(2)}]`,
+        );
 
-    const BX = 0;
-    const BW = BRIDGE_WIDTH;
-    
-    // Materiais com a nova textura de madeira
-    const matWood = new THREE.MeshStandardMaterial({ 
-        map: madeiraTex, 
-        color: 0xffffff, 
-        roughness: 0.9,
-        side: THREE.DoubleSide
-    });
-    const matWoodDark = new THREE.MeshStandardMaterial({ 
-        map: madeira2Tex, 
-        color: 0x888888, 
-        roughness: 0.95,
-        side: THREE.DoubleSide
-    });
-    const matStone = new THREE.MeshStandardMaterial({ color: 0x888078, roughness: 0.95 });
+        // ---- Colisões manuais do Gobble Inn ----
+        const wallH = 3;     // altura das paredes
+        const wallT = 0.40;  // espessura das paredes
+        const postR = 0.15;  // raio (meia-largura) dos postes da entrada
 
-    // --- Tabuleiro em arco ---
-    const bridgeGroup = new THREE.Group();
-    const arcSegments = 10;
-    const arcWidth = BRIDGE_ARC_WIDTH;
-    const arcHeight = BRIDGE_ARC_HEIGHT;
-
-    for (let i = 0; i < arcSegments; i++) {
-        const t0 = i / arcSegments;
-        const t1 = (i + 1) / arcSegments;
-        
-        const z0 = (t0 - 0.5) * arcWidth;
-        const z1 = (t1 - 0.5) * arcWidth;
-        const zCenter = (z0 + z1) / 2;
-        
-        const hCenter = arcHeight * (1 - Math.pow((2 * zCenter) / arcWidth, 2)) - 0.05;
-        
-        const segLen = (arcWidth / arcSegments) + 0.05;
-        
-        // Clonar materiais para ajustar o repeat da textura em cada parte
-        const mWoodSeg = matWood.clone();
-        mWoodSeg.map = madeiraTex.clone();
-        mWoodSeg.map.wrapS = mWoodSeg.map.wrapT = THREE.RepeatWrapping;
-        mWoodSeg.map.repeat.set(BW / 2, segLen / 2);
-        mWoodSeg.map.needsUpdate = true;
-
-        const seg = new THREE.Mesh(new THREE.BoxGeometry(BW, 0.25, segLen), mWoodSeg);
-        seg.position.set(0, hCenter, zCenter);
-        const angle = -Math.atan2(arcHeight * -8 * zCenter / (arcWidth * arcWidth), 1);
-        seg.rotation.x = angle;
-        seg.castShadow = true; seg.receiveShadow = true;
-        bridgeGroup.add(seg);
-
-        for (const side of [-1, 1]) {
-            const mWoodDarkBeam = matWoodDark.clone();
-            mWoodDarkBeam.map = madeira2Tex.clone();
-            mWoodDarkBeam.map.wrapS = mWoodDarkBeam.map.wrapT = THREE.RepeatWrapping;
-            mWoodDarkBeam.map.repeat.set(0.5, segLen / 2);
-            mWoodDarkBeam.map.needsUpdate = true;
-
-            const beam = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, segLen), mWoodDarkBeam);
-            beam.position.set(side * (BW / 2 - 0.2), hCenter - 0.3, zCenter);
-            beam.rotation.x = angle;
-            bridgeGroup.add(beam);
-        }
-
-        const nPlanks = 2;
-        for (let j = 0; j < nPlanks; j++) {
-            const pz = z0 + (j + 0.5) * (segLen / nPlanks);
-            const ph = arcHeight * (1 - Math.pow((2 * pz) / arcWidth, 2)) + 0.08;
-            
-            const mWoodPlank = matWood.clone();
-            mWoodPlank.map = madeiraTex.clone();
-            mWoodPlank.map.wrapS = mWoodPlank.map.wrapT = THREE.RepeatWrapping;
-            mWoodPlank.map.repeat.set(BW / 2, 0.2);
-            mWoodPlank.map.needsUpdate = true;
-
-            const plank = new THREE.Mesh(new THREE.BoxGeometry(BW + 0.2, 0.08, 0.25), mWoodPlank);
-            plank.position.set((Math.random() - 0.5) * 0.1, ph, pz);
-            plank.rotation.x = angle;
-            plank.rotation.y = (Math.random() - 0.5) * 0.05;
-            plank.castShadow = true;
-            bridgeGroup.add(plank);
-        }
-    }
-    bridgeGroup.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
-    scene.add(bridgeGroup);
-
-    // --- Parapeitos e Postes ---
-    for (const sx of [-BW / 2 + 0.1, BW / 2 - 0.1]) {
-        const nPosts = 5;
-        const posts = [];
-        for (let i = 0; i < nPosts; i++) {
-            const t = i / (nPosts - 1);
-            const pz = (t - 0.5) * arcWidth;
-            const ph = arcHeight * (1 - Math.pow((2 * pz) / arcWidth, 2)) + 0.4;
-            
-            const mPost = matWoodDark.clone();
-            mPost.map = madeira2Tex.clone();
-            mPost.map.wrapS = mPost.map.wrapT = THREE.RepeatWrapping;
-            mPost.map.repeat.set(0.2, 1);
-            mPost.map.needsUpdate = true;
-
-            const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.5, 0.22), mPost);
-            post.position.set(sx, ph, pz);
-            post.rotation.y = Math.random() * 0.2;
-            post.castShadow = true; post.receiveShadow = true;
-            scene.add(post);
-            posts.push(post);
-
-            // Colisor individual para cada poste — muito mais preciso
-            addCollider(new THREE.Box3(
-                new THREE.Vector3(BX + sx - 0.2, ph - 0.75, pz - 0.11),
-                new THREE.Vector3(BX + sx + 0.2, ph + 0.75, pz + 0.11)
-            ));
-        }
-
-        for (let i = 0; i < nPosts - 1; i++) {
-            const p1 = posts[i].position;
-            const p2 = posts[i+1].position;
-            const dist = p1.distanceTo(p2);
-            
-            const mRail = matWood.clone();
-            mRail.map = madeiraTex.clone();
-            mRail.map.wrapS = mRail.map.wrapT = THREE.RepeatWrapping;
-            mRail.map.repeat.set(dist / 2, 0.2);
-            mRail.map.needsUpdate = true;
-
-            const rail = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, dist + 0.1), mRail);
-            rail.position.set(sx, (p1.y + p2.y) / 2 + 0.35, (p1.z + p2.z) / 2);
-            rail.lookAt(sx, (p1.y + p2.y) / 2 + 0.35, p2.z);
-            rail.castShadow = true; rail.receiveShadow = true;
-            scene.add(rail);
-
-            const mRailMid = matWoodDark.clone();
-            mRailMid.map = madeira2Tex.clone();
-            mRailMid.map.wrapS = mRailMid.map.wrapT = THREE.RepeatWrapping;
-            mRailMid.map.repeat.set(dist / 2, 0.1);
-            mRailMid.map.needsUpdate = true;
-
-            const railMid = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, dist + 0.1), mRailMid);
-            railMid.position.set(sx, (p1.y + p2.y) / 2 - 0.1, (p1.z + p2.z) / 2);
-            railMid.lookAt(sx, (p1.y + p2.y) / 2 - 0.1, p2.z);
-            railMid.castShadow = true; railMid.receiveShadow = true;
-            scene.add(railMid);
-
-
-            // Colisor para o corrimão entre postes
-            addCollider(new THREE.Box3(
-                new THREE.Vector3(BX + sx - 0.1, Math.min(p1.y, p2.y) - 0.2, Math.min(p1.z, p2.z)),
-                new THREE.Vector3(BX + sx + 0.1, Math.max(p1.y, p2.y) + 0.6, Math.max(p1.z, p2.z))
-            ));
-        }
-    }
-
-    bridgePassage = new THREE.Box3(
-        new THREE.Vector3(BX - BW / 2 + 0.4, -2, RZ - arcWidth / 2 - 0.8),
-        new THREE.Vector3(BX + BW / 2 - 0.4,  4, RZ + arcWidth / 2 + 0.8)
-    );
-
-    // ---- bocas do rio: rochedos a tapar a entrada nas montanhas ----
-    // posicionadas DENTRO da zona jogável, antes das montanhas (que começam em x=±98)
-    criarBocaDoRio(scene,  93, RZ, RW); // este
-    criarBocaDoRio(scene, -93, RZ, RW); // oeste
-}
-
-// dique de rochas a tapar uma das pontas do rio, antes da montanha.
-// O rio continua atrás visualmente mas o canal fica bloqueado por um aglomerado
-// de rochedos altos e neblina, dando a ilusão de nascente/embocadura natural.
-function criarBocaDoRio(scene, cx, cz, riverWidth) {
-    const matBoulder = new THREE.MeshStandardMaterial({ color: 0x7a716a, roughness: 0.95, flatShading: true });
-    const matBoulderEscuro = new THREE.MeshStandardMaterial({ color: 0x4a443e, roughness: 1.0, flatShading: true });
-
-    const grupo = new THREE.Group();
-
-    // ---- 1) Dique de rochedos atravessado no rio (z ao longo da largura) ----
-    const z0 = cz - riverWidth/2 - 1.2;
-    const z1 = cz + riverWidth/2 + 1.2;
-    const passos = 7;
-    for (let i = 0; i < passos; i++) {
-        const t = i / (passos - 1);
-        const z = z0 + (z1 - z0) * t;
-        // raio maior nas extremidades (margens), menor no centro para dar perfil de "U"
-        const baseR = 1.6 + Math.abs(t - 0.5) * 2.4;
-        const r = baseR + (Math.random() - 0.5) * 0.5;
-        const escuro = (i + 1) % 3 === 0;
-        const geo = new THREE.DodecahedronGeometry(r, 0);
-        const m = new THREE.Mesh(geo, escuro ? matBoulderEscuro : matBoulder);
-        // pequena variação em x para o dique não ser uma linha perfeita
-        const dx = (Math.random() - 0.5) * 1.2;
-        const yScale = 1.1 + Math.random() * 0.5;
-        m.position.set(cx + dx, r * yScale * 0.7 - 0.2, z + (Math.random() - 0.5) * 0.6);
-        m.rotation.set(Math.random()*0.6, Math.random()*Math.PI*2, Math.random()*0.6);
-        m.scale.y = yScale;
-        m.castShadow = true;
-        m.receiveShadow = true;
-        grupo.add(m);
-
+        // Parede ESTE (lado da entrada) — face em x=-43.53, espessura para dentro (-x)
         addCollider(new THREE.Box3(
-            new THREE.Vector3(m.position.x - r*0.7, 0, m.position.z - r*0.7),
-            new THREE.Vector3(m.position.x + r*0.7, r*2.2, m.position.z + r*0.7)
+            new THREE.Vector3(-43.53 - wallT, 0,     32.40),
+            new THREE.Vector3(-43.53,         wallH, 41.12),
         ));
-    }
+        // Parede NORTE — face em z=41.49, espessura para dentro (-z)
+        addCollider(new THREE.Box3(
+            new THREE.Vector3(-49.80, 0,     41.49 - wallT),
+            new THREE.Vector3(-43.93, wallH, 41.49),
+        ));
+        // Parede OESTE (fundo) — face em x=-49.81, espessura para dentro (+x)
+        addCollider(new THREE.Box3(
+            new THREE.Vector3(-49.81,         0,     32.10),
+            new THREE.Vector3(-49.81 + wallT, wallH, 41.27),
+        ));
+        // Parede SUL — face em z=32.10, espessura para dentro (+z)
+        addCollider(new THREE.Box3(
+            new THREE.Vector3(-49.79, 0,     32.10),
+            new THREE.Vector3(-44.01, wallH, 32.10 + wallT),
+        ));
 
-    // ---- 2) Rocha grande dominante atrás (lado da montanha) ----
-    const dir = Math.sign(cx) || 1;
-    const grande = new THREE.Mesh(new THREE.DodecahedronGeometry(3.8, 0), matBoulder);
-    grande.position.set(cx + dir * 2.2, 2.6, cz + (Math.random() - 0.5) * 0.6);
-    grande.rotation.set(Math.random()*0.5, Math.random()*Math.PI*2, Math.random()*0.5);
-    grande.scale.set(1.0, 1.4, 1.1);
-    grande.castShadow = true; grande.receiveShadow = true;
-    grupo.add(grande);
-    addCollider(new THREE.Box3(
-        new THREE.Vector3(grande.position.x - 3, 0, grande.position.z - 3),
-        new THREE.Vector3(grande.position.x + 3, 5.5, grande.position.z + 3)
-    ));
+        // Postes da entrada (mais finos que o jogador)
+        addCollider(new THREE.Box3(
+            new THREE.Vector3(-39.95 - postR, 0,     38.37 - postR),
+            new THREE.Vector3(-39.95 + postR, wallH, 38.37 + postR),
+        ));
+        addCollider(new THREE.Box3(
+            new THREE.Vector3(-40.21 - postR, 0,     35.38 - postR),
+            new THREE.Vector3(-40.21 + postR, wallH, 35.38 + postR),
+        ));
 
-    // ---- 3) Neblina/borrifo (duas camadas) por cima do dique ----
-    const matMist = new THREE.MeshBasicMaterial({
-        color: 0xeaf0f6, transparent: true, opacity: 0.28, depthWrite: false,
-    });
-    const mist = new THREE.Mesh(new THREE.SphereGeometry(3.0, 16, 12), matMist);
-    mist.position.set(cx, 1.4, cz);
-    mist.scale.set(1.0, 0.6, 1.6);
-    grupo.add(mist);
+        // Parede diagonal — aproximada por segmentos AABB
+        // de (X:-42.40, Z:25.54) a (X:-44.25, Z:28.27)
+        {
+            const ax = -42.40, az = 25.54;
+            const bx = -44.25, bz = 28.27;
+            const segments = 6;
+            const halfT    = 0.22; // meia-espessura de cada segmento
+            for (let i = 0; i < segments; i++) {
+                const t  = (i + 0.5) / segments;
+                const cx = ax + (bx - ax) * t;
+                const cz = az + (bz - az) * t;
+                addCollider(new THREE.Box3(
+                    new THREE.Vector3(cx - halfT, 0,     cz - halfT),
+                    new THREE.Vector3(cx + halfT, wallH, cz + halfT),
+                ));
+            }
+        }
 
-    const mist2 = new THREE.Mesh(new THREE.SphereGeometry(4.0, 16, 12), matMist.clone());
-    mist2.material.opacity = 0.14;
-    mist2.position.set(cx + dir * 0.6, 1.8, cz);
-    mist2.scale.set(1.1, 0.5, 1.7);
-    grupo.add(mist2);
+        invalidateColliderGrid();
+        console.log('[Inn] 12 colisores manuais adicionados (4 paredes + 2 postes + 6 segmentos diagonal).');
 
-    scene.add(grupo);
+        // Caixa de interação para entrar na taverna — área do alpendre entre
+        // os postes e a parede este. Ajusta se a porta do modelo estiver noutro sítio.
+        tavernEnterBox = new THREE.Box3(
+            new THREE.Vector3(-43.30, 0,   35.00),
+            new THREE.Vector3(-38.50, 2.5, 39.00),
+        );
+    }, undefined, e => console.error('Erro gobble-inn:', e));
 }
 
 // ---- terrenos ----
@@ -1067,6 +600,8 @@ function criarPico(scene, x, z, h, r, rand) {
     cone.castShadow = true;
     cone.receiveShadow = true;
     scene.add(cone);
+    fadeables.push(cone);
+    cullables.push(cone);
 
     // neve no topo (cone menor branco)
     const snowH = h * 0.28;
@@ -1078,6 +613,8 @@ function criarPico(scene, x, z, h, r, rand) {
     snow.rotation.y = rand() * Math.PI;
     snow.castShadow = true;
     scene.add(snow);
+    fadeables.push(snow);
+    cullables.push(snow);
 
     // colisor — caixa larga o suficiente para bloquear o jogador
     addCollider(new THREE.Box3(
@@ -1130,6 +667,18 @@ const SHOP_CX = -30, SHOP_CZ = 25;
 function zonaLivre(x, z, m = 7) {
     return Math.abs(x - SHOP_CX) < m && Math.abs(z - SHOP_CZ) < m;
 }
+
+// Vila do mercador — área limpa à volta da loja, reservada para o jogador
+// colocar assets (casas, lanternas, banca, fonte, etc.).
+// Limites em coordenadas de mundo: rectângulo XZ.
+export const VILLAGE_BOUNDS = {
+    minX: -48, maxX: -12,
+    minZ:   9, maxZ:  41,
+};
+export function naVila(x, z) {
+    return x >= VILLAGE_BOUNDS.minX && x <= VILLAGE_BOUNDS.maxX
+        && z >= VILLAGE_BOUNDS.minZ && z <= VILLAGE_BOUNDS.maxZ;
+}
 // margem de exclusão de árvores nos caminhos (alargada para caminhos sinuosos)
 const PATH_W = 5.0;
 function naFaixaCaminho(x, z) {
@@ -1156,12 +705,14 @@ function criarCastelo(scene) {
     const W = 18, D = 16, H = 7;
 
     const loader = new GLTFLoader();
-    loader.load('../../assets/models/casttle.glb', (gltf) => {
+    loader.load('../../assets/models/constructions/casttle.glb', (gltf) => {
         const m = gltf.scene;
         m.position.set(CX, 0, CZ);
         m.scale.setScalar(SCALE);
         m.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
         scene.add(m);
+        fadeables.push(m);
+        cullables.push(m);
     }, undefined, e => console.error('Erro castelo GLB:', e));
 
     // caminho de acesso ao portão
@@ -1257,6 +808,8 @@ function criarGuardiao(scene) {
     g.position.set(GX, 0, GZ);
     g.rotation.y = 0; // Virado para SUL (frente)
     scene.add(g);
+    fadeables.push(g);
+    cullables.push(g);
     _guardianMesh = g; // Guarda referência para animação
 
     // barreira invisível que cobre toda a largura da ponte (BW=5, parapeitos em ±2.3)
@@ -1304,9 +857,11 @@ function _registaProp(x, z, r) { _propsColocadas.push({ x, z, r }); }
 export function criarMapa(scene) {
     criarTerrenoNorte(scene);
     criarTerrenoSul(scene);
-    criarRio(scene);
+    criarRio(scene, colliders, fadeables, cullables);
     criarGuardiao(scene);
     criarShop(scene, SHOP_CX, SHOP_CZ);
+    // Gobble Inn na vila — norte da loja, dentro de VILLAGE_BOUNDS
+    criarInn(scene, -45, 35, 0.01, 0, -2);
     criarCastelo(scene);
     // zona corrupta ao redor do castelo (z=-80) — visual roxo, sem encontros
     criarZonaCorrupta(scene, 0, -80, 28, 111);
@@ -1330,6 +885,7 @@ export function criarMapa(scene) {
         const x = (rand() * 2 - 1) * 94;
         const z = 5 + rand() * 90;
         if (naFaixaCaminho(x, z)) continue;
+        if (naVila(x, z)) continue;
         if (!_longeDeEstruturas(x, z)) continue;
         if (!_longeDeProps(x, z, MIN_DIST_ARVORES / 2)) continue;
         const zoneRef = _findZoneAt(x, z, [znB1, znB2, znB3]);
@@ -1344,6 +900,7 @@ export function criarMapa(scene) {
         const x = (rand() * 2 - 1) * 94;
         const z = -(5 + rand() * 90);
         if (naFaixaCaminho(x, z)) continue;
+        if (naVila(x, z)) continue;
         if (!_longeDeEstruturas(x, z)) continue;
         if (!_longeDeProps(x, z, MIN_DIST_ARVORES / 2)) continue;
         const zoneRef = _findZoneAt(x, z, [zsB1, zsB2, zsB3, zsB4]);
@@ -1358,6 +915,7 @@ export function criarMapa(scene) {
         const x = (rand() * 2 - 1) * 90;
         const z = 5 + rand() * 88;
         if (naFaixaCaminho(x, z)) continue;
+        if (naVila(x, z)) continue;
         if (!_longeDeEstruturas(x, z)) continue;
         if (!_longeDeProps(x, z, MIN_DIST_ROCHA_ARV / 2)) continue;
         const r = 0.3 + rand() * 0.5;
@@ -1372,6 +930,7 @@ export function criarMapa(scene) {
         const x = (rand() * 2 - 1) * 90;
         const z = -(5 + rand() * 88);
         if (naFaixaCaminho(x, z)) continue;
+        if (naVila(x, z)) continue;
         if (!_longeDeEstruturas(x, z)) continue;
         if (!_longeDeProps(x, z, MIN_DIST_ROCHA_ARV / 2)) continue;
         const r = 0.3 + rand() * 0.6;
@@ -1383,8 +942,8 @@ export function criarMapa(scene) {
     criarMontanhas(scene);
 
     // baú escondido (canto do mapa, longe dos caminhos e da zona corrupta)
-    const _bauBoxes = _criarBau(scene, 70, 70);
-    colliders.push({ box: _bauBoxes.colliderBox, isRiver: false });
+    _bau = new Bau(scene, 70, 0, 70, 'coroa_magica');
+    colliders.push({ box: _bau.getColliderBox(), isRiver: false }); _gridDirty = true;
 
     console.log('Mapa criado.');
 }
@@ -1423,15 +982,32 @@ export function zonasSulLimpas() {
 export function verificaColisao(futuroX, futuroZ) {
     if (futuroX < mapBounds.minX || futuroX > mapBounds.maxX ||
         futuroZ < mapBounds.minZ || futuroZ > mapBounds.maxZ) return true;
+
+    if (_gridDirty) _buildGrid();
+
     const r = 0.25;
-    const pb = new THREE.Box3(
-        new THREE.Vector3(futuroX - r, 0, futuroZ - r),
-        new THREE.Vector3(futuroX + r, 1.7, futuroZ + r)
-    );
-    for (const c of colliders) {
-        if (!pb.intersectsBox(c.box)) continue;
-        if (c.isRiver && bridgePassage?.containsPoint(new THREE.Vector3(futuroX, 0, futuroZ))) continue;
-        return true;
+    _pbMin.set(futuroX - r, 0, futuroZ - r);
+    _pbMax.set(futuroX + r, 1.7, futuroZ + r);
+    _pb.min = _pbMin; _pb.max = _pbMax;
+
+    const cx = Math.floor(futuroX / _CELL);
+    const cz = Math.floor(futuroZ / _CELL);
+
+    // Verifica célula atual e 8 vizinhas (raio de player < célula, 1 vizinho chega)
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+            const bucket = _grid.get((cx + dx) * 10000 + (cz + dz));
+            if (!bucket) continue;
+            for (const i of bucket) {
+                const c = colliders[i];
+                if (!_pb.intersectsBox(c.box)) continue;
+                if (c.isRiver) {
+                    _bridgePt.set(futuroX, 0, futuroZ);
+                    if (getBridgePassage()?.containsPoint(_bridgePt)) continue;
+                }
+                return true;
+            }
+        }
     }
     return false;
 }

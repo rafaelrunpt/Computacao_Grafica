@@ -182,20 +182,204 @@ const partMat = new THREE.PointsMaterial({
 const particulas = new THREE.Points(partGeo, partMat);
 combateScene.add(particulas);
 
-// ---- Cubo inimigo (placeholder) ----
-const inimigoGeo = new THREE.BoxGeometry(1.6, 1.7, 1.6);
-const inimigoMat = new THREE.MeshStandardMaterial({
-    color: 0x7a1a1a,
-    emissive: 0xff2266,
-    emissiveIntensity: 0.55,
-    roughness: 0.4,
-    metalness: 0.2,
-});
-export const combateInimigo = new THREE.Mesh(inimigoGeo, inimigoMat);
+// ---- Wraith inimigo (referência: figura encapuzada com chamas roxas) ----
+export const combateInimigo = new THREE.Group();
 combateInimigo.position.copy(posInimigoCombate);
-combateInimigo.castShadow = true;
-combateInimigo.receiveShadow = true;
+
+const wraithDark = new THREE.MeshStandardMaterial({
+    color: 0x080310, roughness: 0.95, metalness: 0.05,
+});
+const wraithCloth = new THREE.MeshStandardMaterial({
+    color: 0x1a0930, emissive: 0x3d0e75, emissiveIntensity: 0.55,
+    roughness: 1, metalness: 0,
+});
+const wingMat = new THREE.MeshStandardMaterial({
+    color: 0x4a1880, emissive: 0x9040e0, emissiveIntensity: 1.0,
+    transparent: true, opacity: 0.8, side: THREE.DoubleSide, roughness: 0.5,
+});
+const flameMat = new THREE.MeshBasicMaterial({
+    color: 0xa050ff, transparent: true, opacity: 0.85,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+});
+const mistMat = new THREE.MeshBasicMaterial({
+    color: 0x6520b0, transparent: true, opacity: 0.22,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+});
+const glowMat = new THREE.MeshBasicMaterial({ color: 0xc080ff });
+
+// Robe (corpo cónico, alargado em baixo)
+const robe = new THREE.Mesh(
+    new THREE.ConeGeometry(0.95, 2.2, 14, 1, true),
+    wraithCloth
+);
+robe.position.y = 1.0;
+robe.castShadow = true;
+combateInimigo.add(robe);
+
+// Cintura
+const belt = new THREE.Mesh(
+    new THREE.TorusGeometry(0.55, 0.06, 8, 24),
+    new THREE.MeshStandardMaterial({ color: 0x6a6a78, roughness: 0.6 })
+);
+belt.position.y = 1.45;
+belt.rotation.x = Math.PI / 2;
+combateInimigo.add(belt);
+
+// Tronco (parte de cima do robe, mais estreita)
+const torso = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.42, 0.58, 0.95, 12, 1, true),
+    wraithCloth
+);
+torso.position.y = 1.92;
+torso.castShadow = true;
+combateInimigo.add(torso);
+
+// Ombros / capa
+const shoulders = new THREE.Mesh(
+    new THREE.ConeGeometry(0.7, 0.5, 12, 1, true),
+    wraithDark
+);
+shoulders.position.y = 2.15;
+shoulders.castShadow = true;
+combateInimigo.add(shoulders);
+
+// Capuz
+const hood = new THREE.Mesh(
+    new THREE.ConeGeometry(0.42, 0.9, 12),
+    wraithDark
+);
+hood.position.y = 2.78;
+hood.rotation.x = 0.15;
+hood.castShadow = true;
+combateInimigo.add(hood);
+
+// Rosto brilhante dentro do capuz
+const face = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 12), glowMat);
+face.position.set(0, 2.55, 0.18);
+combateInimigo.add(face);
+const faceLight = new THREE.PointLight(0xa060ff, 1.0, 2.2, 2);
+faceLight.position.set(0, 2.55, 0.25);
+combateInimigo.add(faceLight);
+
+// Braços (mangas caídas) + garras luminosas
+function braco(side) {
+    const manga = new THREE.Mesh(
+        new THREE.ConeGeometry(0.18, 1.05, 8, 1, true),
+        wraithCloth
+    );
+    manga.position.set(0.55 * side, 1.55, 0.1);
+    manga.rotation.z = side * 0.45;
+    manga.castShadow = true;
+    combateInimigo.add(manga);
+
+    const garra = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 10), glowMat);
+    garra.position.set(0.82 * side, 1.05, 0.12);
+    combateInimigo.add(garra);
+}
+braco(-1); braco(1);
+
+// Asas (forma curva, semitransparente, roxa)
+function asa(side) {
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);
+    shape.bezierCurveTo(0.7 * side, 0.3, 1.4 * side, 0.0, 1.6 * side, -0.6);
+    shape.bezierCurveTo(1.2 * side, -0.5, 0.8 * side, -0.9, 0.4 * side, -1.2);
+    shape.bezierCurveTo(0.25 * side, -0.8, 0.1 * side, -0.4, 0, 0);
+    const g = new THREE.ShapeGeometry(shape);
+    const m = new THREE.Mesh(g, wingMat);
+    m.position.set(0.35 * side, 2.0, -0.25);
+    m.rotation.y = side * -0.35;
+    return m;
+}
+const asaL = asa(-1);
+const asaR = asa(1);
+combateInimigo.add(asaL, asaR);
+
+// Chamas roxas em volta da cabeça
+const flames = [];
+for (let i = 0; i < 12; i++) {
+    const g = new THREE.ConeGeometry(0.08 + Math.random() * 0.05, 0.45 + Math.random() * 0.45, 6);
+    const m = new THREE.Mesh(g, flameMat);
+    const a = (i / 12) * Math.PI * 2 + Math.random() * 0.3;
+    const rad = 0.32 + Math.random() * 0.18;
+    m.position.set(Math.cos(a) * rad, 2.95 + Math.random() * 0.25, Math.sin(a) * rad);
+    m.userData = {
+        baseY: m.position.y,
+        phase: Math.random() * Math.PI * 2,
+        baseScale: 0.8 + Math.random() * 0.5,
+    };
+    m.scale.setScalar(m.userData.baseScale);
+    flames.push(m);
+    combateInimigo.add(m);
+}
+
+// Nevoa/aura rotativa em redor do wraith
+const mistGroup = new THREE.Group();
+mistGroup.position.y = 1.2;
+for (let i = 0; i < 16; i++) {
+    const g = new THREE.PlaneGeometry(1.7, 1.7);
+    const m = new THREE.Mesh(g, mistMat);
+    const a = (i / 16) * Math.PI * 2;
+    const rad = 0.95 + Math.random() * 0.35;
+    m.position.set(Math.cos(a) * rad, (Math.random() - 0.3) * 1.6, Math.sin(a) * rad);
+    m.rotation.y = -a + Math.PI / 2;
+    m.rotation.z = Math.random() * Math.PI * 2;
+    mistGroup.add(m);
+}
+combateInimigo.add(mistGroup);
+
+// segundo anel de nevoa, mais lento e em sentido contrário
+const mistGroup2 = new THREE.Group();
+mistGroup2.position.y = 0.4;
+for (let i = 0; i < 12; i++) {
+    const g = new THREE.PlaneGeometry(2.1, 1.4);
+    const m = new THREE.Mesh(g, mistMat);
+    const a = (i / 12) * Math.PI * 2;
+    const rad = 1.3 + Math.random() * 0.3;
+    m.position.set(Math.cos(a) * rad, (Math.random() - 0.5) * 0.8, Math.sin(a) * rad);
+    m.rotation.y = -a + Math.PI / 2;
+    mistGroup2.add(m);
+}
+combateInimigo.add(mistGroup2);
+
+// luz roxa pessoal
+const auraLight = new THREE.PointLight(0x9040ff, 1.6, 5.5, 2);
+auraLight.position.set(0, 1.4, 0);
+combateInimigo.add(auraLight);
+
 combateScene.add(combateInimigo);
+
+// Proxy de material para preservar a API usada por systems/combate.js
+const _fadeMats = [wraithDark, wraithCloth, wingMat, flameMat, mistMat, glowMat,
+                   belt.material, face.material];
+const _emissiveMats = [wraithCloth, wingMat];
+const _baseOpacity = new Map(_fadeMats.map(m => [m, m.opacity ?? 1]));
+const _baseEmissive = _emissiveMats.map(m => m.emissiveIntensity);
+const inimigoMat = {
+    get emissiveIntensity() { return _emissiveMats[0].emissiveIntensity; },
+    set emissiveIntensity(v) {
+        _emissiveMats[0].emissiveIntensity = v;
+        _emissiveMats[1].emissiveIntensity = v * 1.4;
+    },
+    get transparent() { return wraithCloth.transparent; },
+    set transparent(v) { _fadeMats.forEach(m => { m.transparent = v; }); },
+    get opacity() { return wraithCloth.opacity; },
+    set opacity(v) {
+        _fadeMats.forEach(m => { m.opacity = (_baseOpacity.get(m) ?? 1) * v; });
+    },
+    color: { setHex: () => {} },
+    emissive: { setHex: () => {} },
+};
+combateInimigo.material = inimigoMat;
+combateInimigo.userData.flames = flames;
+combateInimigo.userData.mistGroup = mistGroup;
+combateInimigo.userData.mistGroup2 = mistGroup2;
+combateInimigo.userData.asaL = asaL;
+combateInimigo.userData.asaR = asaR;
+combateInimigo.userData._baseOpacity = _baseOpacity;
+combateInimigo.userData._baseEmissive = _baseEmissive;
+combateInimigo.userData._emissiveMats = _emissiveMats;
+combateInimigo.userData._fadeMats = _fadeMats;
 
 // ---- Atualização por frame (uniforms + animações) ----
 let _t = 0;
@@ -206,10 +390,36 @@ export function updateCombateScene(deltaTime) {
     // pulsar a luz da arena
     arenaPulse.intensity = 1.2 + Math.sin(_t * 2.4) * 0.5;
 
-    // inimigo a flutuar e a rodar lentamente
-    combateInimigo.position.y = posInimigoCombate.y + Math.sin(_t * 1.6) * 0.12;
-    combateInimigo.rotation.y += deltaTime * 0.6;
-    combateInimigo.rotation.x = Math.sin(_t * 0.8) * 0.08;
+    // wraith a flutuar e a oscilar lentamente
+    combateInimigo.position.y = posInimigoCombate.y + Math.sin(_t * 1.4) * 0.12;
+    combateInimigo.rotation.y = Math.sin(_t * 0.5) * 0.15;
+    combateInimigo.rotation.z = Math.sin(_t * 0.8) * 0.04;
+
+    // nevoa rotativa (dois anéis em sentidos opostos)
+    const mist1 = combateInimigo.userData.mistGroup;
+    const mist2 = combateInimigo.userData.mistGroup2;
+    if (mist1) mist1.rotation.y += deltaTime * 0.45;
+    if (mist2) mist2.rotation.y -= deltaTime * 0.28;
+
+    // asas a bater
+    const asaL = combateInimigo.userData.asaL;
+    const asaR = combateInimigo.userData.asaR;
+    if (asaL && asaR) {
+        const flap = Math.sin(_t * 2.2) * 0.18;
+        asaL.rotation.y = -0.35 + flap;
+        asaR.rotation.y =  0.35 - flap;
+    }
+
+    // chamas a oscilar
+    const flames = combateInimigo.userData.flames;
+    if (flames) {
+        for (const f of flames) {
+            const u = f.userData;
+            f.position.y = u.baseY + Math.sin(_t * 5 + u.phase) * 0.08;
+            const s = u.baseScale * (0.85 + Math.sin(_t * 6 + u.phase) * 0.2);
+            f.scale.set(s, s * (1.0 + Math.sin(_t * 4 + u.phase) * 0.15), s);
+        }
+    }
 
     // partículas a subir lentamente
     const pos = particulas.geometry.attributes.position;
@@ -226,8 +436,10 @@ export function resetCombateScene() {
     combateInimigo.rotation.set(0, 0, 0);
     combateInimigo.visible = true;
     combateInimigo.scale.set(1, 1, 1);
-    inimigoMat.opacity = 1;
-    inimigoMat.transparent = false;
-    inimigoMat.color.setHex(0x7a1a1a);
-    inimigoMat.emissive.setHex(0xff2266);
+    const ud = combateInimigo.userData;
+    ud._fadeMats.forEach(m => {
+        m.opacity = ud._baseOpacity.get(m) ?? 1;
+        m.transparent = (ud._baseOpacity.get(m) ?? 1) < 1;
+    });
+    ud._emissiveMats.forEach((m, i) => { m.emissiveIntensity = ud._baseEmissive[i]; });
 }

@@ -192,6 +192,9 @@ player.userData.leftArm = leftArmGroup;
 player.userData.rightArm = rightArmGroup;
 
 player.position.set(3, 0, 5);
+// baseY = altura "intencional" definida pelo gameplay (chão da loja, ponte, teleport).
+// A animação do andar só pode somar/subtrair o bounce por cima deste valor.
+player.userData.baseY = 0;
 
 // ---------------------------------------------------------
 // 6. ANIMAÇÃO
@@ -207,28 +210,30 @@ export function updateCoroaAnimacao(deltaTime) {
 }
 
 export function updatePlayerAnimation(isMoving, deltaTime) {
-    const walkSpeed = 25; 
-    const stepAmplitude = 0.6; 
-    const armAmplitude = 0.5; 
+    const walkSpeed = 25;
+    const stepAmplitude = 0.6;
+    const armAmplitude = 0.5;
+
+    const baseY = player.userData.baseY ?? 0;
 
     if (isMoving) {
         walkTime += deltaTime * walkSpeed;
 
         player.userData.leftLeg.rotation.x = Math.sin(walkTime) * stepAmplitude;
         player.userData.rightLeg.rotation.x = -Math.sin(walkTime) * stepAmplitude;
-        
+
         player.userData.leftArm.rotation.x = -Math.sin(walkTime) * armAmplitude;
         player.userData.rightArm.rotation.x = Math.sin(walkTime) * armAmplitude;
 
         const bounce = Math.abs(Math.sin(walkTime)) * 0.06;
-        player.position.y = bounce; 
+        player.position.y = baseY + bounce;
 
     } else {
         player.userData.leftLeg.rotation.x = 0;
         player.userData.rightLeg.rotation.x = 0;
         player.userData.leftArm.rotation.x = 0;
         player.userData.rightArm.rotation.x = 0;
-        player.position.y = 0;
-        walkTime = 0; 
+        player.position.y = baseY;
+        walkTime = 0;
     }
 }

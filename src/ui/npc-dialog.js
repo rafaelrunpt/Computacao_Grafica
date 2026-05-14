@@ -1,3 +1,11 @@
+import { THEMES } from './dialogue-themes.js';
+import { getCintilas, gastarCintilas, ganharCintilas } from '../systems/currency.js';
+import { adicionarItem, CATALOGO } from '../systems/inventario.js';
+import {
+    getFase as getFetchFase, getProgresso as getFetchProgresso,
+    aceitarFetchQuest, entregarFetchQuest,
+} from '../systems/merchant-fetch-quest.js';
+
 // ==========================================
 //  Dados do diálogo
 // ==========================================
@@ -16,7 +24,6 @@ const ABERTURA = {
     ],
 };
 
-// id único por escolha. repetivel:true → mantém-se na lista após ser usada.
 const ESCOLHAS = {
     fraco: [
         {
@@ -120,10 +127,15 @@ let playerLevel = 1;
 let passagemConcedida = false;
 let respondendoAtual = false;
 let typingInterval = null;
+let currentTypingText = '';
+let currentTypingCallback = null;
+let historyLog = [];
+let summaryExpanded = false;
 
-// Persistência: ids já usados (não repetíveis ficam ocultos depois de usados)
 const usedIds = new Set();
 let lastTier = null;
+let currentTheme = THEMES.tavern;
+let currentNpcConfig = null;     // config do NPC atualmente em diálogo
 
 // ==========================================
 //  UI
@@ -131,208 +143,340 @@ let lastTier = null;
 const overlay = document.createElement('div');
 overlay.style.cssText = `
     position: fixed; inset: 0;
-    background: radial-gradient(ellipse at center, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.85) 100%);
     display: none; align-items: flex-end; justify-content: center;
-    z-index: 200; padding-bottom: 50px;
-    font-family: 'Georgia', 'Times New Roman', serif;
-    backdrop-filter: blur(2px);
+    z-index: 200; padding-bottom: 0;
+    backdrop-filter: blur(6px);
+    background: rgba(0, 0, 0, 0.15);
+    overflow: hidden;
 `;
 
-// ---------- Caixa exterior (moldura dourada) ----------
+const accentsContainer = document.createElement('div');
+accentsContainer.style.cssText = `
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: -1;
+`;
+overlay.appendChild(accentsContainer);
+
+// ---------- History Box (Topo Esquerda, Dropdown) ----------
+const summaryBox = document.createElement('div');
+summaryBox.style.cssText = `
+    position: absolute;
+    left: 40px; top: 40px;
+    width: 280px;
+    border-radius: 10px;
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.12);
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 10;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+`;
+
+const summaryHeader = document.createElement('div');
+summaryHeader.style.cssText = `
+    padding: 11px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+    user-select: none;
+`;
+
+const summaryLabel = document.createElement('div');
+summaryLabel.style.cssText = `
+    font-size: 10px; text-transform: uppercase; letter-spacing: 2.5px;
+    font-weight: bold;
+`;
+summaryLabel.textContent = 'Histórico da Conversa';
+
+const summaryArrow = document.createElement('div');
+summaryArrow.style.cssText = `
+    font-size: 11px;
+    transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+    opacity: 0.6;
+`;
+summaryArrow.textContent = '▾';
+
+summaryHeader.append(summaryLabel, summaryArrow);
+
+const summaryContent = document.createElement('div');
+summaryContent.style.cssText = `
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 0 16px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), padding 0.35s;
+`;
+
+summaryBox.append(summaryHeader, summaryContent);
+overlay.appendChild(summaryBox);
+
+summaryBox.onclick = () => {
+    summaryExpanded = !summaryExpanded;
+    if (summaryExpanded) {
+        summaryContent.style.maxHeight = '420px';
+        summaryContent.style.padding = '0 16px 16px';
+        summaryContent.style.overflowY = 'auto';
+        summaryArrow.style.transform = 'rotate(180deg)';
+        summaryBox.style.boxShadow = '0 16px 40px rgba(0,0,0,0.5)';
+        setTimeout(() => {
+            summaryContent.scrollTop = summaryContent.scrollHeight;
+        }, 50);
+    } else {
+        summaryContent.style.maxHeight = '0';
+        summaryContent.style.padding = '0 16px';
+        summaryContent.style.overflowY = 'hidden';
+        summaryArrow.style.transform = 'rotate(0deg)';
+        summaryBox.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)';
+    }
+};
+
+// ---------- Caixa Principal (Centro Baixo) ----------
 const caixaExt = document.createElement('div');
 caixaExt.style.cssText = `
-    width: min(700px, 94vw);
-    padding: 4px;
-    background: linear-gradient(135deg,
-        #8a5a18 0%,
-        #d4a830 25%,
-        #f0c850 50%,
-        #d4a830 75%,
-        #8a5a18 100%);
-    border-radius: 12px;
-    box-shadow:
-        0 0 60px rgba(220,150,40,0.35),
-        0 12px 40px rgba(0,0,0,0.95),
-        inset 0 0 4px rgba(255,220,120,0.6);
-    transform: translateY(50px) scale(0.96);
+    width: min(960px, 100vw);
+    padding: 1px 1px 0 1px;
+    border-radius: 14px 14px 0 0;
+    transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s ease-out;
+    position: relative;
+    z-index: 1;
+    transform: translateY(36px) scale(0.97);
     opacity: 0;
-    transition: transform 0.4s cubic-bezier(.2,.8,.2,1), opacity 0.3s ease-out;
 `;
 
-// ---------- Caixa interior (conteúdo) ----------
 const caixa = document.createElement('div');
 caixa.style.cssText = `
-    background:
-        linear-gradient(160deg, rgba(38,25,10,0.98) 0%, rgba(18,12,4,0.98) 100%),
-        radial-gradient(ellipse at top, rgba(140,90,30,0.25) 0%, transparent 70%);
-    border: 1px solid rgba(60,40,15,0.8);
-    border-radius: 9px;
-    box-shadow:
-        inset 0 0 80px rgba(0,0,0,0.7),
-        inset 0 1px 0 rgba(220,150,40,0.25);
+    border-radius: 13px 13px 0 0;
     overflow: hidden;
     display: flex; flex-direction: column;
-    max-height: 70vh;
+    height: 360px;
+    border-width: 1px 1px 0 1px;
+    border-style: solid;
+    backdrop-filter: blur(28px);
 `;
 
 // ---------- Cabeçalho ----------
 const header = document.createElement('div');
 header.style.cssText = `
-    background:
-        linear-gradient(180deg, rgba(60,40,12,0.9) 0%, rgba(30,20,6,0.6) 100%);
-    padding: 14px 20px 12px;
+    padding: 14px 22px;
     display: flex; align-items: center; gap: 14px;
     flex-shrink: 0;
-    border-bottom: 1px solid rgba(140,90,25,0.35);
-    position: relative;
+    height: 76px; box-sizing: border-box;
 `;
 
-// Linha decorativa fina sob o header
-header.style.boxShadow = 'inset 0 -1px 0 rgba(220,160,40,0.4), 0 2px 4px rgba(0,0,0,0.5)';
-
-// Retrato do guardião
 const retrato = document.createElement('div');
 retrato.style.cssText = `
-    width: 56px; height: 56px;
-    background:
-        radial-gradient(circle at 35% 30%, #ff7030 0%, #c04018 35%, #5a1808 75%, #2a0c04 100%);
+    width: 48px; height: 48px;
     border-radius: 50%;
-    border: 2px solid #d4a830;
     display: flex; align-items: center; justify-content: center;
-    font-size: 26px; flex-shrink: 0;
-    box-shadow:
-        0 0 18px rgba(255,100,30,0.5),
-        inset 0 0 14px rgba(0,0,0,0.6),
-        0 0 0 2px rgba(20,12,4,0.9),
-        0 0 0 4px rgba(180,120,30,0.4);
+    flex-shrink: 0;
+    box-shadow: 0 0 12px rgba(0,0,0,0.3);
+    background-size: cover;
+    background-position: center;
 `;
-retrato.textContent = '⚔';
 
-// Nome + ornamentos
 const nomeWrap = document.createElement('div');
 nomeWrap.style.cssText = `display:flex; flex-direction:column; gap:2px; flex:1;`;
 
 const nomeNpc = document.createElement('div');
-nomeNpc.style.cssText = `
-    color: #f2d070;
-    font-size: 18px;
-    font-weight: bold;
-    letter-spacing: 2px;
-    text-shadow:
-        0 0 12px rgba(255,200,80,0.7),
-        0 1px 2px rgba(0,0,0,1);
-    font-variant: small-caps;
-`;
-nomeNpc.innerHTML = '<span style="color:#c89060;font-weight:normal;font-size:14px;">❖</span> Guardião da Ponte <span style="color:#c89060;font-weight:normal;font-size:14px;">❖</span>';
+nomeNpc.style.cssText = `font-size: 18px; font-weight: bold; letter-spacing: 0.5px;`;
+nomeNpc.innerHTML = 'Guardião da Ponte';
 
 const subtitulo = document.createElement('div');
 subtitulo.style.cssText = `
-    color: #a07840; font-size: 11px; letter-spacing: 3px;
-    font-style: italic; opacity: 0.85;
+    font-size: 10px; letter-spacing: 2px;
+    font-style: italic; opacity: 0.6;
+    text-transform: uppercase;
 `;
-subtitulo.textContent = 'Sentinela da Ponte do Norte';
+subtitulo.textContent = 'Protetor da Passagem';
 
 nomeWrap.append(nomeNpc, subtitulo);
 
 const fecharBtn = document.createElement('button');
 fecharBtn.style.cssText = `
-    background: none; border: 1px solid rgba(140,90,25,0.4);
-    border-radius: 4px; cursor: pointer;
-    color: #80604060; font-size: 16px; line-height: 1;
-    width: 28px; height: 28px;
+    background: none; border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 50%; cursor: pointer;
+    font-size: 14px; width: 28px; height: 28px;
     transition: all 0.2s;
     display: flex; align-items: center; justify-content: center;
 `;
 fecharBtn.textContent = '✕';
-fecharBtn.onmouseenter = () => {
-    fecharBtn.style.color = '#f2d070';
-    fecharBtn.style.borderColor = '#c8901c';
-    fecharBtn.style.background = 'rgba(120,70,15,0.3)';
-};
-fecharBtn.onmouseleave = () => {
-    fecharBtn.style.color = '#80604060';
-    fecharBtn.style.borderColor = 'rgba(140,90,25,0.4)';
-    fecharBtn.style.background = 'none';
-};
-fecharBtn.onclick = () => fecharDialogo();
 
 header.append(retrato, nomeWrap, fecharBtn);
 
-// ---------- Divisor ornamental ----------
-function criarDivisor() {
-    const div = document.createElement('div');
-    div.style.cssText = `
-        display: flex; align-items: center; gap: 10px;
-        padding: 0 24px; margin: 4px 0;
-        flex-shrink: 0;
-    `;
-    div.innerHTML = `
-        <div style="flex:1; height:1px; background:linear-gradient(90deg, transparent, rgba(180,130,40,0.5), transparent);"></div>
-        <span style="color:#a07840; font-size:10px; letter-spacing:4px;">◆</span>
-        <div style="flex:1; height:1px; background:linear-gradient(90deg, transparent, rgba(180,130,40,0.5), transparent);"></div>
-    `;
-    return div;
-}
+// ---------- Conteúdo Diálogo ----------
+const dialogueView = document.createElement('div');
+dialogueView.style.cssText = `display: flex; flex-direction: column; flex: 1; overflow: hidden;`;
 
-// ---------- Fala do guardião ----------
 const falaWrap = document.createElement('div');
 falaWrap.style.cssText = `
-    padding: 14px 24px 16px;
-    flex-shrink: 0;
-    min-height: 70px;
-    display: flex; align-items: flex-start; gap: 12px;
+    padding: 15px 28px 5px; flex-shrink: 0;
+    height: 100px; box-sizing: border-box;
+    display: flex; align-items: flex-start; gap: 16px;
+    overflow: hidden;
+    cursor: default;
+    user-select: none;
 `;
 
 const aspas = document.createElement('div');
-aspas.style.cssText = `
-    color: #c8901c; font-size: 36px; line-height: 0.6;
-    margin-top: 8px; opacity: 0.5;
-    font-family: 'Georgia', serif;
-    flex-shrink: 0;
-`;
+aspas.style.cssText = `font-size: 38px; line-height: 0.6; margin-top: 10px; opacity: 0.3; flex-shrink: 0;`;
 aspas.textContent = '“';
 
 const falaTexto = document.createElement('div');
-falaTexto.style.cssText = `
-    color: #ecd49a; font-size: 15px; line-height: 1.65;
-    font-style: italic; flex: 1;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
-`;
+falaTexto.style.cssText = `font-size: 15px; line-height: 1.5; flex: 1; overflow: hidden;`;
 
 falaWrap.append(aspas, falaTexto);
 
-// ---------- Escolhas ----------
 const escolhasDiv = document.createElement('div');
 escolhasDiv.style.cssText = `
-    flex: 1; overflow-y: auto;
-    padding: 4px 18px 18px;
-    display: flex; flex-direction: column; gap: 8px;
-    scrollbar-width: thin; scrollbar-color: #6a4a18 transparent;
+    padding: 10px 28px 20px;
+    flex: 1;
+    display: flex; flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden; /* Impedir scroll na área de diálogo */
 `;
 
-caixa.append(header, falaWrap, criarDivisor(), escolhasDiv);
+// Click na área de texto para saltar typing
+falaWrap.onclick = () => {
+    if (typingInterval) {
+        clearInterval(typingInterval);
+        typingInterval = null;
+        falaTexto.textContent = currentTypingText;
+        falaWrap.style.cursor = 'default';
+        const cb = currentTypingCallback;
+        currentTypingText = '';
+        currentTypingCallback = null;
+        if (cb) cb();
+    }
+};
+
+dialogueView.append(falaWrap, escolhasDiv);
+caixa.append(header, dialogueView);
 caixaExt.appendChild(caixa);
 overlay.appendChild(caixaExt);
 document.body.appendChild(overlay);
 
 // ==========================================
-//  Lógica
+//  Lógica de UI
+// ==========================================
+
+function addToHistory(role, text) {
+    historyLog.push({ role, text });
+    
+    const entry = document.createElement('div');
+    entry.style.cssText = `
+        border-left: 2px solid ${role === 'npc' ? currentTheme.accent : 'rgba(255,255,255,0.2)'};
+        padding-left: 12px; margin-bottom: 4px;
+        flex-shrink: 0;
+    `;
+    
+    const label = document.createElement('div');
+    label.style.cssText = `
+        font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px;
+        color: ${role === 'npc' ? currentTheme.accent : currentTheme.bodyTextDim};
+        font-weight: bold; margin-bottom: 2px;
+    `;
+    label.textContent = role === 'npc' ? 'Guerreiro' : 'Herói';
+    
+    const content = document.createElement('div');
+    content.style.cssText = `
+        font-size: 12px; line-height: 1.4; color: ${currentTheme.bodyText};
+        font-family: ${currentTheme.bodyFont};
+        ${role === 'player' ? 'font-style: italic; opacity: 0.8;' : ''}
+    `;
+    content.textContent = text;
+    
+    entry.append(label, content);
+    summaryContent.appendChild(entry);
+    
+    // Auto-scroll history box se não estiver expandido (mostra o fundo)
+    if (!summaryExpanded) {
+        summaryBox.scrollTop = summaryBox.scrollHeight;
+    }
+}
+
+function aplicarTema(themeKey) {
+    const theme = THEMES[themeKey] || THEMES.tavern;
+    currentTheme = theme;
+
+    overlay.style.fontFamily = theme.bodyFont;
+
+    accentsContainer.innerHTML = '';
+    if (theme.sceneAccents) {
+        theme.sceneAccents.forEach(acc => {
+            const div = document.createElement('div');
+            div.style.cssText = `
+                position: absolute; left: ${acc.left}; top: ${acc.top};
+                width: ${acc.size}px; height: ${acc.size}px;
+                background: ${acc.color}; filter: blur(${acc.size / 3}px);
+                border-radius: 50%; opacity: 0.3;
+            `;
+            accentsContainer.appendChild(div);
+        });
+    }
+
+    summaryBox.style.background = `${theme.panel}BB`;
+    summaryHeader.style.background = `rgba(0,0,0,0.15)`;
+    summaryLabel.style.color = theme.accent;
+    summaryArrow.style.color = theme.accent;
+
+    caixaExt.style.background = `linear-gradient(135deg, ${theme.panelBorder}66, ${theme.panelBorder}11)`;
+    caixaExt.style.boxShadow = `0 25px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.1)`;
+
+    caixa.style.background = `${theme.panel}DD`;
+    caixa.style.borderColor = 'rgba(255,255,255,0.1)';
+
+    header.style.background = 'rgba(0,0,0,0.2)';
+    retrato.style.border = `2px solid ${theme.accent}66`;
+    retrato.style.color = theme.accent;
+
+    nomeNpc.style.color = theme.nameText;
+    nomeNpc.style.fontFamily = theme.nameFont;
+    subtitulo.style.color = theme.accent;
+
+    fecharBtn.style.color = theme.bodyTextDim;
+    aspas.style.color = theme.accent;
+    falaTexto.style.color = theme.bodyText;
+    falaTexto.style.fontFamily = theme.bodyFont;
+}
+
+fecharBtn.onclick = () => fecharDialogo();
+
+// ==========================================
+//  Lógica de Diálogo
 // ==========================================
 function escreverComEfeito(texto, onFim) {
     if (typingInterval) clearInterval(typingInterval);
     falaTexto.textContent = '';
     let i = 0;
+    currentTypingText = texto;
+    currentTypingCallback = onFim;
+
+    addToHistory('npc', texto);
+    falaWrap.style.cursor = 'pointer';
+
     typingInterval = setInterval(() => {
         falaTexto.textContent += texto[i++];
         if (i >= texto.length) {
             clearInterval(typingInterval);
             typingInterval = null;
+            currentTypingText = '';
+            currentTypingCallback = null;
+            falaWrap.style.cursor = 'default';
             if (onFim) onFim();
         }
-    }, 22);
+    }, 15);
 }
 
 function escolhasDisponiveis() {
+    if (currentNpcConfig && typeof currentNpcConfig.getEscolhas === 'function') {
+        return currentNpcConfig.getEscolhas().filter(e => {
+            if (e.condicao && !e.condicao()) return false;
+            if (!e.repetivel && usedIds.has(e.id)) return false;
+            return true;
+        });
+    }
+    // Fallback: guardião (sistema antigo).
     const tier = playerLevel >= 2 ? 'forte' : 'fraco';
     if (passagemConcedida) {
         return [{ id: 'passar_agora', label: '⚔  Atravessar a ponte', acao: 'passar_agora', repetivel: true }];
@@ -343,67 +487,71 @@ function escolhasDisponiveis() {
 function mostrarEscolhas() {
     escolhasDiv.innerHTML = '';
     const lista = escolhasDisponiveis();
+    const theme = currentTheme;
 
-    lista.forEach((escolha, idx) => {
+    const numChoices = lista.length;
+    // Cálculo rigoroso para caber tudo em escolhasDiv (altura disponível ~220px)
+    const availableHeight = 224; 
+    const totalGaps = (numChoices - 1) * 8;
+    const baseButtonHeight = (availableHeight - totalGaps) / numChoices;
+    
+    const paddingY = Math.min(14, Math.max(4, (baseButtonHeight - 20) / 2));
+    const fontSize = Math.min(15, Math.max(11, baseButtonHeight / 2.5));
+    const gapSize = Math.min(10, Math.max(4, 220 / (numChoices * 4)));
+
+    escolhasDiv.style.gap = `${gapSize}px`;
+
+    lista.forEach((escolha) => {
         const btn = document.createElement('button');
         const isAcao = escolha.acao === 'passar' || escolha.acao === 'passar_agora';
 
         btn.style.cssText = `
-            text-align: left;
-            background: ${isAcao
-                ? 'linear-gradient(135deg, rgba(180,120,30,0.4), rgba(80,50,12,0.5))'
-                : 'linear-gradient(135deg, rgba(60,38,12,0.45), rgba(30,18,6,0.55))'};
-            border: 1px solid ${isAcao ? '#c8901c' : 'rgba(120,80,25,0.55)'};
-            border-left: 3px solid ${isAcao ? '#f0c850' : '#7a5018'};
-            border-radius: 4px;
-            padding: 11px 14px 11px 16px;
-            color: ${isAcao ? '#f2d070' : '#d4b87a'};
-            font-family: 'Georgia', serif;
-            font-size: 14px; line-height: 1.45;
-            cursor: pointer;
-            transition: all 0.18s ease;
-            position: relative;
-            opacity: 0;
-            transform: translateX(-8px);
-            ${isAcao ? 'box-shadow: 0 0 12px rgba(220,160,40,0.25);' : ''}
+            text-align: left; background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-left: 4px solid ${isAcao ? theme.accent : 'rgba(255,255,255,0.1)'};
+            border-radius: 4px; 
+            padding: ${paddingY}px 22px;
+            color: ${theme.choiceText}; font-family: ${theme.bodyFont};
+            font-size: ${fontSize}px; line-height: 1.2; cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 1;
+            min-height: 0;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
         `;
 
-        btn.innerHTML = `<span style="color:${isAcao ? '#f0c850' : '#a07840'};margin-right:8px;font-weight:bold;">▸</span>${escolha.label}`;
+        btn.innerHTML = `<span style="color:${theme.accent};margin-right:12px;font-weight:bold;opacity:0.8;">▸</span>${escolha.label}`;
 
         btn.onmouseenter = () => {
-            btn.style.background = isAcao
-                ? 'linear-gradient(135deg, rgba(220,160,50,0.55), rgba(120,75,20,0.65))'
-                : 'linear-gradient(135deg, rgba(110,75,20,0.6), rgba(60,38,12,0.7))';
-            btn.style.borderLeftColor = '#f0c850';
-            btn.style.borderColor = '#d4a830';
-            btn.style.transform = 'translateX(2px)';
-            btn.style.boxShadow = '0 0 16px rgba(220,160,40,0.4), inset 0 0 8px rgba(220,160,40,0.15)';
+            btn.style.background = 'rgba(255, 255, 255, 0.12)';
+            btn.style.borderColor = theme.accent + '55';
+            btn.style.borderLeftColor = theme.accent;
+            btn.style.transform = 'translateX(8px)';
         };
         btn.onmouseleave = () => {
-            btn.style.background = isAcao
-                ? 'linear-gradient(135deg, rgba(180,120,30,0.4), rgba(80,50,12,0.5))'
-                : 'linear-gradient(135deg, rgba(60,38,12,0.45), rgba(30,18,6,0.55))';
-            btn.style.borderLeftColor = isAcao ? '#f0c850' : '#7a5018';
-            btn.style.borderColor = isAcao ? '#c8901c' : 'rgba(120,80,25,0.55)';
+            btn.style.background = 'rgba(255, 255, 255, 0.05)';
+            btn.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+            btn.style.borderLeftColor = isAcao ? theme.accent : 'rgba(255,255,255,0.1)';
             btn.style.transform = 'translateX(0)';
-            btn.style.boxShadow = isAcao ? '0 0 12px rgba(220,160,40,0.25)' : 'none';
         };
 
         btn.onclick = () => tratarEscolha(escolha);
         escolhasDiv.appendChild(btn);
-
-        // stagger fade-in
-        setTimeout(() => {
-            btn.style.transition = 'all 0.25s ease, transform 0.18s ease';
-            btn.style.opacity = '1';
-            btn.style.transform = 'translateX(0)';
-        }, 60 + idx * 70);
     });
 }
 
 function tratarEscolha(escolha) {
     if (respondendoAtual) return;
+    addToHistory('player', escolha.label);
 
+    // Ação imediata (antes da resposta) — pode cancelar/fechar o diálogo.
+    if (typeof escolha.acaoImediata === 'function') {
+        const r = escolha.acaoImediata();
+        if (r === 'cancelar') return;
+    }
+
+    // Sistema antigo (guardião) — `passar_agora` fecha e dispara callback.
     if (escolha.acao === 'passar_agora') {
         fecharDialogo();
         if (onPassar) onPassar();
@@ -411,80 +559,277 @@ function tratarEscolha(escolha) {
     }
 
     respondendoAtual = true;
-
-    // marca como usada se não for repetível
     if (!escolha.repetivel) usedIds.add(escolha.id);
 
-    // remove botões com fade-out
     [...escolhasDiv.children].forEach(btn => {
-        btn.style.transition = 'opacity 0.15s';
-        btn.style.opacity = '0';
+        btn.style.opacity = '0.3';
+        btn.style.pointerEvents = 'none';
     });
+
     setTimeout(() => { escolhasDiv.innerHTML = ''; }, 150);
 
-    const resposta = pick(escolha.respostas);
+    // respostas pode ser array OU função (para respostas dinâmicas).
+    const candidatas = typeof escolha.respostas === 'function'
+        ? escolha.respostas()
+        : escolha.respostas;
+    const resposta = Array.isArray(candidatas) ? pick(candidatas) : String(candidatas);
+
     escreverComEfeito(resposta, () => {
         respondendoAtual = false;
-        if (escolha.acao === 'passar') {
-            passagemConcedida = true;
-        }
+        if (escolha.acao === 'passar') passagemConcedida = true;
+        if (typeof escolha.acaoApos === 'function') escolha.acaoApos();
         if (escolha.acao === 'fechar') {
-            setTimeout(() => fecharDialogo(), 1100);
+            setTimeout(() => fecharDialogo(), 1000);
             return;
         }
-        setTimeout(() => mostrarEscolhas(), 350);
+        setTimeout(() => mostrarEscolhas(), 300);
     });
 }
 
-// Fechar com ESC
 window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && dialogoAberto) fecharDialogo();
 });
 
 // ==========================================
-//  API pública
+//  API genérica para abrir um diálogo com qualquer NPC
 // ==========================================
-export function abrirDialogoGuardiao(level, callbackPassar) {
+function abrirDialogo(config) {
     if (dialogoAberto) return;
     dialogoAberto = true;
-    playerLevel = level;
-    onPassar = callbackPassar;
-    passagemConcedida = false;
+    currentNpcConfig = config;
     respondendoAtual = true;
+    summaryExpanded = false;
+    historyLog = [];
 
-    // reset usedIds se o tier mudou
-    const tier = level >= 2 ? 'forte' : 'fraco';
-    if (tier !== lastTier) {
-        usedIds.clear();
-        lastTier = tier;
+    aplicarTema(config.tema || 'tavern');
+
+    // Identidade
+    nomeNpc.textContent = config.nome || '';
+    subtitulo.textContent = config.subtitulo || '';
+    if (config.retratoUrl) {
+        retrato.style.backgroundImage = `url('${config.retratoUrl}')`;
+        retrato.textContent = '';
+    } else {
+        retrato.style.backgroundImage = '';
+        retrato.textContent = config.retratoIcone || '⚔';
+        retrato.style.fontSize = '22px';
     }
 
     overlay.style.display = 'flex';
     escolhasDiv.innerHTML = '';
     falaTexto.textContent = '';
+    summaryContent.innerHTML = '';
 
-    // animação de entrada
+    summaryContent.style.maxHeight = '0';
+    summaryContent.style.padding = '0 16px';
+    summaryContent.style.overflowY = 'hidden';
+    summaryArrow.style.transform = 'rotate(0deg)';
+    summaryBox.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)';
+
+    caixaExt.style.transition = 'none';
+    caixaExt.style.transform = 'translateY(36px) scale(0.97)';
+    caixaExt.style.opacity = '0';
+
     requestAnimationFrame(() => {
-        caixaExt.style.transform = 'translateY(0) scale(1)';
-        caixaExt.style.opacity = '1';
+        requestAnimationFrame(() => {
+            caixaExt.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s ease-out';
+            caixaExt.style.transform = 'translateY(0) scale(1)';
+            caixaExt.style.opacity = '1';
+        });
     });
 
     setTimeout(() => {
-        const abertura = pick(level >= 2 ? ABERTURA.forte : ABERTURA.fraco);
+        const abertura = typeof config.getAbertura === 'function' ? config.getAbertura() : '';
         escreverComEfeito(abertura, () => {
             respondendoAtual = false;
             mostrarEscolhas();
         });
-    }, 220);
+    }, 200);
 }
+
+// ==========================================
+//  API pública
+// ==========================================
+export function abrirDialogoGuardiao(level, callbackPassar, themeKey = 'tavern') {
+    if (dialogoAberto) return;
+    playerLevel = level;
+    onPassar = callbackPassar;
+    passagemConcedida = false;
+
+    const tier = level >= 2 ? 'forte' : 'fraco';
+    if (tier !== lastTier) { usedIds.clear(); lastTier = tier; }
+
+    abrirDialogo({
+        nome: 'Guardião da Ponte',
+        subtitulo: 'Protetor da Passagem',
+        retratoUrl: '../../assets/textures/avatares/guardiao_avatar.png',
+        tema: themeKey,
+        getAbertura: () => pick(level >= 2 ? ABERTURA.forte : ABERTURA.fraco),
+        // null deixa o sistema antigo (ESCOLHAS+passagemConcedida) tomar conta
+        getEscolhas: null,
+    });
+}
+
+// ---- Mercador ----
+const MERCADOR_PRECOS = { pocao: 15, mega: 35 };
+
+const MERCADOR_FALAS_OFERTA = {
+    pocao: [
+        'Toma — {p} ✦. Cuida-te lá fora.',
+        '{p} ✦ bem investidos. Que te seja útil.',
+        'Aqui tens — não dês a mais ninguém.',
+    ],
+    mega: [
+        'Esta é mais forte — {p} ✦. Usa-a com cabeça.',
+        '{p} ✦ por isto. Não desperdices num arranhão.',
+        'Guarda-a para quando contar mesmo. {p} ✦.',
+    ],
+    semCintilas: [
+        'Não tens Cintilas suficientes, viajante.',
+        'Volta quando os bolsos estiverem mais cheios.',
+        'Sem Cintilas não há negócio.',
+    ],
+};
+
+function _falaCom(template, preco) {
+    return template.replace(/\{p\}/g, String(preco));
+}
+
+export function abrirDialogoMercador(themeKey = 'tavern') {
+    if (dialogoAberto) return;
+    usedIds.clear();
+
+    abrirDialogo({
+        nome: 'Alice',
+        subtitulo: 'Mercador',
+        retratoUrl: '../../assets/textures/avatares/merchant.png',
+        tema: themeKey,
+        getAbertura: () => {
+            const c = getCintilas();
+            return c > 0
+                ? `Bem-vindo, viajante. Tens ${c} ✦ contigo — vê se algo te agrada.`
+                : 'Bem-vindo, viajante. Tenho ervas, talismãs e poções — mas tudo tem o seu preço.';
+        },
+        getEscolhas: () => {
+            const c = getCintilas();
+
+            const compraEscolha = (id, itemId, preco, falasOk) => ({
+                id,
+                repetivel: true,
+                label: `${CATALOGO[itemId].icone}  ${CATALOGO[itemId].nome} — ${preco} ✦${(c >= preco) ? '' : '  (insuficiente)'}`,
+                respostas: () => (c >= preco)
+                    ? falasOk.map(f => _falaCom(f, preco))
+                    : MERCADOR_FALAS_OFERTA.semCintilas,
+                acaoImediata: () => {
+                    if (c < preco) return; // resposta cobre o caso "sem cintilas"
+                    gastarCintilas(preco);
+                    adicionarItem(itemId, 1);
+                },
+            });
+
+            const fase = getFetchFase();
+            const escolhaQuest = construirEscolhaFetchQuest(fase);
+
+            return [
+                compraEscolha('comprar_pocao', 'pocao', MERCADOR_PRECOS.pocao, MERCADOR_FALAS_OFERTA.pocao),
+                compraEscolha('comprar_mega',  'mega',  MERCADOR_PRECOS.mega,  MERCADOR_FALAS_OFERTA.mega),
+                escolhaQuest,
+                {
+                    id: 'adeus_mercador',
+                    label: 'Adeus, mercador.',
+                    acao: 'fechar',
+                    repetivel: true,
+                    respostas: [
+                        'Que a sorte te acompanhe, viajante.',
+                        'Volta sempre — tenho coisas boas.',
+                        'Bom proveito do que te resta.',
+                    ],
+                },
+            ];
+        },
+    });
+}
+
+const FETCH_RECOMPENSA_CINTILAS = 120;
+
+function construirEscolhaFetchQuest(fase) {
+    if (fase === 'none') {
+        return {
+            id: 'fetch_oferta',
+            label: '⚔  Tens algum trabalho para mim?',
+            repetivel: true,
+            respostas: [
+                'Ontem... fui apanhada por uma emboscada na estrada. Levaram-me o que eu trazia. Quatro objetos importantes — perdidos pelos caminhos. Trá-mos de volta e recompenso-te bem.',
+                'Uns bandidos saíram-me ao caminho ontem. Espalharam as minhas coisas pelo mapa. Se trouxeres os quatro objetos que perdi — saco, caderno, anel e pingente — recompenso-te com Cintilas.',
+            ],
+            acaoApos: () => {
+                // Aceita automaticamente ao receber a explicação
+                aceitarFetchQuest();
+            },
+        };
+    }
+    if (fase === 'ativa') {
+        const { coletados, meta } = getFetchProgresso();
+        return {
+            id: 'fetch_progresso',
+            label: `⚔  Sobre a tua tarefa  (${coletados}/${meta})`,
+            repetivel: true,
+            respostas: () => {
+                const { coletados: c, meta: m } = getFetchProgresso();
+                if (c === 0) return [
+                    'Ainda não trouxeste nada. Procura nos caminhos onde costumam haver emboscadas.',
+                    'Continuam por aí, viajante. Procura bem.',
+                ];
+                if (c < m) return [
+                    `Vais bem — ${c} de ${m}. Faltam ainda alguns. Continua.`,
+                    `${c}/${m}. Não desistas — os outros estão pelo mapa.`,
+                ];
+                return ['Já tens todos! Vem trazê-los.'];
+            },
+        };
+    }
+    if (fase === 'completa') {
+        return {
+            id: 'fetch_entregar',
+            label: '✅  Tenho tudo o que perdeste.',
+            repetivel: true,
+            respostas: [
+                `Os meus tesouros! Não sei como te agradecer... Toma — ${FETCH_RECOMPENSA_CINTILAS} ✦ e uma Poção Maior. Mereceste cada uma.`,
+            ],
+            acaoApos: () => {
+                if (entregarFetchQuest()) {
+                    ganharCintilas(FETCH_RECOMPENSA_CINTILAS);
+                    adicionarItem('mega', 1);
+                }
+            },
+        };
+    }
+    // 'entregue' — quest já feita
+    return {
+        id: 'fetch_concluida',
+        label: '⚜  Sobre aquela emboscada...',
+        repetivel: true,
+        respostas: [
+            'Já recuperei tudo graças a ti. Que os caminhos te tratem melhor do que me trataram.',
+            'Sempre que precisares de algo, sabes onde estou.',
+        ],
+    };
+}
+
+
+export function isDialogoMercadorAberto() { return dialogoAberto; }
 
 export function fecharDialogo() {
     if (!dialogoAberto) return;
     dialogoAberto = false;
+    currentNpcConfig = null;
     if (typingInterval) { clearInterval(typingInterval); typingInterval = null; }
-    caixaExt.style.transform = 'translateY(50px) scale(0.96)';
+    currentTypingText = '';
+    currentTypingCallback = null;
+    caixaExt.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 1, 1), opacity 0.25s ease-in';
+    caixaExt.style.transform = 'translateY(28px) scale(0.97)';
     caixaExt.style.opacity = '0';
-    setTimeout(() => { overlay.style.display = 'none'; }, 250);
+    setTimeout(() => { overlay.style.display = 'none'; }, 280);
 }
 
 export function isDialogoAberto() {

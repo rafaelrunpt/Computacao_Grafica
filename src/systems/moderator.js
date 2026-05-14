@@ -6,6 +6,9 @@ import { adicionarItem, getItens, CATALOGO } from './inventario.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mainCamera, renderer } from '../core/renderer.js';
 import { mudarCena, estado, lojaPlayer, caseloPlayer } from '../core/transicoes.js';
+import { lojaScene, lojaColliders, stairsZones, blockedZones, fixedHeightZones } from '../world/loja.js';
+import { caseloScene, caseloColliders } from '../world/castelo.js';
+import * as THREE from 'three';
 
 /**
  * MODERATOR / DEBUG TOOL
@@ -16,6 +19,69 @@ const moderator = {
     isOpen: false,
     freeCam: false,
     controls: null,
+    noClip: false,   // ignora colisões (loja / castelo / mundo)
+    lockY: false,    // impede o gameplay de sobrescrever player.userData.baseY
+    colliderHelpers: [],
+
+    toggleNoClip() {
+        this.noClip = !this.noClip;
+        this.lockY = this.noClip; // godmode: também trava o Y
+        const btn = document.getElementById('mod-noclip-btn');
+        btn.style.background = this.noClip ? '#22cc44' : '#3a3a4a';
+        btn.style.color = this.noClip ? '#000' : '#f0d080';
+        btn.textContent = this.noClip ? '🚀 NOCLIP: ON' : '🚀 NOCLIP: OFF';
+    },
+
+    toggleColliders() {
+        const btn = document.getElementById('mod-coll-btn');
+        // Limpar helpers anteriores
+        if (this.colliderHelpers.length > 0) {
+            for (const { helper, scene } of this.colliderHelpers) scene.remove(helper);
+            this.colliderHelpers = [];
+            btn.style.background = '#3a3a4a';
+            btn.textContent = '👁 VER COLISORES';
+            return;
+        }
+        let aabbList = [];
+        let stairsList = [];
+        let blockedList = [];
+        let fixedList = [];
+        let scene = null;
+        if (estado.cena === 'loja')        { aabbList = lojaColliders; stairsList = stairsZones; blockedList = blockedZones; fixedList = fixedHeightZones; scene = lojaScene; }
+        else if (estado.cena === 'caselo') { aabbList = caseloColliders; scene = caseloScene; }
+        if (!scene) {
+            console.log('[MOD] Visualização só funciona em loja/castelo.');
+            return;
+        }
+        // Colisores (vermelho)
+        for (const box of aabbList) {
+            const helper = new THREE.Box3Helper(box, 0xff3030);
+            scene.add(helper);
+            this.colliderHelpers.push({ helper, scene });
+        }
+        // Zonas de escadas (verde)
+        for (const box of stairsList) {
+            const helper = new THREE.Box3Helper(box, 0x33ff66);
+            scene.add(helper);
+            this.colliderHelpers.push({ helper, scene });
+        }
+        // Zonas bloqueadas (laranja)
+        for (const box of blockedList) {
+            const helper = new THREE.Box3Helper(box, 0xff8800);
+            scene.add(helper);
+            this.colliderHelpers.push({ helper, scene });
+        }
+        // Zonas de altura fixa / pontes (azul)
+        for (const zone of fixedList) {
+            const helper = new THREE.Box3Helper(zone.box, 0x40a0ff);
+            scene.add(helper);
+            this.colliderHelpers.push({ helper, scene });
+        }
+        btn.style.background = '#22cc44';
+        btn.style.color = '#000';
+        btn.textContent = `👁 ${blockedList.length}b / ${fixedList.length}f`;
+        console.log(`[MOD] cena ${estado.cena}: ${blockedList.length} bloqueadas (laranja), ${fixedList.length} pontes (azul).`);
+    },
 
     toggleFreeCam() {
         this.freeCam = !this.freeCam;
@@ -44,17 +110,45 @@ const moderator = {
 
     addXP(amount) { ganharXP(parseInt(amount) || 0); },
 
-    teleport(x, z) {
-        player.position.x = parseFloat(x) || 0;
-        player.position.z = parseFloat(z) || 0;
+    teleport(x, y, z) {
+        const nx = parseFloat(x); const ny = parseFloat(y); const nz = parseFloat(z);
+        if (!Number.isNaN(nx)) player.position.x = nx;
+        if (!Number.isNaN(ny)) {
+            player.position.y = ny;
+            player.userData.baseY = ny; // base que a animação respeita
+        }
+        if (!Number.isNaN(nz)) player.position.z = nz;
         // Se estivermos numa cena interior, temos de atualizar os objetos de estado para o loop de animação não dar reset
         if (estado.cena === 'loja') {
             lojaPlayer.x = player.position.x;
+            lojaPlayer.y = player.position.y;
             lojaPlayer.z = player.position.z;
         } else if (estado.cena === 'caselo') {
             caseloPlayer.x = player.position.x;
+            caseloPlayer.y = player.position.y;
             caseloPlayer.z = player.position.z;
         }
+    },
+
+    getPos() {
+        const out = {
+            x: player.position.x.toFixed(2),
+            y: player.position.y.toFixed(2),
+            z: player.position.z.toFixed(2),
+        };
+        if (this.freeCam && this.controls) {
+            out.cam = {
+                x: mainCamera.position.x.toFixed(2),
+                y: mainCamera.position.y.toFixed(2),
+                z: mainCamera.position.z.toFixed(2),
+            };
+            out.lookAt = {
+                x: this.controls.target.x.toFixed(2),
+                y: this.controls.target.y.toFixed(2),
+                z: this.controls.target.z.toFixed(2),
+            };
+        }
+        return out;
     },
 
     limparZonas() {
@@ -182,16 +276,21 @@ modUI.innerHTML = `
 
         <div style="font-size:10px;color:#c8a96e;margin:10px 0 4px 0;letter-spacing:1px;">UTILIDADES</div>
         <div style="margin-bottom:8px;">
-            <label style="font-size:11px;">TELEPORT (X, Z):</label>
+            <label style="font-size:11px;">TELEPORT (X, Y, Z):</label>
             <div style="display:flex;gap:4px;margin-top:3px;">
-                <input type="number" id="mod-tp-x" placeholder="X" style="width:50px;background:#000;color:#fff;border:1px solid #f0d080;padding:2px;">
-                <input type="number" id="mod-tp-z" placeholder="Z" style="width:50px;background:#000;color:#fff;border:1px solid #f0d080;padding:2px;">
+                <input type="number" step="0.1" id="mod-tp-x" placeholder="X" style="width:42px;background:#000;color:#fff;border:1px solid #f0d080;padding:2px;">
+                <input type="number" step="0.1" id="mod-tp-y" placeholder="Y" style="width:42px;background:#000;color:#fff;border:1px solid #f0d080;padding:2px;">
+                <input type="number" step="0.1" id="mod-tp-z" placeholder="Z" style="width:42px;background:#000;color:#fff;border:1px solid #f0d080;padding:2px;">
                 <button id="mod-tp-btn" style="flex:1;background:#f0d080;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;">GO</button>
             </div>
+            <button id="mod-pos-btn" style="width:100%;margin-top:4px;background:#3a3a4a;color:#f0d080;border:1px solid #f0d080;cursor:pointer;padding:5px;font-weight:bold;font-size:11px;">📍 MOSTRAR POSIÇÃO ATUAL</button>
+            <div id="mod-pos-out" style="font-size:10px;color:#a0c0ff;background:rgba(0,0,0,0.4);border:1px solid #6a5020;border-radius:4px;padding:4px 6px;margin-top:4px;text-align:center;">—</div>
         </div>
 
         <button id="mod-clear-btn"   style="width:100%;background:#9e3b45;color:#fff;border:1px solid #f0d080;cursor:pointer;padding:6px;font-weight:bold;margin-bottom:6px;">LIMPAR ZONAS</button>
-        <button id="mod-freecam-btn" style="width:100%;background:#f0d080;color:#000;border:1px solid #000;cursor:pointer;padding:8px;font-weight:bold;margin-bottom:8px;">FREE CAM: OFF</button>
+        <button id="mod-freecam-btn" style="width:100%;background:#f0d080;color:#000;border:1px solid #000;cursor:pointer;padding:8px;font-weight:bold;margin-bottom:6px;">FREE CAM: OFF</button>
+        <button id="mod-noclip-btn"  style="width:100%;background:#3a3a4a;color:#f0d080;border:1px solid #f0d080;cursor:pointer;padding:8px;font-weight:bold;margin-bottom:6px;">🚀 NOCLIP: OFF</button>
+        <button id="mod-coll-btn"    style="width:100%;background:#3a3a4a;color:#f0d080;border:1px solid #f0d080;cursor:pointer;padding:6px;font-weight:bold;margin-bottom:8px;">👁 VER COLISORES</button>
 
         <div style="font-size:10px;color:#888;text-align:center;border-top:1px solid #444;padding-top:5px;">
             L para fechar
@@ -270,10 +369,38 @@ function setupEvents() {
     document.getElementById('mod-heal-btn').onclick   = () => moderator.fullHeal();
     document.getElementById('mod-defeat-btn').onclick = () => moderator.derrotar();
     document.getElementById('mod-tp-btn').onclick = () => {
-        moderator.teleport(document.getElementById('mod-tp-x').value, document.getElementById('mod-tp-z').value);
+        moderator.teleport(
+            document.getElementById('mod-tp-x').value,
+            document.getElementById('mod-tp-y').value,
+            document.getElementById('mod-tp-z').value
+        );
+    };
+    document.getElementById('mod-pos-btn').onclick = () => {
+        const p = moderator.getPos();
+        const out = document.getElementById('mod-pos-out');
+        if (p.cam) {
+            out.innerHTML =
+                `Player: <b>${p.x}, ${p.y}, ${p.z}</b><br>` +
+                `Câmara: <b>${p.cam.x}, ${p.cam.y}, ${p.cam.z}</b><br>` +
+                `LookAt: <b>${p.lookAt.x}, ${p.lookAt.y}, ${p.lookAt.z}</b>`;
+            console.log(
+                `[MOD] Player: (${p.x}, ${p.y}, ${p.z})\n` +
+                `[MOD] Camera.position.set(${p.cam.x}, ${p.cam.y}, ${p.cam.z});\n` +
+                `[MOD] Camera.lookAt(${p.lookAt.x}, ${p.lookAt.y}, ${p.lookAt.z});`,
+            );
+        } else {
+            out.innerHTML = `X: <b>${p.x}</b>  ·  Y: <b>${p.y}</b>  ·  Z: <b>${p.z}</b>`;
+            console.log(`[MOD] Pos: x=${p.x}, y=${p.y}, z=${p.z} (cena: ${estado.cena})`);
+        }
+        // preenche também os inputs para facilitar copiar / re-tp
+        document.getElementById('mod-tp-x').value = p.x;
+        document.getElementById('mod-tp-y').value = p.y;
+        document.getElementById('mod-tp-z').value = p.z;
     };
     document.getElementById('mod-clear-btn').onclick   = () => moderator.limparZonas();
     document.getElementById('mod-freecam-btn').onclick = () => moderator.toggleFreeCam();
+    document.getElementById('mod-noclip-btn').onclick  = () => moderator.toggleNoClip();
+    document.getElementById('mod-coll-btn').onclick    = () => moderator.toggleColliders();
 
     // Toggle de itens
     const toggleItens = document.getElementById('mod-toggle-itens');

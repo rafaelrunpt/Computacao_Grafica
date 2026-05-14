@@ -68,7 +68,7 @@ icone.style.cssText = `
     font-size: 64px; line-height: 1;
     margin: 8px 0 4px 0;
     text-shadow: 0 0 20px #d4a830, 0 0 40px #d4a830;
-    animation: rewardSpin 2.5s ease-out;
+    animation: rewardPop 0.55s cubic-bezier(.2,1.6,.3,1);
 `;
 card.appendChild(icone);
 
@@ -90,6 +90,18 @@ descricao.style.cssText = `
 `;
 card.appendChild(descricao);
 
+const cintilasLinha = document.createElement('div');
+cintilasLinha.style.cssText = `
+    display: none;
+    align-items: center; justify-content: center; gap: 6px;
+    font-size: 15px; font-weight: bold;
+    color: #a0c8ff;
+    text-shadow: 0 0 8px #4488dd, 1px 1px 0 #000;
+    letter-spacing: 1px;
+    margin: 2px 0 10px;
+`;
+card.appendChild(cintilasLinha);
+
 const dica = document.createElement('div');
 dica.style.cssText = `
     font-size: 11px; color: #a08050;
@@ -99,13 +111,13 @@ dica.style.cssText = `
 dica.textContent = 'Abre o inventário (I) para o equipar';
 card.appendChild(dica);
 
-// keyframes para o ícone girar
+// keyframes para o pop do ícone (sem rotação)
 const style = document.createElement('style');
 style.textContent = `
-    @keyframes rewardSpin {
-        0%   { transform: rotate(-360deg) scale(0.2); }
-        70%  { transform: rotate(20deg)   scale(1.2); }
-        100% { transform: rotate(0)       scale(1); }
+    @keyframes rewardPop {
+        0%   { transform: scale(0.35); }
+        65%  { transform: scale(1.18); }
+        100% { transform: scale(1); }
     }
 `;
 document.head.appendChild(style);
@@ -156,10 +168,22 @@ function tickConfetti() {
 }
 
 // --- API pública ---
-export function mostrarRecompensa({ icone: ic, nome: nm, descricao: desc, duracao = 3500 }) {
+export function mostrarRecompensa({ icone: ic, nome: nm, descricao: desc, cintilas = 0, duracao = 3500 }) {
     icone.textContent = ic || '🎁';
     nome.textContent = nm || 'Novo Item';
     descricao.textContent = desc || '';
+
+    if (cintilas > 0) {
+        cintilasLinha.innerHTML = `<span style="font-size:18px;color:#cde2ff;">✦</span> +${cintilas} Cintilas`;
+        cintilasLinha.style.display = 'flex';
+    } else {
+        cintilasLinha.style.display = 'none';
+    }
+
+    // re-trigger da animação de pop no ícone
+    icone.style.animation = 'none';
+    void icone.offsetWidth;
+    icone.style.animation = 'rewardPop 0.55s cubic-bezier(.2,1.6,.3,1)';
 
     overlay.style.display = 'flex';
     requestAnimationFrame(() => {

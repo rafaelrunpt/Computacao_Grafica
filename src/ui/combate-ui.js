@@ -122,10 +122,74 @@ function makeActionBtn(label, sub, color) {
     return btn;
 }
 
-const btnAtacar = makeActionBtn('⚔ ATACAR', 'desfere um golpe', '120,30,60');
-const btnItens  = makeActionBtn('🧪 ITENS',  'usa um objecto',   '60,30,120');
-const btnFugir  = makeActionBtn('💨 FUGIR',  'tenta escapar',    '40,40,80');
+const btnAtacar = makeActionBtn('⚔ ATAQUE', 'escolhe um golpe', '120,30,60');
+const btnItens  = makeActionBtn('🧪 ITENS', 'usa um objecto',   '60,30,120');
+const btnFugir  = makeActionBtn('💨 FUGIR', 'tenta escapar',    '40,40,80');
 actionsBar.append(btnAtacar, btnItens, btnFugir);
+
+// ---- sub-painel de ataques (2x2, estilo Pokémon) ----
+const ataquesPanel = document.createElement('div');
+ataquesPanel.style.cssText = `
+    position: fixed; left: 50%; bottom: 130px; transform: translateX(-50%);
+    background: linear-gradient(180deg, rgba(30,0,50,0.95), rgba(10,0,20,0.97));
+    border: 2px solid #aa44dd;
+    border-radius: 10px;
+    padding: 14px 16px 12px;
+    width: min(560px, 92vw);
+    color: #f0d0ff;
+    z-index: 82;
+    display: none;
+    box-shadow: 0 0 22px rgba(160,60,200,0.6), inset 0 0 14px rgba(80,0,120,0.5);
+    pointer-events: auto;
+`;
+ataquesPanel.innerHTML = `
+    <div style="font-size:14px;font-weight:bold;letter-spacing:2px;margin-bottom:10px;text-align:center;text-shadow:0 0 6px #aa44dd,1px 1px 0 #000;">
+        ⟡ ATAQUES ⟡
+    </div>
+    <div id="combate-ataques-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+    <button id="combate-ataques-fechar" style="margin-top:10px;width:100%;padding:6px;background:rgba(60,0,100,0.7);color:#f0d0ff;border:1px solid #aa44dd;border-radius:6px;font-family:'Courier New',monospace;cursor:pointer;">FECHAR</button>
+`;
+document.body.appendChild(ataquesPanel);
+
+const ataquesGrid = ataquesPanel.querySelector('#combate-ataques-grid');
+const btnSlots = [];
+for (let i = 0; i < 4; i++) {
+    const btn = document.createElement('button');
+    btn.dataset.slot = String(i);
+    btn.style.cssText = `
+        font-family: 'Courier New', monospace;
+        font-size: 16px; font-weight: bold; letter-spacing: 1px;
+        color: #fff;
+        background: linear-gradient(180deg, rgba(120,30,60,0.85), rgba(20,0,30,0.95));
+        border: 2px solid #aa44dd;
+        border-radius: 8px;
+        padding: 14px 12px;
+        cursor: pointer;
+        text-shadow: 0 0 6px #aa44dd, 1px 1px 0 #000;
+        box-shadow: 0 0 10px rgba(160,60,200,0.35), inset 0 0 10px rgba(80,0,120,0.5);
+        transition: transform 0.1s, box-shadow 0.2s;
+        min-height: 70px;
+        text-align: center;
+    `;
+    btn.onmouseenter = () => {
+        if (btn.disabled) return;
+        btn.style.transform = 'translateY(-2px)';
+        btn.style.boxShadow = '0 0 18px rgba(220,120,255,0.8), inset 0 0 16px rgba(120,40,180,0.65)';
+    };
+    btn.onmouseleave = () => {
+        btn.style.transform = 'translateY(0)';
+        btn.style.boxShadow = '0 0 10px rgba(160,60,200,0.35), inset 0 0 10px rgba(80,0,120,0.5)';
+    };
+    btn.onclick = () => {
+        if (btn.disabled) return;
+        const idx = parseInt(btn.dataset.slot, 10);
+        ataquesPanel.style.display = 'none';
+        if (_handlers.onAtacarSlot) _handlers.onAtacarSlot(idx);
+    };
+    btnSlots.push(btn);
+    ataquesGrid.appendChild(btn);
+}
+ataquesPanel.querySelector('#combate-ataques-fechar').onclick = () => { ataquesPanel.style.display = 'none'; };
 
 // ---- painel de itens (sobreposição) ----
 const itemsPanel = document.createElement('div');
@@ -152,18 +216,59 @@ itemsPanel.innerHTML = `
 document.body.appendChild(itemsPanel);
 
 // ---- API exposta ----
-let _handlers = { onAtacar: null, onItem: null, onFugir: null };
+let _handlers = { onAtacarSlot: null, onItem: null, onFugir: null };
+// estado mais recente dos 4 slots, para podermos rebuildar respeitando cooldowns
+let _slotState = [null, null, null, null]; // cada entrada: { ataque, cooldown } ou null
 
-btnAtacar.onclick = () => { if (_handlers.onAtacar) _handlers.onAtacar(); };
-btnItens.onclick  = () => { itemsPanel.style.display = 'block'; };
-btnFugir.onclick  = () => { if (_handlers.onFugir) _handlers.onFugir(); };
+btnAtacar.onclick = () => {
+    itemsPanel.style.display = 'none';
+    ataquesPanel.style.display = 'block';
+};
+btnItens.onclick = () => {
+    ataquesPanel.style.display = 'none';
+    itemsPanel.style.display = 'block';
+};
+btnFugir.onclick = () => { if (_handlers.onFugir) _handlers.onFugir(); };
 
 document.getElementById('combate-itens-fechar').onclick = () => { itemsPanel.style.display = 'none'; };
 
-export function setCombateHandlers({ onAtacar, onItem, onFugir }) {
-    _handlers.onAtacar = onAtacar;
-    _handlers.onItem   = onItem;
-    _handlers.onFugir  = onFugir;
+export function setCombateHandlers({ onAtacarSlot, onItem, onFugir }) {
+    _handlers.onAtacarSlot = onAtacarSlot;
+    _handlers.onItem  = onItem;
+    _handlers.onFugir = onFugir;
+}
+
+function renderSlotBtn(btn, info, podeMexer) {
+    if (!info || !info.ataque) {
+        btn.innerHTML = `🔒 BLOQUEADO<div style="font-size:11px;font-weight:normal;opacity:0.55;margin-top:4px;letter-spacing:1px;">slot vazio</div>`;
+        btn.disabled = true;
+        btn.style.opacity = '0.4';
+        btn.style.cursor = 'default';
+        return;
+    }
+    const a = info.ataque;
+    const cd = info.cooldown | 0;
+    const emCD = cd > 0;
+    const sub = emCD ? `recarga: ${cd}` : a.desc;
+    btn.innerHTML = `${a.icone || '⚔'} ${a.nome.toUpperCase()}<div style="font-size:11px;font-weight:normal;opacity:0.75;margin-top:4px;letter-spacing:1px;">${sub}</div>`;
+    const ativo = podeMexer && !emCD;
+    btn.disabled = !ativo;
+    btn.style.opacity = ativo ? '1' : (emCD ? '0.55' : '0.45');
+    btn.style.cursor  = ativo ? 'pointer' : 'default';
+}
+
+function refreshSlots(podeMexer) {
+    for (let i = 0; i < btnSlots.length; i++) {
+        renderSlotBtn(btnSlots[i], _slotState[i], podeMexer);
+    }
+}
+
+// Atualiza nome/cooldown dos 4 slots — chamado pelo sistema de combate.
+export function setAtaqueSlots(...slots) {
+    for (let i = 0; i < _slotState.length; i++) {
+        _slotState[i] = slots[i] || null;
+    }
+    refreshSlots(!btnItens.disabled);
 }
 
 export function mostrarCombateUI(nomeInimigo = 'INIMIGO CORROMPIDO') {
@@ -179,6 +284,7 @@ export function esconderCombateUI() {
     enemyPlate.style.display = 'none';
     playerPlate.style.display = 'none';
     itemsPanel.style.display = 'none';
+    ataquesPanel.style.display = 'none';
 }
 
 export function setLog(texto) { logBox.textContent = texto; }
@@ -199,6 +305,12 @@ export function setBotoesAtivos(ativo) {
         b.style.opacity = ativo ? '1' : '0.45';
         b.style.cursor  = ativo ? 'pointer' : 'default';
     });
+    if (!ativo) {
+        ataquesPanel.style.display = 'none';
+        itemsPanel.style.display   = 'none';
+    }
+    // botões internos respeitam cooldown além do "podeMexer"
+    refreshSlots(ativo);
 }
 
 export function preencherItens(lista, onUse) {
