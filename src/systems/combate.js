@@ -3,7 +3,7 @@ import { ganharXP, playerStats, receberDano, curar, recuperarTotal, getAtkEfetiv
 import { ganharCintilas } from './currency.js';
 import { entrarCombate, sairCombate, getMundoSnapshot, sairBossParaCastelo } from '../core/transicoes.js';
 import { notificarVitoria as notificarVitoriaQuest } from './merchant-quest.js';
-import { combateInimigo, setBossMode, isBossMode } from '../world/combate-scene.js';
+import { setBossMode, isBossMode, setTipoInimigo, getInimigoActivo } from '../world/combate-scene.js';
 import { getBossRoot } from '../entities/boss.js';
 import { iniciarFaseDesvio, pararFaseDesvio, atualizarFaseDesvio, isFaseDesvioActiva, setOnPlayerDerrotado, setBossHpFrac } from './boss-attacks.js';
 
@@ -14,7 +14,7 @@ setOnPlayerDerrotado(() => {
     setTimeout(() => sairDaArena(), 1200);
 });
 import { getItens, usarItem, adicionarItem, CATALOGO, quantidade as qtdItem } from './inventario.js';
-import { playSFX, switchMusic } from './audio.js';
+import { playSFX, switchMusic, stopMusic, tocarFanfarraVitoria } from './audio.js';
 import { mostrarRecompensa } from '../ui/popup-recompensa.js';
 import { player } from '../entities/jogador.js';
 import {
@@ -149,24 +149,38 @@ export function zonaBatalhaProximoCentro(x, z, raio = 1.6) {
     return null;
 }
 
-export function iniciarCombateEm(x, z) {
+export function iniciarCombateEm(x, z, tipo = 'wraith') {
     if (estadoJogo.emCombate || playerStats.derrotado) return;
     estadoJogo.combateX = x;
     estadoJogo.combateZ = z;
+    _tipoEncontro = (tipo === 'sluddy') ? 'sluddy' : 'wraith';
+    setTipoInimigo(_tipoEncontro);
     iniciarCombate();
 }
 
 // ----------------------------------------------------------------------
 // ESTADO DE COMBATE (turn-based simples)
 // ----------------------------------------------------------------------
+// Inimigo "duro" — fica restringido às zonas a norte da ponte. Stats
+// aumentados (mais HP, mais drops) já que é o único inimigo dessas zonas.
 const inimigoBase = {
     nome: 'SHACO CORROMPIDO',
-    hp: 30, maxHp: 30,
-    atk: 4,
-    xpDrop: 35,
+    hp: 48, maxHp: 48,
+    atk: 5,
+    xpDrop: 45,
+    cintilasDrop: 24,
+};
+// Inimigo fraco (Sluddy) — manifesta-se nas terras a sul, junto à loja.
+// Drops e vida reduzidos para servir de "treino" no início.
+const sluddyBase = {
+    nome: 'SLUDDY',
+    hp: 18, maxHp: 18,
+    atk: 3,
+    xpDrop: 40,
     cintilasDrop: 12,
 };
 let inimigoAtual = { ...inimigoBase };
+let _tipoEncontro = 'wraith';
 
 // ----------------------------------------------------------------------
 // DIFICULDADE ESCALÁVEL
@@ -206,7 +220,8 @@ function escalarStats(base, lvl = _nivelInimigo) {
 }
 
 function novoInimigo() {
-    inimigoAtual = escalarStats(inimigoBase);
+    const base = _tipoEncontro === 'sluddy' ? sluddyBase : inimigoBase;
+    inimigoAtual = escalarStats(base);
 }
 
 function refreshHpUI() {
@@ -369,7 +384,7 @@ function turnoInimigo() {
 
 // ---- micro-animações (flash) ----
 function pulsarInimigo() {
-    const m = combateInimigo.material;
+    const m = getInimigoActivo().material;
     const original = m.emissiveIntensity;
     m.emissiveIntensity = 2.5;
     setTimeout(() => { m.emissiveIntensity = original; }, 180);
@@ -401,6 +416,9 @@ function finalizarVitoria() {
     // as runas/olhos. No combate normal usamos o fade de opacidade do wraith.
     let f = 1;
     if (boss) {
+        // pára a música do boss e toca a fanfarra de vitória
+        stopMusic(0.6);
+        tocarFanfarraVitoria();
         const root = getBossRoot();
         const fadeId = setInterval(() => {
             f -= 0.05;
@@ -418,12 +436,13 @@ function finalizarVitoria() {
         return;
     }
 
-    const m = combateInimigo.material;
+    const inimigoMesh = getInimigoActivo();
+    const m = inimigoMesh.material;
     m.transparent = true;
     const fadeId = setInterval(() => {
         f -= 0.08;
         m.opacity = Math.max(0, f);
-        combateInimigo.scale.setScalar(Math.max(0.01, f));
+        inimigoMesh.scale.setScalar(Math.max(0.01, f));
         if (f <= 0) {
             clearInterval(fadeId);
             ganharXP(inimigoAtual.xpDrop);
@@ -512,7 +531,7 @@ function iniciarCombate() {
             resetCooldowns();
             mostrarCombateUI(inimigoAtual.nome);
             refreshHpUI();
-            setLog(`Um ${inimigoAtual.nome} apareceu! O que vais fazer?`);
+            setLog(`Um ${inimigoAtual.nome} manifestou-se! Que fareis?`);
             setCombateHandlers({
                 onAtacarSlot: acaoAtacarSlot,
                 onItem:       acaoItem,
@@ -630,10 +649,12 @@ function mostrarEcraVitoriaFinal() {
             ✦ A CORRUPÇÃO FOI BANIDA ✦
         </div>
         <div style="font-size:18px;color:#cde2ff;max-width:680px;line-height:1.55;">
-            O Soberano caiu. A luz volta a tocar as terras outrora consumidas pelo nevoeiro.
-            <br>O teu nome será cantado até onde a maré chega.
+            O Soberano tombou. A luz volta a bafejar as terras outrora consumidas pelo nevoeiro.
+            <br>O vosso nome será entoado em cânticos até onde a maré alcança.
         </div>
         <div style="font-size:14px;color:#a08060;margin-top:14px;">— FIM —</div>
     `;
     document.body.appendChild(o);
 }
+
+

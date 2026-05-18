@@ -46,12 +46,12 @@ function build() {
                 <div style="font-size:22px;font-weight:bold;letter-spacing:2px;">⚜ TABERNA DO GOBLIN ⚜</div>
                 <div style="font-size:16px;color:#cde2ff;"><span style="color:#a0c8ff">✦</span> <span id="bs-cintilas">0</span></div>
             </div>
-            <div style="font-size:13px;color:#a08060;margin-bottom:18px;">"Bebe, lê e fica forte. Aqui não há almoços grátis."</div>
+            <div style="font-size:13px;color:#a08060;margin-bottom:18px;">"Sorve, medita e fortalece-te. Pois nestas bandas, nada se obtém sem mercê ou ouro."</div>
 
-            <div style="font-size:16px;color:#e8c870;margin:6px 0 8px;border-bottom:1px solid #5a3a20;padding-bottom:4px;">Poções</div>
+            <div style="font-size:16px;color:#e8c870;margin:6px 0 8px;border-bottom:1px solid #5a3a20;padding-bottom:4px;">Elixires</div>
             <div id="bs-pocoes" style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;"></div>
 
-            <div style="font-size:16px;color:#e8c870;margin:6px 0 8px;border-bottom:1px solid #5a3a20;padding-bottom:4px;">Ataques</div>
+            <div style="font-size:16px;color:#e8c870;margin:6px 0 8px;border-bottom:1px solid #5a3a20;padding-bottom:4px;">Artes de Combate</div>
             <div id="bs-ataques" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
 
             <div style="display:flex;justify-content:flex-end;margin-top:8px;">
@@ -59,7 +59,7 @@ function build() {
                     background:#3a2010; color:#f0d9a8; border:1px solid #b07840;
                     padding: 8px 18px; cursor:pointer; border-radius:8px;
                     font-family:'Courier New',monospace; font-size:14px; letter-spacing:1px;
-                ">FECHAR (ESC)</button>
+                ">RETIRAR (ESC)</button>
             </div>
         </div>
     `;
@@ -116,7 +116,7 @@ function renderListas() {
         pocoesEl.appendChild(rowItem({
             icone: p.icone, nome: p.nome, desc: p.desc,
             precoLabel: `✦ ${p.preco}`,
-            btnLabel: 'COMPRAR',
+            btnLabel: 'ADQUIRIR',
             btnDisabled: !podeComprar,
             onBuy: () => {
                 if (!gastarCintilas(p.preco)) return;
@@ -135,9 +135,9 @@ function renderListas() {
             icone: at.icone,
             nome: at.nome,
             desc: at.desc,
-            badge: jaTem ? '<span style="color:#88dd88;font-size:11px;margin-left:6px;">[DESBLOQUEADO]</span>' : '',
+            badge: jaTem ? '<span style="color:#88dd88;font-size:11px;margin-left:6px;">[MESTRADO]</span>' : '',
             precoLabel: jaTem ? '—' : `✦ ${a.preco}`,
-            btnLabel: jaTem ? 'OBTIDO' : 'APRENDER',
+            btnLabel: jaTem ? 'CONHECIDO' : 'MESTRAR',
             btnDisabled: jaTem || !podeComprar,
             onBuy: () => {
                 if (!gastarCintilas(a.preco)) return;

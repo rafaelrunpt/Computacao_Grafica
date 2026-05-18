@@ -1,5 +1,5 @@
 // --------------------------------------------------------
-// UI DE INVENTÁRIO (mundo / loja / castelo)
+// UI DE ALFORGE (mundo / loja / castelo)
 // --------------------------------------------------------
 // Abre com I, fecha com I ou Escape. Estilo RPG dourado/madeira,
 // coerente com o HUD (NÍVEL) e a moldura do minimapa.
@@ -56,7 +56,7 @@ panel.insertAdjacentHTML('afterbegin', `
 
 // título
 const titulo = document.createElement('div');
-titulo.innerHTML = `⚜ INVENTÁRIO ⚜`;
+titulo.innerHTML = `⚜ ALFORGE ⚜`;
 titulo.style.cssText = `
     text-align: center;
     font-size: 22px; font-weight: bold; letter-spacing: 4px;
@@ -71,10 +71,10 @@ panel.appendChild(titulo);
 // instrução
 const dica = document.createElement('div');
 dica.style.cssText = 'font-size:12px;color:#c8a96e;text-align:center;margin-bottom:4px;font-family:"Courier New",monospace;letter-spacing:1px;';
-dica.textContent = 'Clica num item para o usar — I/ESC para fechar';
+dica.textContent = 'Tocai num objecto para o usar — I/ESC para fechar';
 panel.appendChild(dica);
 
-// lista de itens
+// lista de objectos
 const listaEl = document.createElement('div');
 listaEl.style.cssText = `
     display: flex; flex-direction: column; gap: 8px;
@@ -84,7 +84,7 @@ listaEl.style.cssText = `
 `;
 panel.appendChild(listaEl);
 
-// linha de mensagem (feedback do uso)
+// linha de mensagem (resposta ao uso)
 const msgEl = document.createElement('div');
 msgEl.style.cssText = `
     min-height: 22px;
@@ -96,7 +96,7 @@ msgEl.style.cssText = `
 `;
 panel.appendChild(msgEl);
 
-// rodapé com HP atual
+// rodapé com HP actual
 const hpRodape = document.createElement('div');
 hpRodape.style.cssText = `
     text-align: center;
@@ -116,7 +116,7 @@ function renderItens() {
     if (usaveis.length === 0) {
         const vazio = document.createElement('div');
         vazio.style.cssText = 'text-align:center;color:#a08050;font-style:italic;padding:18px;';
-        vazio.textContent = '— a tua mochila está vazia —';
+        vazio.textContent = '— o vosso alforge encontra-se vazio —';
         listaEl.appendChild(vazio);
         return;
     }
@@ -170,10 +170,10 @@ function renderItens() {
 }
 
 function renderHpRodape() {
-    hpRodape.textContent = `HP ${playerStats.hp} / ${playerStats.maxHp}` + (playerStats.derrotado ? ' ⟡ em recuperação ⟡' : '');
+    hpRodape.textContent = `HP ${playerStats.hp} / ${playerStats.maxHp}` + (playerStats.derrotado ? ' ⟡ a recuperar ⟡' : '');
 }
 
-// re-render se o stock mudar fora da UI (ex: vitória dropa item)
+// re-render se os haveres mudarem fora da UI (ex: triunfo concede objecto)
 registarOnChange(() => { if (_aberto) renderItens(); });
 
 // ---- abrir / fechar ----

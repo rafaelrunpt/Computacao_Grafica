@@ -420,6 +420,7 @@
           const btns = this.choicesEl.querySelectorAll('.arc-choice');
           if (btns[idx]) btns[idx].click();
         }
+        else if (!this._done) { this._finishTyping(); }
       };
       window.addEventListener('keydown', this._onKey);
     }

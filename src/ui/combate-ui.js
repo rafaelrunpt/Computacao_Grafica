@@ -1,14 +1,14 @@
 // --------------------------------------------------------
 // UI DE COMBATE
 // --------------------------------------------------------
-// Três áreas de ação: Atacar, Itens, Fugir + barras de HP + log.
+// Três áreas de acção: Ataque, Itens, Fugir + barras de HP + log.
 // Tema: roxo corrompido (coerente com a arena).
 // --------------------------------------------------------
 
 // `root` é o nó "ligar/desligar" da UI. Os elementos individuais são
-// posicionados absolutamente em relação a `document.body` para a layout
+// posicionados absolutamente em relação a `document.body` para a disposição
 // ficar compacta nos cantos (deixa o centro do ecrã livre para o
-// jogador ver os projécteis do boss).
+// herói ver os projécteis do guardião).
 const root = document.createElement('div');
 root.id = 'combate-ui';
 root.style.cssText = `
@@ -20,7 +20,7 @@ root.style.cssText = `
 `;
 document.body.appendChild(root);
 
-// ---- nameplate do inimigo (topo, compacto) ----
+// ---- placa do inimigo (topo, compacto) ----
 const enemyPlate = document.createElement('div');
 enemyPlate.style.cssText = `
     position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
@@ -36,7 +36,7 @@ enemyPlate.style.cssText = `
 `;
 enemyPlate.innerHTML = `
     <div style="font-size:14px;font-weight:bold;letter-spacing:2px;text-shadow:0 0 6px #aa44dd,1px 1px 0 #000;">
-        SHACO CORROMPIDO
+        GUARDIÃO CORROMPIDO
     </div>
     <div style="height:6px;background:rgba(0,0,0,0.6);border:1px solid #aa44dd;border-radius:4px;margin-top:4px;overflow:hidden;">
         <div id="combate-hp-inimigo" style="height:100%;width:100%;background:linear-gradient(90deg,#ff3070,#ff80aa);box-shadow:0 0 6px #ff3070;transition:width 0.4s;"></div>
@@ -45,7 +45,7 @@ enemyPlate.innerHTML = `
 `;
 document.body.appendChild(enemyPlate);
 
-// ---- nameplate do player (canto inferior esquerdo, compacto) ----
+// ---- placa do herói (canto inferior esquerdo, compacto) ----
 const playerPlate = document.createElement('div');
 playerPlate.style.cssText = `
     position: fixed; bottom: 14px; left: 14px;
@@ -70,7 +70,7 @@ playerPlate.innerHTML = `
 `;
 document.body.appendChild(playerPlate);
 
-// ---- caixa de mensagens (log, no topo por baixo do nameplate) ----
+// ---- caixa de mensagens (registo, no topo por baixo da placa) ----
 const logBox = document.createElement('div');
 logBox.style.cssText = `
     position: fixed; top: 84px; left: 50%; transform: translateX(-50%);
@@ -92,7 +92,7 @@ logBox.style.cssText = `
 logBox.textContent = '';
 document.body.appendChild(logBox);
 
-// ---- painel de ações (canto inferior direito) ----
+// ---- painel de acções (canto inferior direito) ----
 const actionsBar = document.createElement('div');
 actionsBar.style.cssText = `
     position: fixed; bottom: 14px; right: 14px;
@@ -123,9 +123,6 @@ function makeActionBtn(label, sub, color, keyHint) {
         padding: 0;
         overflow: hidden;
     `;
-    // O conteúdo ocupa todo o botão e não bloqueia cliques —
-    // assim qualquer ponto do rectângulo dispara o onclick.
-    // O badge da tecla fica no canto superior esquerdo.
     btn.innerHTML = `
         <div style="
             position: absolute; top: 2px; left: 4px;
@@ -156,12 +153,12 @@ function makeActionBtn(label, sub, color, keyHint) {
     return btn;
 }
 
-const btnAtacar = makeActionBtn('⚔ ATAQUE', 'escolhe um golpe', '120,30,60', 'J');
-const btnItens  = makeActionBtn('🧪 ITENS', 'usa um objecto',   '60,30,120', 'K');
-const btnFugir  = makeActionBtn('💨 FUGIR', 'tenta escapar',    '40,40,80', 'L');
+const btnAtacar = makeActionBtn('⚔ ATAQUE', 'escolhei um golpe', '120,30,60', 'J');
+const btnItens  = makeActionBtn('🧪 ITENS', 'usai um objecto',   '60,30,120', 'K');
+const btnFugir  = makeActionBtn('💨 FUGIR', 'tentai escapar',    '40,40,80', 'L');
 actionsBar.append(btnAtacar, btnItens, btnFugir);
 
-// ---- sub-painel de ataques (2x2, estilo Pokémon) ----
+// ---- sub-painel de golpes (2x2) ----
 const ataquesPanel = document.createElement('div');
 ataquesPanel.style.cssText = `
     position: fixed; right: 14px; bottom: 84px;
@@ -178,10 +175,10 @@ ataquesPanel.style.cssText = `
 `;
 ataquesPanel.innerHTML = `
     <div style="font-size:11px;font-weight:bold;letter-spacing:2px;margin-bottom:6px;text-align:center;text-shadow:0 0 4px #aa44dd,1px 1px 0 #000;">
-        ⟡ ATAQUES ⟡
+        ⟡ TÉCNICAS ⟡
     </div>
     <div id="combate-ataques-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
-    <button id="combate-ataques-fechar" style="margin-top:6px;width:100%;padding:4px;background:rgba(60,0,100,0.7);color:#f0d0ff;border:1px solid #aa44dd;border-radius:6px;font-family:'Courier New',monospace;font-size:11px;cursor:pointer;">FECHAR</button>
+    <button id="combate-ataques-fechar" style="margin-top:6px;width:100%;padding:4px;background:rgba(60,0,100,0.7);color:#f0d0ff;border:1px solid #aa44dd;border-radius:6px;font-family:'Courier New',monospace;font-size:11px;cursor:pointer;">RETROCEDER</button>
 `;
 document.body.appendChild(ataquesPanel);
 
@@ -244,16 +241,16 @@ itemsPanel.style.cssText = `
 `;
 itemsPanel.innerHTML = `
     <div style="font-size:11px;font-weight:bold;letter-spacing:2px;margin-bottom:6px;text-align:center;text-shadow:0 0 4px #aa44dd,1px 1px 0 #000;">
-        ⟡ INVENTÁRIO ⟡
+        ⟡ ALFORGE ⟡
     </div>
     <div id="combate-itens-lista" style="display:flex;flex-direction:column;gap:4px;"></div>
-    <button id="combate-itens-fechar" style="margin-top:6px;width:100%;padding:4px;background:rgba(60,0,100,0.7);color:#f0d0ff;border:1px solid #aa44dd;border-radius:6px;font-family:'Courier New',monospace;font-size:11px;cursor:pointer;">FECHAR</button>
+    <button id="combate-itens-fechar" style="margin-top:6px;width:100%;padding:4px;background:rgba(60,0,100,0.7);color:#f0d0ff;border:1px solid #aa44dd;border-radius:6px;font-family:'Courier New',monospace;font-size:11px;cursor:pointer;">RETORNAR</button>
 `;
 document.body.appendChild(itemsPanel);
 
 // ---- API exposta ----
 let _handlers = { onAtacarSlot: null, onItem: null, onFugir: null };
-// estado mais recente dos 4 slots, para podermos rebuildar respeitando cooldowns
+// estado mais recente dos 4 slots, para podermos reconstruir respeitando repousos
 let _slotState = [null, null, null, null]; // cada entrada: { ataque, cooldown } ou null
 
 btnAtacar.onclick = () => {
@@ -268,10 +265,7 @@ btnFugir.onclick = () => { if (_handlers.onFugir) _handlers.onFugir(); };
 
 document.getElementById('combate-itens-fechar').onclick = () => { itemsPanel.style.display = 'none'; };
 
-// Click fora dos painéis fecha-os — assim o jogador pode ver os
-// ataques do boss e desviar-se sem ter de clicar em "FECHAR".
-// Cliques dentro do actionsBar (botões principais) ou dos painéis
-// abertos não disparam o close — apenas cliques no resto do ecrã.
+// Click fora dos painéis fecha-os
 window.addEventListener('mousedown', (e) => {
     if (root.style.display === 'none') return;
     if (actionsBar.contains(e.target)) return;
@@ -282,18 +276,7 @@ window.addEventListener('mousedown', (e) => {
 });
 
 // ----------------------------------------------------------------------
-// KEYBINDS — lado direito do teclado para a mão direita do jogador
-// (a esquerda fica em WASD para esquivar). Usa `e.code` (posição física)
-// para funcionar em layouts não-US. Estruturado para um gamepad
-// substituir só o input — os helpers `_accaoPrincipal/_picarSlot/_picarItem`
-// não dependem das teclas.
-//
-//   PRINCIPAL (sem painel aberto):
-//     [J] ATAQUE   [K] ITENS   [L] FUGIR
-//   PAINEL DE ATAQUES aberto:
-//     [J] [K] [L] [;] escolhem slot   [Esc] fecha
-//   PAINEL DE ITENS aberto:
-//     [J] [K] [L] [;] [U] [I] [O] [P] escolhem item   [Esc] fecha
+// KEYBINDS
 // ----------------------------------------------------------------------
 export const KEY_LABELS_ACCAO = ['J', 'K', 'L'];
 export const KEY_LABELS_SLOT  = ['J', 'K', 'L', ';'];
@@ -330,7 +313,6 @@ window.addEventListener('keydown', (e) => {
         return;
     }
 
-    // Painel de ataques aberto → J/K/L/; escolhem slot
     if (ataquesPanel.style.display !== 'none') {
         const idx = CODE_SLOT.indexOf(e.code);
         if (idx >= 0) {
@@ -340,7 +322,6 @@ window.addEventListener('keydown', (e) => {
         return;
     }
 
-    // Painel de itens aberto → J/K/L/; U/I/O/P escolhem linha
     if (itemsPanel.style.display !== 'none') {
         const idx = CODE_ITEM.indexOf(e.code);
         if (idx >= 0) {
@@ -350,7 +331,6 @@ window.addEventListener('keydown', (e) => {
         return;
     }
 
-    // Sem painel aberto → J/K/L são as acções principais
     const idx = CODE_ACCAO.indexOf(e.code);
     if (idx >= 0) {
         _accaoPrincipal(idx);
@@ -392,7 +372,7 @@ function _slotContent(slotIdx, titulo, sub, subOpacity = 0.75) {
 
 function renderSlotBtn(btn, info, podeMexer, idx) {
     if (!info || !info.ataque) {
-        btn.innerHTML = _slotContent(idx, '🔒 BLOQUEADO', 'slot vazio', 0.55);
+        btn.innerHTML = _slotContent(idx, '🔒 BLOQUEADO', 'espaço vazio', 0.55);
         btn.disabled = true;
         btn.style.opacity = '0.4';
         btn.style.cursor = 'default';
@@ -401,7 +381,7 @@ function renderSlotBtn(btn, info, podeMexer, idx) {
     const a = info.ataque;
     const cd = info.cooldown | 0;
     const emCD = cd > 0;
-    const sub = emCD ? `recarga: ${cd}` : a.desc;
+    const sub = emCD ? `repouso: ${cd}` : a.desc;
     btn.innerHTML = _slotContent(idx, `${a.icone || '⚔'} ${a.nome.toUpperCase()}`, sub);
     const ativo = podeMexer && !emCD;
     btn.disabled = !ativo;
@@ -415,7 +395,6 @@ function refreshSlots(podeMexer) {
     }
 }
 
-// Atualiza nome/cooldown dos 4 slots — chamado pelo sistema de combate.
 export function setAtaqueSlots(...slots) {
     for (let i = 0; i < _slotState.length; i++) {
         _slotState[i] = slots[i] || null;
@@ -430,8 +409,6 @@ export function mostrarCombateUI(nomeInimigo = 'INIMIGO CORROMPIDO') {
     playerPlate.style.display = 'block';
     logBox.style.display = 'block';
     actionsBar.style.display = 'grid';
-    // Garante que o body não tem offset residual de shakes anteriores —
-    // se ficasse desalinhado, os clicks aterravam fora dos botões.
     document.body.style.transform = '';
     setBotoesAtivos(true);
 }
@@ -468,7 +445,6 @@ export function setBotoesAtivos(ativo) {
         ataquesPanel.style.display = 'none';
         itemsPanel.style.display   = 'none';
     }
-    // botões internos respeitam cooldown além do "podeMexer"
     refreshSlots(ativo);
 }
 
@@ -476,7 +452,7 @@ export function preencherItens(lista, onUse) {
     const cont = document.getElementById('combate-itens-lista');
     cont.innerHTML = '';
     if (lista.length === 0) {
-        cont.innerHTML = '<div style="opacity:0.7;text-align:center;font-size:12px;">— sem itens —</div>';
+        cont.innerHTML = '<div style="opacity:0.7;text-align:center;font-size:12px;">— sem objectos —</div>';
         return;
     }
 
@@ -494,8 +470,6 @@ export function preencherItens(lista, onUse) {
         h.textContent = texto;
         cont.appendChild(h);
     }
-    // Índice contínuo na lista renderizada (para o keybind 1-9
-    // bater certo com o que o jogador vê no painel).
     let _idxRender = 0;
     function linha(item, equipavel) {
         const idx = _idxRender++;
@@ -509,7 +483,7 @@ export function preencherItens(lista, onUse) {
             display:flex;justify-content:space-between;align-items:center;gap:6px;
         `;
         const sufixo = equipavel
-            ? `<span style="pointer-events:none;opacity:0.7;font-size:9px;">${item.equipado ? 'EQUIPADO' : 'equipar'}</span>`
+            ? `<span style="pointer-events:none;opacity:0.7;font-size:9px;">${item.equipado ? 'TRAJADO' : 'cingir'}</span>`
             : `<span style="pointer-events:none;opacity:0.7;font-size:9px;">x${item.quantidade}</span>`;
         const keyLabel = KEY_LABELS_ITEM[idx];
         const keyHint = keyLabel
@@ -524,15 +498,11 @@ export function preencherItens(lista, onUse) {
     }
 
     if (pocoes.length > 0) {
-        header('🧪 Poções');
+        header('🧪 Elixires');
         for (const it of pocoes) linha(it, false);
     }
-    if (acessorios.length > 0) {
-        header('⚜ Acessórios');
-        for (const it of acessorios) linha(it, true);
-    }
     if (outros.length > 0) {
-        header('◇ Outros');
+        header('◇ Diversos');
         for (const it of outros) linha(it, false);
     }
 }

@@ -108,7 +108,7 @@ dica.style.cssText = `
     font-family: 'Courier New', monospace;
     letter-spacing: 1px;
 `;
-dica.textContent = 'Abre o inventário (I) para o equipar';
+dica.textContent = 'Consultai o vosso inventário (I) para o empunhar';
 card.appendChild(dica);
 
 // keyframes para o pop do ícone (sem rotação)

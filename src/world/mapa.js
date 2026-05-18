@@ -231,7 +231,7 @@ function criarRocha(scene, x, z, r = 0.6, contaminada = false) {
 
 // ---- zona de batalha ----
 // Geometria: PlaneGeometry com bordas distorcidas por ruído → forma orgânica
-function criarZonaBatalha(scene, cx, cz, raio, seed) {
+function criarZonaBatalha(scene, cx, cz, raio, seed, tipo = 'wraith') {
     const rand = seededRand(seed);
     const segs = 32; // polígono com 32 segmentos de borda
     const geo = new THREE.BufferGeometry();
@@ -297,8 +297,9 @@ function criarZonaBatalha(scene, cx, cz, raio, seed) {
         new THREE.Vector3(cx - raio, 0, cz - raio),
         new THREE.Vector3(cx + raio, 1, cz + raio)
     );
+    box.tipo = tipo;
     grassZones.push(box);
-    const zoneObj = { box, meshes: zoneMeshes, trees: [], scene };
+    const zoneObj = { box, meshes: zoneMeshes, trees: [], scene, tipo };
     battleZoneObjects.push(zoneObj);
     return zoneObj;
 }
@@ -715,16 +716,18 @@ export function criarMapa(scene) {
     // zona corrupta ao redor do castelo (z=-80) — visual roxo, sem encontros
     criarZonaCorrupta(scene, 0, -80, 28, 111);
 
-    // zonas de batalha norte
-    const znB1 = criarZonaBatalha(scene,  28,  28, 12, 202);
-    const znB2 = criarZonaBatalha(scene,  28,  60, 10, 303);
-    const znB3 = criarZonaBatalha(scene, -28,  65,  9, 404);
+    // zonas de batalha norte do rio (perto da loja e da taverna) — SLUDDY
+    // (inimigo fraco, drops reduzidos, ideal para o início da aventura).
+    const znB1 = criarZonaBatalha(scene,  28,  28, 12, 202, 'sluddy');
+    const znB2 = criarZonaBatalha(scene,  28,  60, 10, 303, 'sluddy');
+    const znB3 = criarZonaBatalha(scene, -28,  65,  9, 404, 'sluddy');
 
-    // zonas de batalha sul
-    const zsB1 = criarZonaBatalha(scene, -28, -20, 11, 505);
-    const zsB2 = criarZonaBatalha(scene,  28, -20, 12, 606);
-    const zsB3 = criarZonaBatalha(scene, -50, -50, 13, 707);
-    const zsB4 = criarZonaBatalha(scene,  50, -50, 13, 808);
+    // zonas de batalha sul (depois da ponte) — WRAITH ("SHACO CORROMPIDO"),
+    // inimigo duro com HP e drops aumentados.
+    const zsB1 = criarZonaBatalha(scene, -28, -20, 11, 505, 'wraith');
+    const zsB2 = criarZonaBatalha(scene,  28, -20, 12, 606, 'wraith');
+    const zsB3 = criarZonaBatalha(scene, -50, -50, 13, 707, 'wraith');
+    const zsB4 = criarZonaBatalha(scene,  50, -50, 13, 808, 'wraith');
 
     const rand = seededRand(1);
 

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { criarBoss, updateBoss, getBossRoot } from '../entities/boss.js';
 import { criarInimigoWraith, updateInimigoWraith, resetInimigoWraith } from '../entities/inimigo-wraith.js';
+import { criarInimigoSluddy, updateInimigoSluddy, resetInimigoSluddy } from '../entities/inimigo-sluddy.js';
 
 // ----------------------------------------------------------------------
 // CENA DE COMBATE
@@ -195,6 +196,26 @@ export const combateInimigo = criarInimigoWraith();
 combateInimigo.position.copy(posInimigoCombate);
 combateScene.add(combateInimigo);
 
+// ---- Sluddy inimigo (entidade em src/entities/inimigo-sluddy.js) ----
+export const combateSluddy = criarInimigoSluddy();
+combateSluddy.position.copy(posInimigoCombate);
+combateSluddy.visible = false;
+combateScene.add(combateSluddy);
+
+// Tipo de inimigo activo em combate normal (não-boss): 'wraith' | 'sluddy'
+let _tipoInimigo = 'wraith';
+export function setTipoInimigo(tipo) {
+    _tipoInimigo = (tipo === 'sluddy') ? 'sluddy' : 'wraith';
+    if (_bossMode) return; // boss mode controla visibilidade independentemente
+    combateInimigo.visible = (_tipoInimigo === 'wraith');
+    combateSluddy.visible  = (_tipoInimigo === 'sluddy');
+}
+export function getTipoInimigo() { return _tipoInimigo; }
+// Devolve o mesh activo (para o systems/combate fazer fade no fim de vitória)
+export function getInimigoActivo() {
+    return _tipoInimigo === 'sluddy' ? combateSluddy : combateInimigo;
+}
+
 // ----------------------------------------------------------------------
 // BOSS — adicionado à mesma cena, escondido por defeito.
 // É activado por `setBossMode(true)`; nessa altura o wraith é
@@ -219,7 +240,13 @@ export function isBossMode() { return _bossMode; }
 export function setBossMode(on) {
     _bossMode = !!on;
     if (_bossRoot) _bossRoot.visible = _bossMode;
-    combateInimigo.visible = !_bossMode;
+    if (_bossMode) {
+        combateInimigo.visible = false;
+        combateSluddy.visible  = false;
+    } else {
+        combateInimigo.visible = (_tipoInimigo === 'wraith');
+        combateSluddy.visible  = (_tipoInimigo === 'sluddy');
+    }
     // muta as posições que outros módulos importaram por referência
     if (_bossMode) {
         posPlayerCombate.copy(_posPlayerBoss);
@@ -256,8 +283,14 @@ export function updateCombateScene(deltaTime) {
         }
     }
 
-    // animação do wraith (delegada à entidade)
-    updateInimigoWraith(combateInimigo, deltaTime, _t, posInimigoCombate);
+    // animação dos inimigos de combate normal (delegada às entidades).
+    // Só anima o que está visível para poupar trabalho.
+    if (combateInimigo.visible) {
+        updateInimigoWraith(combateInimigo, deltaTime, _t, posInimigoCombate);
+    }
+    if (combateSluddy.visible) {
+        updateInimigoSluddy(combateSluddy, deltaTime, _t, posInimigoCombate);
+    }
 
     // partículas a subir lentamente
     const pos = particulas.geometry.attributes.position;
@@ -270,11 +303,19 @@ export function updateCombateScene(deltaTime) {
 
 // ---- Reset visual entre combates (volta a posição/rotação inicial) ----
 export function resetCombateScene() {
-    // o wraith ocupa o spot normal mesmo durante o boss (ficaria atrás),
-    // mas é escondido por _bossMode.
+    // os inimigos partilham a mesma marca; só aparece o seleccionado pelo
+    // tipo. Em boss mode ambos ficam ocultos.
     combateInimigo.position.copy(_posInimigoNormal);
-    combateInimigo.visible = !_bossMode;
+    combateSluddy.position.copy(_posInimigoNormal);
+    if (_bossMode) {
+        combateInimigo.visible = false;
+        combateSluddy.visible  = false;
+    } else {
+        combateInimigo.visible = (_tipoInimigo === 'wraith');
+        combateSluddy.visible  = (_tipoInimigo === 'sluddy');
+    }
     resetInimigoWraith(combateInimigo);
+    resetInimigoSluddy(combateSluddy);
     // garantir que o boss está visível e na marca correcta se boss mode
     if (_bossMode && _bossRoot) {
         _bossRoot.visible = true;

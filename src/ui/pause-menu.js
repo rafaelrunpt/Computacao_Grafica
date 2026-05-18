@@ -1,9 +1,11 @@
 // --------------------------------------------------------
-// MENU DE PAUSA — abre/fecha com ESC ou P
+// MENU DE TRÉGUA — abre/fecha com ESC ou P
 // --------------------------------------------------------
 import { settings, setSetting, resetSettings } from '../systems/settings.js';
 import { playerStats, getAtkEfetivo } from '../systems/player-stats.js';
 import { CATALOGO as CATALOGO_INV } from '../systems/inventario.js';
+import { estado, lojaPlayer } from '../core/transicoes.js';
+import { lojaSpawnPos } from '../world/loja.js';
 
 let _aberto = false;
 let _bloqueado = false;
@@ -46,7 +48,7 @@ panel.insertAdjacentHTML('afterbegin', `
 `);
 
 const titulo = document.createElement('div');
-titulo.innerHTML = '⚜ PAUSA ⚜';
+titulo.innerHTML = '⚜ TRÉGUA ⚜';
 titulo.style.cssText = `
     text-align:center;font-size:24px;font-weight:bold;letter-spacing:6px;
     color:#f0d080;text-shadow:0 0 10px #a07000, 2px 2px 0 #000;
@@ -78,7 +80,7 @@ panel.appendChild(acoes);
 
 const dica = document.createElement('div');
 dica.style.cssText = `text-align:center;font-size:11px;color:#c8a96e;font-family:'Courier New',monospace;letter-spacing:1px;`;
-dica.textContent = 'ESC para retomar';
+dica.textContent = 'ESC para prosseguir';
 panel.appendChild(dica);
 
 // --- helpers de UI ---
@@ -155,46 +157,46 @@ function select(options, value, onChange) {
 function renderAudio() {
     conteudo.innerHTML = '';
 
-    const r1 = row(); r1.appendChild(labelLine('Volume Geral (Master)'));
+    const r1 = row(); r1.appendChild(labelLine('Sopro do Mundo (Geral)'));
     r1.appendChild(slider(0, 1, 0.01, settings.masterVolume, v => setSetting('masterVolume', v), '%'));
     conteudo.appendChild(r1);
 
-    const r2 = row(); r2.appendChild(labelLine('Volume da Música'));
+    const r2 = row(); r2.appendChild(labelLine('Melodias'));
     r2.appendChild(slider(0, 1, 0.01, settings.musicVolume, v => setSetting('musicVolume', v), '%'));
     conteudo.appendChild(r2);
 
-    const r3 = row(); r3.appendChild(labelLine('Volume dos Efeitos (SFX)'));
+    const r3 = row(); r3.appendChild(labelLine('Ecos da Batalha (SFX)'));
     r3.appendChild(slider(0, 1, 0.01, settings.sfxVolume, v => setSetting('sfxVolume', v), '%'));
     conteudo.appendChild(r3);
 
     const r4 = row();
-    r4.appendChild(labelLine('Silenciar Tudo'));
+    r4.appendChild(labelLine('Silenciar o Reino'));
     r4.appendChild(toggle(settings.muted, v => setSetting('muted', v)));
     conteudo.appendChild(r4);
 }
 
 function renderJogabilidade() {
     conteudo.innerHTML = '';
-    const r1 = row(); r1.appendChild(labelLine('Sensibilidade do Rato'));
+    const r1 = row(); r1.appendChild(labelLine('Agilidade da Mão (Rato)'));
     r1.appendChild(slider(0.1, 3.0, 0.05, settings.mouseSensitivity, v => setSetting('mouseSensitivity', v), 'x'));
     conteudo.appendChild(r1);
 
-    const r2 = row(); r2.appendChild(labelLine('Inverter Eixo Y da Câmara'));
+    const r2 = row(); r2.appendChild(labelLine('Inverter Eixo Y do Olhar'));
     r2.appendChild(toggle(settings.invertY, v => setSetting('invertY', v)));
     conteudo.appendChild(r2);
 }
 
 function renderVideo() {
     conteudo.innerHTML = '';
-    const r1 = row(); r1.appendChild(labelLine('Qualidade Gráfica (sombras / AA)'));
+    const r1 = row(); r1.appendChild(labelLine('Esplendor Visual (sombras / AA)'));
     r1.appendChild(select([['baixa','Baixa'],['media','Média'],['alta','Alta']], settings.quality, v => setSetting('quality', v)));
     conteudo.appendChild(r1);
 
-    const r2 = row(); r2.appendChild(labelLine('Campo de Visão (FOV)'));
+    const r2 = row(); r2.appendChild(labelLine('Alcance do Olhar (FOV)'));
     r2.appendChild(slider(50, 110, 1, settings.fov, v => setSetting('fov', v), '°'));
     conteudo.appendChild(r2);
 
-    const r3 = row(); r3.appendChild(labelLine('Modo Ecrã Cheio'));
+    const r3 = row(); r3.appendChild(labelLine('Ecrã Inteiro'));
     r3.appendChild(toggle(!!document.fullscreenElement, v => {
         setSetting('fullscreen', v);
         if (v && !document.fullscreenElement) document.documentElement.requestFullscreen?.();
@@ -202,7 +204,7 @@ function renderVideo() {
     }));
     conteudo.appendChild(r3);
 
-    const r4 = row(); r4.appendChild(labelLine('Mostrar FPS'));
+    const r4 = row(); r4.appendChild(labelLine('Mostrar Cadência (FPS)'));
     r4.appendChild(toggle(settings.showFps, v => setSetting('showFps', v)));
     conteudo.appendChild(r4);
 }
@@ -210,17 +212,17 @@ function renderVideo() {
 function renderControlos() {
     conteudo.innerHTML = `
         <div style="font-size:14px;line-height:1.8;">
-            <div style="font-size:13px;color:#c8a96e;letter-spacing:1px;margin-bottom:8px;">CONTROLOS</div>
+            <div style="font-size:13px;color:#c8a96e;letter-spacing:1px;margin-bottom:8px;">MANEJO</div>
             <table style="width:100%;border-collapse:collapse;font-family:'Courier New',monospace;font-size:13px;">
-                <tr><td style="padding:4px 8px;color:#ffe0a0;width:120px;">W A S D</td><td>Movimentação</td></tr>
-                <tr><td style="padding:4px 8px;color:#ffe0a0;">E</td><td>Interagir / falar / entrar</td></tr>
+                <tr><td style="padding:4px 8px;color:#ffe0a0;width:120px;">W A S D</td><td>Deslocamento</td></tr>
+                <tr><td style="padding:4px 8px;color:#ffe0a0;">E</td><td>Interagir / Dialogar / Entrar</td></tr>
                 <tr><td style="padding:4px 8px;color:#ffe0a0;">I</td><td>Inventário</td></tr>
                 <tr><td style="padding:4px 8px;color:#ffe0a0;">M</td><td>Mapa / Minimapa</td></tr>
-                <tr><td style="padding:4px 8px;color:#ffe0a0;">L</td><td>Menu de debug</td></tr>
-                <tr><td style="padding:4px 8px;color:#ffe0a0;">ESC / P</td><td>Pausa</td></tr>
+                <tr><td style="padding:4px 8px;color:#ffe0a0;">L</td><td>Pergaminhos de Alquimia (Debug)</td></tr>
+                <tr><td style="padding:4px 8px;color:#ffe0a0;">ESC / P</td><td>Trégua</td></tr>
             </table>
             <div style="font-size:11px;color:#a08050;margin-top:12px;font-style:italic;">
-                Remapeamento de teclas — em desenvolvimento
+                Reajuste de manejo — em preparo
             </div>
         </div>
     `;
@@ -231,14 +233,14 @@ function renderEstatisticas() {
     const wrap = document.createElement('div');
     wrap.style.cssText = `font-family:'Courier New',monospace;font-size:14px;line-height:1.8;`;
     wrap.innerHTML = `
-        <div style="font-size:13px;color:#c8a96e;letter-spacing:1px;margin-bottom:8px;font-family:'Georgia',serif;">ESTATÍSTICAS DA PARTIDA</div>
+        <div style="font-size:13px;color:#c8a96e;letter-spacing:1px;margin-bottom:8px;font-family:'Georgia',serif;">FEITOS E PROEZAS DA JORNADA</div>
         <div>Nível: <span style="color:#ffe0a0;">${playerStats.level}</span></div>
         <div>XP: <span style="color:#a0c0ff;">${playerStats.xp} / ${playerStats.xpToNext}</span></div>
         <div>HP: <span style="color:#ff9090;">${playerStats.hp} / ${playerStats.maxHp}</span></div>
         <div>ATK: <span style="color:#c0a060;">${playerStats.atk ?? '—'}</span>${getAtkEfetivo() !== playerStats.atk ? ` <span style="color:#aaffbb;">(${getAtkEfetivo()} c/ bónus)</span>` : ''}</div>
-        <div>Acessório equipado: <span style="color:#ffe0a0;">${(() => {
+        <div>Artefacto em uso: <span style="color:#ffe0a0;">${(() => {
             const id = playerStats.equipped?.acessorio;
-            if (!id) return '— nenhum —';
+            if (!id) return '— nada —';
             const it = (CATALOGO_INV && CATALOGO_INV[id]) || null;
             return it ? `${it.icone} ${it.nome}` : id;
         })()}</span></div>
@@ -249,63 +251,63 @@ function renderEstatisticas() {
 function renderTutorial() {
     conteudo.innerHTML = `
         <div style="font-size:13px;line-height:1.6;">
-            <div style="font-size:13px;color:#c8a96e;letter-spacing:1px;margin-bottom:8px;">COMO JOGAR</div>
+            <div style="font-size:13px;color:#c8a96e;letter-spacing:1px;margin-bottom:8px;">ENSINO</div>
             <p style="margin:0 0 10px;">
-                Acordas num quarto desconhecido. Fala com o bartender, sai pela porta para a taverna,
-                e descobre o mundo: zonas corruptas para limpar, lojas para te apetrechares, e um castelo
-                onde te espera o boss final.
+                Despertais num aposento desconhecido. Falai com o taberneiro, parti pela porta para a estalagem,
+                e descobri o mundo: terras corrompidas para purificar, mercadores para vos apetrechar, e um castelo
+                onde vos aguarda o desafio final.
             </p>
 
-            <div style="color:#c8a96e;margin-top:10px;margin-bottom:4px;letter-spacing:1px;">🎮 MOVIMENTO</div>
+            <div style="color:#c8a96e;margin-top:10px;margin-bottom:4px;letter-spacing:1px;">🎮 DESLOCAMENTO</div>
             <ul style="padding-left:18px;margin:0 0 8px;">
-                <li><b>W A S D</b> — andar &nbsp;·&nbsp; <b>E</b> — interagir &nbsp;·&nbsp; <b>I</b> — inventário</li>
-                <li><b>Esc</b> — pausa/opções</li>
+                <li><b>W A S D</b> — caminhar &nbsp;·&nbsp; <b>E</b> — interagir &nbsp;·&nbsp; <b>I</b> — alforges &nbsp;·&nbsp; <b>B</b> — códice</li>
+                <li><b>Esc</b> — trégua / ajustes</li>
             </ul>
 
             <div style="color:#c8a96e;margin-top:8px;margin-bottom:4px;letter-spacing:1px;">⚔ COMBATE NORMAL</div>
             <ul style="padding-left:18px;margin:0 0 8px;">
-                <li>Em zonas escuras, prime <b>E</b> no centro para entrar em combate.</li>
-                <li>Ataques têm cooldown — usa o slot certo para o momento certo.</li>
-                <li>Vencer dá XP, subir de nível aumenta o dano.</li>
+                <li>Em zonas sombrias, premi <b>E</b> no centro para iniciar o combate.</li>
+                <li>Os ataques requerem repouso — escolhei o momento certo.</li>
+                <li>A vitória traz sabedoria; elevar o vosso nível aumenta o vosso vigor.</li>
             </ul>
 
-            <div style="color:#c8a96e;margin-top:8px;margin-bottom:4px;letter-spacing:1px;">🏰 CASTELO & ACESSÓRIOS</div>
+            <div style="color:#c8a96e;margin-top:8px;margin-bottom:4px;letter-spacing:1px;">🏰 CASTELO & ARTEFACTOS</div>
             <ul style="padding-left:18px;margin:0 0 8px;">
-                <li>Cinco pedestais — coloca cada um dos 5 acessórios para desbloquear o boss.</li>
-                <li>Acessórios dão buffs: HP, cura pós-combate, evasão, etc.</li>
-                <li>Ao preencher os 5, o cristal do totem acende — interage com <b>E</b> para entrar.</li>
+                <li>Cinco pedestais — colocai cada um dos 5 artefactos para desafiar o guardião.</li>
+                <li>Artefactos concedem bênçãos: vitalidade, cura pós-batalha, evasão, entre outros.</li>
+                <li>Ao reunir os 5, o cristal do totem brilhará — premi <b>E</b> para entrar.</li>
             </ul>
 
-            <div style="color:#c8a96e;margin-top:8px;margin-bottom:4px;letter-spacing:1px;">👑 BOSS FIGHT</div>
+            <div style="color:#c8a96e;margin-top:8px;margin-bottom:4px;letter-spacing:1px;">👑 CONFRONTO FINAL</div>
             <ul style="padding-left:18px;margin:0 0 8px;">
-                <li>Esquerda (esquivar) — <b>A/D</b> mudam de lane, <b>W</b> salta, <b>S</b> agacha.</li>
+                <li>Esquerda (esquiva) — <b>A/D</b> mudam a lane, <b>W</b> salta, <b>S</b> agacha.</li>
                 <li>Direita (acção) — <b>J</b> ATAQUE &nbsp;·&nbsp; <b>K</b> ITENS &nbsp;·&nbsp; <b>L</b> FUGIR.</li>
-                <li>Painel de ataque aberto: <b>J K L ;</b> escolhem o slot. Itens: também <b>U I O P</b>.</li>
+                <li>Painel de ataque: <b>J K L ;</b> escolhem a habilidade. Itens: <b>U I O P</b>.</li>
                 <li><b>Esc</b> fecha qualquer painel.</li>
             </ul>
 
-            <div style="color:#c8a96e;margin-top:8px;margin-bottom:4px;letter-spacing:1px;">🎯 ATAQUES DO BOSS</div>
+            <div style="color:#c8a96e;margin-top:8px;margin-bottom:4px;letter-spacing:1px;">🎯 ATAQUES DO GUARDIÃO</div>
             <ul style="padding-left:18px;margin:0 0 8px;">
-                <li><b style="color:#ff8080;">Aéreo</b> (anel vermelho no chão) — cai numa lane. Sai dessa lane ou salta.</li>
-                <li><b style="color:#ffcc80;">Rasante</b> (barra laranja no chão) — varre o chão. <b>Salta</b>.</li>
-                <li><b style="color:#c8a0ff;">Lateral</b> (coluna roxa + seta) — vem do lado indicado. Muda de lane ou <b>agacha</b>.</li>
-                <li><b style="color:#a0ffc8;">Varredura</b> (parede verde à altura do peito) — atravessa as 3 lanes. <b>Agacha</b>.</li>
+                <li><b style="color:#ff8080;">Aéreo</b> (selo vermelho no solo) — cai numa lane. Saí ou saltal.</li>
+                <li><b style="color:#ffcc80;">Rasante</b> (barra laranja no solo) — varre o chão. <b>Saltal</b>.</li>
+                <li><b style="color:#c8a0ff;">Lateral</b> (coluna roxa + seta) — provém do lado indicado. Mudai de lane ou <b>agachai-vos</b>.</li>
+                <li><b style="color:#a0ffc8;">Varredura</b> (muralha verde) — atravessa as 3 lanes. <b>Agachai-vos</b>.</li>
             </ul>
             <p style="margin:6px 0 0;font-size:12px;color:#a08050;font-style:italic;">
-                À medida que o boss perde vida, os projécteis aceleram (até aos 30%).
-                Abaixo dos 25% entra em fúria — o aviso aparece com cores trocadas.
+                À medida que o guardião enfraquece, os seus golpes aceleram.
+                Abaixo dos 25% de vida, entra em fúria — o aviso surgirá com cores invertidas.
             </p>
         </div>
     `;
 }
 
 const tabs = [
-    { id: 'audio',     label: 'Áudio',         render: renderAudio },
-    { id: 'jog',       label: 'Jogabilidade',  render: renderJogabilidade },
-    { id: 'video',     label: 'Vídeo',         render: renderVideo },
-    { id: 'ctrl',      label: 'Controlos',     render: renderControlos },
-    { id: 'stats',     label: 'Estatísticas',  render: renderEstatisticas },
-    { id: 'tut',       label: 'Tutorial',      render: renderTutorial },
+    { id: 'audio',     label: 'Sopros',         render: renderAudio },
+    { id: 'jog',       label: 'Manejo',         render: renderJogabilidade },
+    { id: 'video',     label: 'Visões',         render: renderVideo },
+    { id: 'ctrl',      label: 'Acções',         render: renderControlos },
+    { id: 'stats',     label: 'Feitos',         render: renderEstatisticas },
+    { id: 'tut',       label: 'Ensino',         render: renderTutorial },
 ];
 
 let _abaActiva = 'audio';
@@ -332,25 +334,37 @@ function renderTabsBar() {
 
 function renderAcoes() {
     acoes.innerHTML = '';
-    const continuar = btn('▶ Continuar', '#ffe0a0');
+    const continuar = btn('▶ Prosseguir', '#ffe0a0');
     continuar.onclick = fecharPause;
     acoes.appendChild(continuar);
 
-    const reiniciar = btn('↻ Reiniciar', '#c0a060');
+    if (estado.cena === 'loja') {
+        const voltarEntrada = btn('↺ Regressar à Entrada', '#c0a060');
+        voltarEntrada.onclick = () => {
+            lojaPlayer.x = lojaSpawnPos.x;
+            lojaPlayer.y = lojaSpawnPos.y;
+            lojaPlayer.z = lojaSpawnPos.z;
+            lojaPlayer.rotY = 0;
+            fecharPause();
+        };
+        acoes.appendChild(voltarEntrada);
+    }
+
+    const reiniciar = btn('↻ Recomeçar', '#c0a060');
     reiniciar.onclick = () => {
-        if (confirm('Reiniciar o jogo? Vais perder o progresso da sessão actual.')) location.reload();
+        if (confirm('Desejais recomeçar a vossa jornada? Todo o progresso desta sessão será perdido.')) location.reload();
     };
     acoes.appendChild(reiniciar);
 
-    const menu = btn('⌂ Menu Principal', '#c0a060');
+    const menu = btn('⌂ Portão Inicial', '#c0a060');
     menu.onclick = () => {
-        if (confirm('Voltar ao menu principal? Vais perder o progresso da sessão.')) location.reload();
+        if (confirm('Desejais voltar ao portão inicial? O vosso progresso actual será perdido.')) location.reload();
     };
     acoes.appendChild(menu);
 
-    const reset = btn('Repor opções', '#a08050');
+    const reset = btn('Restaurar Ajustes', '#a08050');
     reset.onclick = () => {
-        if (confirm('Repor as opções para os valores por defeito?')) {
+        if (confirm('Desejais restaurar os ajustes para os valores originais?')) {
             resetSettings();
             // re-render aba activa
             const t = tabs.find(t => t.id === _abaActiva); if (t) t.render();
@@ -358,12 +372,12 @@ function renderAcoes() {
     };
     acoes.appendChild(reset);
 
-    const sair = btn('✕ Sair do Jogo', '#9e3b45');
+    const sair = btn('✕ Partir', '#9e3b45');
     sair.onclick = () => {
-        if (confirm('Sair do jogo? Fecha a aba/janela do navegador para sair.')) {
+        if (confirm('Desejais partir e abandonar o reino? Fechai a janela para sair.')) {
             window.close();
             // se window.close não funcionar, desliga a página
-            document.body.innerHTML = `<div style="color:#f0d080;font-family:Georgia,serif;text-align:center;padding:60px;">Obrigado por jogar. Podes fechar esta aba.</div>`;
+            document.body.innerHTML = `<div style="color:#f0d080;font-family:Georgia,serif;text-align:center;padding:60px;">Agradecemos a vossa presença. Podeis fechar esta aba.</div>`;
         }
     };
     acoes.appendChild(sair);

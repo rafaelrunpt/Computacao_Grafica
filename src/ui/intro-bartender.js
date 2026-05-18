@@ -42,7 +42,7 @@ function build() {
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;
                     color:#9a7050;font-size:13px;letter-spacing:1px;">
             <span id="intro-bartender-progress">1 / ${LINHAS.length}</span>
-            <span>[ ESPAÇO / CLIQUE para continuar ]</span>
+            <span>[ ESPAÇO / CLIQUE para prosseguir ]</span>
         </div>
     `;
     document.body.appendChild(_box);

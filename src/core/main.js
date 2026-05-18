@@ -15,7 +15,7 @@ import { quantidade as qtdInv, removerItem as removerInv } from '../systems/inve
 import { tavernScene, getTavernHeight, tryMoveTavern, tavernSaidaBox, tavernBarmanBox, quartoEnterBox, bartenderIntroBox, bartenderVendorBox, bartenderIntroFeita, marcarBartenderIntroFeita, updateTavernNPCs } from '../world/tavern.js';
 import { abrirIntroBartender, isIntroBartenderAberta } from '../ui/intro-bartender.js';
 import { abrirBartenderShop, isBartenderShopAberta } from '../ui/bartender-shop.js';
-import { quartoScene, tryMoveQuarto, getQuartoHeight, quartoSaidaBox, updateQuarto, quartoSpawnPos, quartoBauBox, bauQuartoAberto, abrirBauQuarto, quartoCamaBox } from '../world/quarto.js';
+import { quartoScene, tryMoveQuarto, getQuartoHeight, quartoSaidaBox, updateQuarto, quartoSpawnPos, quartoBauBox, bauQuartoAberto, abrirBauQuarto, bauQuartoColetado, coletarBauQuarto, quartoCamaBox } from '../world/quarto.js';
 import { curar } from '../systems/player-stats.js';
 import { todasZonasLimpas } from '../world/mapa.js';
 import { combateScene, updateCombateScene } from '../world/combate-scene.js';
@@ -24,11 +24,13 @@ import { isBossMode } from '../world/combate-scene.js';
 import { keys, registarCallbackInput } from './input.js';
 import { ganharXP, playerStats, recalcularMaxHp } from '../systems/player-stats.js';
 import { buildAvatarScene, syncAvatarMaterials, avatarRenderer, avatarScene, avatarCam, showPrompt, hidePrompt } from '../ui/hud.js';
-// Para alternar entre as duas UIs de diálogo, troca este import:
+// Para alternar entre as duas UIs de diálogo, trocar este import:
 //   '../ui/npc-dialog.js'         → versão original
 //   '../ui/npc-dialog-arcano.js'  → versão Arcano (teste)
 import { abrirDialogoGuardiao, abrirDialogoGuardiaoCedePassagem, isDialogoAberto } from '../ui/npc-dialog.js';
 import { abrirInventario, fecharInventario, isInventarioAberto } from '../ui/inventario-ui.js';
+import { toggleQuestBook, isQuestBookAberto } from '../ui/quest-book.js';
+import { descobrirQuest, completarQuest } from '../systems/quests.js';
 import { abrirLockpick, isLockpickAberto } from '../ui/lockpick.js';
 import { criarLostItems, updateLostItems, getLostItemAt } from '../world/lost-items.js';
 import { coletarItemPerdido } from '../systems/merchant-fetch-quest.js';
@@ -214,24 +216,28 @@ sincronizarAcessorio();
 let mapaAberto = false;
 registarCallbackInput(
     () => {
-        if (estado.cena === 'mundo' && !estadoJogo.emCombate && !isInventarioAberto() && !isPauseAberto()) mapaAberto = !mapaAberto;
+        if (estado.cena === 'mundo' && !estadoJogo.emCombate && !isInventarioAberto() && !isPauseAberto() && !isQuestBookAberto()) mapaAberto = !mapaAberto;
     },
     () => {
         // I abre o inventário só fora do combate, sem mapa nem diálogo aberto
         if (estadoJogo.emCombate) return;
-        if (mapaAberto) return;
-        if (isDialogoAberto()) return;
-        if (isPauseAberto()) return;
+        if (mapaAberto || isQuestBookAberto()) return;
+        if (isDialogoAberto() || isPauseAberto()) return;
         if (isInventarioAberto()) fecharInventario();
         else abrirInventario();
     },
     (e) => {
         // ESC/P — pausa. Não abre se outra UI sobreposta estiver aberta (deixa-a fechar primeiro)
         if (!isPauseAberto()) {
-            if (isInventarioAberto() || isDialogoAberto() || mapaAberto || isLockpickAberto()) return;
+            if (isInventarioAberto() || isDialogoAberto() || mapaAberto || isLockpickAberto() || isQuestBookAberto()) return;
         }
         if (e) e.stopPropagation?.();
         togglePause();
+    },
+    () => {
+        // B — Códice de Encargos
+        if (estadoJogo.emCombate || mapaAberto || isInventarioAberto() || isDialogoAberto() || isPauseAberto() || isLockpickAberto()) return;
+        toggleQuestBook();
     }
 );
 
@@ -326,7 +332,7 @@ function animateMundo(deltaTime) {
         );
         if (guardianInteractBox && pb.intersectsBox(guardianInteractBox)) {
             const passou = isGuardiaoPassagemConcedida();
-            showPrompt('E — Falar com o guardião');
+            showPrompt('E — Parlamentar com o Guardião');
             if (keys.e) {
                 keys.e = false;
                 if (!passou && playerStats.level >= 2) {
@@ -338,19 +344,19 @@ function animateMundo(deltaTime) {
             }
         } else if (shopDoorInteract && pb.intersectsBox(shopDoorInteract)) {
             if (isShopDesbloqueada() || zonasSulLimpas()) {
-                showPrompt('E — Entrar na loja');
+                showPrompt('E — Adentrar a Loja');
                 if (keys.e) { switchMusic('shop', 1.0); entrarLoja(); }
-            } else { showPrompt('Limpa as zonas corrompidas do sul para entrar'); }
+            } else { showPrompt('Purificai as zonas fustigadas do sul para adentrar'); }
         } else if (castleEnterBox && pb.intersectsBox(castleEnterBox)) {
-            showPrompt('E — Entrar no castelo');
+            showPrompt('E — Adentrar o Castelo');
             if (keys.e) { playSFX('trovao'); entrarCaselo(); }
         } else if (tavernEnterBox && pb.intersectsBox(tavernEnterBox)) {
-            showPrompt('E — Entrar na taverna');
+            showPrompt('E — Entrar na Estalagem');
             if (keys.e) { keys.e = false; switchMusic('tavern', 1.0); entrarTavern(); }
         } else if (getBauInteractBox() && pb.intersectsBox(getBauInteractBox())) {
             if (!bauJaColetado()) {
                 if (!bauJaAberto()) {
-                    showPrompt('E — Forçar fechadura');
+                    showPrompt('E — Arrombar a Fechadura');
                     if (keys.e) {
                         keys.e = false;
                         abrirLockpick({
@@ -360,7 +366,7 @@ function animateMundo(deltaTime) {
                         });
                     }
                 } else {
-                    showPrompt('E — Coletar recompensa');
+                    showPrompt('E — Reivindicar Espólio');
                     if (keys.e) {
                         keys.e = false;
                         if (coletarBau()) {
@@ -382,7 +388,7 @@ function animateMundo(deltaTime) {
         } else if (getBauMascaraInteractBox() && pb.intersectsBox(getBauMascaraInteractBox())) {
             if (!bauMascaraJaColetado()) {
                 if (!bauMascaraJaAberto()) {
-                    showPrompt('E — Forçar fechadura');
+                    showPrompt('E — Arrombar a Fechadura');
                     if (keys.e) {
                         keys.e = false;
                         abrirLockpick({
@@ -392,7 +398,7 @@ function animateMundo(deltaTime) {
                         });
                     }
                 } else {
-                    showPrompt('E — Coletar recompensa');
+                    showPrompt('E — Reivindicar Espólio');
                     if (keys.e) {
                         keys.e = false;
                         if (coletarBauMascara()) {
@@ -423,10 +429,10 @@ function animateMundo(deltaTime) {
             } else {
                 const zonaBatalha = zonaBatalhaProximoCentro(player.position.x, player.position.z);
                 if (zonaBatalha) {
-                    showPrompt('E — Iniciar combate');
+                    showPrompt('E — Iniciar Peleja');
                     if (keys.e) {
                         keys.e = false;
-                        iniciarCombateEm(player.position.x, player.position.z);
+                        iniciarCombateEm(player.position.x, player.position.z, zonaBatalha.tipo);
                     }
                 } else {
                     hidePrompt();
@@ -571,21 +577,21 @@ function animateLoja(deltaTime) {
     );
 
     if (lojaSaidaBox.intersectsBox(pb)) {
-        showPrompt('E — Sair da loja');
+        showPrompt('E — Deixar a Loja');
         if (keys.e) { keys.e = false; switchMusic('mundo', 1.0); sairLoja(); }
     } else if (getMerchantInteractBox() && pb.intersectsBox(getMerchantInteractBox())) {
-        showPrompt('E — Falar com o mercador');
+        showPrompt('E — Parlamentar com a Mercadora');
         if (keys.e) { keys.e = false; abrirDialogoMercador(); }
     } else if (getBauLojaInteractBox() && pb.intersectsBox(getBauLojaInteractBox())) {
         if (!bauLojaJaColetado()) {
             if (!bauLojaJaAberto()) {
-                showPrompt('E — Abrir baú escondido');
+                showPrompt('E — Arrombar Arca Oculta');
                 if (keys.e) {
                     keys.e = false;
                     if (abrirBauLoja()) playSFX('fechadura');
                 }
             } else {
-                showPrompt('E — Coletar recompensa');
+                showPrompt('E — Reivindicar Espólio');
                 if (keys.e) {
                     keys.e = false;
                     if (coletarBauLoja()) {
@@ -663,12 +669,12 @@ function animateCaselo(deltaTime) {
     );
 
     if (caseloSaidaBox.intersectsBox(pb2)) {
-        showPrompt('E — Sair do castelo');
+        showPrompt('E — Abandonar o Castelo');
         if (keys.e) { keys.e = false; sairCaselo(); }
         if (isPistaAberta()) esconderPista();
     } else if (todosPedestaisCheios() && bossCrystalInteractBox.intersectsBox(pb2)) {
         // só fica accionável depois dos 5 pedestais estarem cheios
-        showPrompt('E — Confrontar o Soberano da Corrupção');
+        showPrompt('E — Enfrentar o Suserano da Danação');
         if (keys.e) {
             keys.e = false;
             iniciarBossFight();
@@ -687,6 +693,7 @@ function animateCaselo(deltaTime) {
                 if (keys.e) {
                     keys.e = false;
                     if (colocarItemPedestal(idx)) {
+                        completarQuest(ped.itemId);
                         removerInv(ped.itemId, 1);
                         // se o item estava equipado, desequipa-o
                         if (playerStats.equipped?.acessorio === ped.itemId) {
@@ -706,15 +713,16 @@ function animateCaselo(deltaTime) {
                         esconderPista();
                         playSFX('fechadura');
                         if (todosPedestaisCheios()) {
-                            mostrarPista('As cinco runas estão completas. O cristal pulsa — aproxima-te e premе E quando estiveres pronto.');
+                            mostrarPista('As cinco runas estão completas. O cristal pulsa — aproximai-vos e premei E quando estiverdes pronto.');
                         }
                     }
                 }
             } else {
                 // sem o item ou pedestal por revelar → mostra a pista
-                showPrompt('E — Examinar a runa');
+                showPrompt('E — Perscrutar a Runa');
                 if (keys.e) {
                     keys.e = false;
+                    if (ped.itemId) descobrirQuest(ped.itemId);
                     mostrarPista(ped.pista);
                 }
             }
@@ -817,11 +825,11 @@ function animateTavern(deltaTime) {
     if (isIntroBartenderAberta() || isBartenderShopAberta()) {
         hidePrompt();
     } else if (tavernSaidaBox.intersectsBox(pb)) {
-        showPrompt('E — Sair da taverna');
+        showPrompt('E — Deixar a Estalagem');
         if (keys.e) { keys.e = false; switchMusic('mundo', 1.0); sairTavern(); }
         if (isPistaAberta()) esconderPista();
     } else if (quartoEnterBox && quartoEnterBox.intersectsBox(pb)) {
-        showPrompt('E — Subir ao quarto');
+        showPrompt('E — Ascender aos Aposentos');
         if (keys.e) { keys.e = false; entrarQuarto(); }
         if (isPistaAberta()) esconderPista();
     } else if (!bartenderIntroFeita() && bartenderIntroBox.intersectsBox(pb)) {
@@ -830,12 +838,12 @@ function animateTavern(deltaTime) {
         if (!isIntroBartenderAberta()) {
             abrirIntroBartender(() => {
                 marcarBartenderIntroFeita();
-                mostrarPista('O bartender afastou-se para o seu canto da taverna. Procura-o se precisares de poções ou ataques.');
+                mostrarPista('O taberneiro retirou-se para o seu recanto da estalagem. Procurai-o se precisardes de elixires ou golpes.');
             });
         }
         hidePrompt();
     } else if (bartenderIntroFeita() && bartenderVendorBox.intersectsBox(pb)) {
-        showPrompt('E — Falar com o bartender');
+        showPrompt('E — Parlamentar com o Taberneiro');
         if (keys.e) {
             keys.e = false;
             abrirBartenderShop();
@@ -848,7 +856,7 @@ function animateTavern(deltaTime) {
             if (isPistaAberta()) esconderPista();
         } else if (questAureola.estado === 'aceite') {
             if (todasZonasLimpas()) {
-                showPrompt('E — Reclamar recompensa');
+                showPrompt('E — Reivindicar Espólio');
                 if (keys.e) {
                     keys.e = false;
                     questAureola.estado = 'completa';
@@ -858,18 +866,18 @@ function animateTavern(deltaTime) {
                     esconderPista();
                 }
             } else {
-                showPrompt('E — Falar com o estalajadeiro');
+                showPrompt('E — Parlamentar com o Estalajadeiro');
                 if (keys.e) {
                     keys.e = false;
-                    mostrarPista('Estalajadeiro: "Ainda há sombras lá fora. Limpa tudo, depois volta — guardo-te a auréola."');
+                    mostrarPista('Estalajadeiro: "Ainda restam sombras lá fora. Limpai-as todas, e depois regressai — guardo-vos a auréola."');
                 }
             }
         } else {
-            showPrompt('E — Falar com o estalajadeiro');
+            showPrompt('E — Parlamentar com o Estalajadeiro');
             if (keys.e) {
                 keys.e = false;
                 questAureola.estado = 'aceite';
-                mostrarPista('Estalajadeiro: "Estas terras choram pelos caídos. Purifica todas as zonas corruptas do mapa e a Auréola dos Caídos será tua."');
+                mostrarPista('Estalajadeiro: "Estas terras pranteiam pelos caídos. Purificai todas as zonas corruptas do mapa e a Auréola dos Caídos será vossa."');
             }
         }
     } else {
@@ -960,26 +968,37 @@ function animateQuarto(deltaTime) {
     );
 
     if (quartoSaidaBox.intersectsBox(pb)) {
-        showPrompt('E — Voltar à taverna');
+        showPrompt('E — Regressar à Estalagem');
         if (keys.e) { keys.e = false; sairQuarto(); }
-    } else if (quartoBauBox && quartoBauBox.intersectsBox(pb) && !bauQuartoAberto()) {
-        showPrompt('E — Abrir baú');
-        if (keys.e) {
-            keys.e = false;
-            abrirBauQuarto();
-            playSFX('abrir_bau');
-            // poções iniciais — agora vêm daqui
-            adicionarItem('pocao', 3);
-            adicionarItem('mega', 1);
-            const it = CATALOGO['pocao'];
-            mostrarRecompensa({
-                icone: it.icone,
-                nome: 'Poções de Cura',
-                descricao: '×3 Poção de Cura  +  ×1 Poção Maior',
-            });
+    } else if (quartoBauBox && quartoBauBox.intersectsBox(pb) && !bauQuartoColetado()) {
+        if (!bauQuartoAberto()) {
+            showPrompt('E — Abrir a Arca');
+            if (keys.e) {
+                keys.e = false;
+                abrirBauQuarto();
+                playSFX('abrir_bau');
+            }
+        } else {
+            showPrompt('E — Reivindicar Espólio');
+            if (keys.e) {
+                keys.e = false;
+                if (coletarBauQuarto()) {
+                    playSFX('abrir_bau');
+                    // elixires iniciais — agora vêm daqui
+                    adicionarItem('pocao', 3);
+                    adicionarItem('mega', 1);
+                    const it = CATALOGO['pocao'];
+                    mostrarRecompensa({
+                        icone: it.icone,
+                        nome: 'Elixires de Cura',
+                        descricao: '×3 Elixir de Cura  +  ×1 Elixir Maior',
+                    });
+                    hidePrompt();
+                }
+            }
         }
     } else if (quartoCamaBox && quartoCamaBox.intersectsBox(pb)) {
-        showPrompt('E — Dormir (repõe as áreas corruptas)');
+        showPrompt('E — Repousar (as trevas recrudescerão)');
         if (keys.e) {
             keys.e = false;
             estado.ePressBloqueado = true;
@@ -989,8 +1008,8 @@ function animateQuarto(deltaTime) {
                 curar(9999); // dormir cura totalmente
                 fade(0, () => { estado.ePressBloqueado = false; });
                 mostrarPista(n > 0
-                    ? `Dormiste. ${n} zona${n>1?'s':''} corrupta${n>1?'s':''} voltaram a manifestar-se.`
-                    : 'Dormiste. HP totalmente recuperado.');
+                    ? `Repousastes. ${n} zona${n>1?'s':''} corrupta${n>1?'s':''} voltaram a manifestar-se.`
+                    : 'Repousastes. Vitalidade totalmente recuperada.');
             });
         }
     } else {

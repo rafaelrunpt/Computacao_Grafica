@@ -117,11 +117,11 @@ castleMsg.innerHTML = `
     <div style="font-family:'Courier New',monospace;font-size:36px;font-weight:bold;color:#cc44ff;
         text-shadow:0 0 30px #aa00ff,0 0 60px #6600cc,2px 2px 0 #000;
         letter-spacing:4px;text-align:center;line-height:1.4;">
-        ☠ VOCÊ ENTRA NO CASTELO ☠
+        ☠ ADENTRAIS O CASTELO ☠
     </div>
     <div style="font-family:'Courier New',monospace;font-size:16px;color:#8844aa;
         text-shadow:0 0 10px #6600cc;margin-top:12px;opacity:0.85;">
-        Há coisas aqui que não deveriam existir...
+        Coisas há nestas bandas que a razão desconhece...
     </div>
 `;
 document.body.appendChild(castleMsg);

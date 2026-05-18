@@ -14,24 +14,24 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
 const ABERTURA = {
     fraco: [
-        'Alto! Esta ponte não é para qualquer viajante. Retorna quando o teu poder for digno de nota.',
-        'Para! Sinto em ti a inexperiência de um novato. Esta travessia não te pertence... ainda.',
-        'Nenhum passa sem provar o seu valor. Tu, estranho, ainda não o fizeste.',
+        'Alto! Esta ponte não é para qualquer caminhante. Retornai quando o vosso poder for digno de nota.',
+        'Parai! Sinto em vós a inexperiência de um aprendiz. Esta travessia não vos pertence... ainda.',
+        'Ninguém passa sem provar o seu valor. Vós, estranho, ainda não o fizestes.',
     ],
     forte: [
-        'Aproximas-te com o peso de muitas batalhas nos teus passos. Talvez sejas digno desta travessia.',
-        'Reconheço a chama de um guerreiro experiente. Esta ponte pode ser tua... se assim o desejares.',
-        'Paro-te por tradição, não por dúvida. Vejo em ti um espírito forjado em combate.',
+        'Aproximai-vos com o peso de muitas batalhas nos vossos passos. Talvez sejais digno desta travessia.',
+        'Reconheço a têmpera de um guerreiro provado. Esta ponte pode ser vossa... se assim o desejardes.',
+        'Detenho-vos por tradição, não por dúvida. Vejo em vós um espírito forjado em combate.',
     ],
     posPassagem: [
-        'A ponte está aberta para ti, viajante. Em que posso ajudar-te?',
-        'Voltaste. Diz lá — o que te traz cá?',
-        'A passagem é tua. Fala, se quiseres.',
+        'A ponte está aberta para vós, viajante. Em que vos posso ser útil?',
+        'Retornastes. Dizei-me — o que vos traz por estas bandas?',
+        'A passagem é vossa. Falai, se for do vosso desejo.',
     ],
     cedePassagem: [
-        'Sinto em ti um poder que antes não estava. A ponte é tua, guerreiro — passa.',
-        'O teu espírito mudou desde a última vez que aqui estiveste. Reconheço a força em ti. Passa.',
-        'Esta presença... carregas agora o peso de verdadeiras batalhas. Não te detenho mais. Vai.',
+        'Sinto em vós um poder que antes não existia. A ponte é vossa, guerreiro — passai.',
+        'O vosso espírito mudou desde a última vez que aqui estivestes. Reconheço a força em vós. Passai.',
+        'Esta presença... carregais agora o fardo de verdadeiras pelejas. Não vos detenho mais. Ide.',
     ],
 };
 
@@ -39,62 +39,62 @@ const ESCOLHAS = {
     fraco: [
         {
             id: 'requisito',
-            label: 'O que tenho de fazer para passar?',
+            label: 'O que devo fazer para atravessar?',
             respostas: [
-                'Prova o teu valor em combate. Regressa quando tiveres crescido em experiência e poder.',
-                'Enfrenta as criaturas destas terras. Quando o teu espírito for suficientemente forte, eu saberei.',
-                'Não há atalho. Combate, aprende, cresce. Depois voltamos a falar.',
+                'Provai o vosso valor em combate. Regressai quando tiverdes colhido sabedoria e poder.',
+                'Enfrentai as bestas que assolam estas terras. Quando o vosso espírito for suficientemente temperado, eu o saberei.',
+                'Não existem atalhos para a glória. Combatei, aprendei, crescei. Depois voltaremos a parlamentar.',
             ],
         },
         {
             id: 'norte_fraco',
-            label: 'Que perigos há no norte?',
+            label: 'Que perigos espreitam no norte?',
             respostas: [
-                'Um castelo sombrio corrompido por uma força ancestral. Criaturas que outrora eram homens.',
-                'O mal cresce a cada lua cheia nas terras do norte. O castelo é o verdadeiro perigo.',
-                'Terras corrompidas, criaturas sem razão. Mas para atravessar, primeiro tens de me convencer com poder.',
+                'Um baluarte sombrio, maculado por uma força ancestral. Criaturas que outrora foram homens.',
+                'O mal recrudesce a cada lua cheia nas terras setentrionais. O castelo é a verdadeira danação.',
+                'Terras corrompidas, feras sem discernimento. Mas para atravessar, primeiro deveis convencer-me com a vossa bravura.',
             ],
         },
         {
             id: 'adeus',
-            label: 'Adeus, guardião.',
+            label: 'Ficai em paz, guardião.',
             acao: 'fechar',
             repetivel: true,
             respostas: [
-                'Vai com cuidado, jovem. E volta mais forte.',
-                'Que os ventos te levem ao teu destino, viajante.',
-                'Volta quando as tuas cicatrizes me convencerem.',
+                'Ide com cautela, jovem. E regressai mais robusto.',
+                'Que os ventos vos conduzam ao vosso destino, caminhante.',
+                'Retornai quando as vossas cicatrizes forem o vosso testemunho.',
             ],
         },
     ],
     posPassagem: [
         {
             id: 'norte_pos',
-            label: 'O que há no norte?',
+            label: 'O que me aguarda no norte?',
             respostas: [
-                'Um castelo corrompido por sombras antigas. Criaturas que já foram homens. Vai preparado.',
-                'O mal cresce lá dentro há décadas. O que encontrares no castelo... não será simples de derrotar.',
-                'Terras corrompidas e, no centro, um cristal negro que pulsa como um coração doente.',
+                'Um castelo fustigado por sombras de eras idas. Criaturas que já foram homens. Ide devidamente preparado.',
+                'O mal viceja naquelas entranhas há décadas. O que encontrardes no castelo... não será fácil de subjugar.',
+                'Terras mártires e, no âmago, um cristal negro que pulsa como um coração enfermo.',
             ],
         },
         {
             id: 'identidade_pos',
-            label: 'Quem és tu, guardião?',
+            label: 'Quem sois vós, guardião?',
             respostas: [
-                'Um guerreiro que escolheu o dever sobre a glória. Trezentos anos neste posto.',
-                'O último da Ordem da Ponte. Os outros tombaram. Eu fico até que alguém leve a luta ao norte.',
-                'Apenas um velho soldado com uma missão. E hoje, vejo em ti o que procurava.',
+                'Um soldado que elegeu o dever em detrimento da glória. Trezentos anos cumpro este posto.',
+                'O último da Ordem da Ponte. Os meus irmãos tombaram. Eu permaneço até que alguém leve a contenda ao norte.',
+                'Apenas um velho arauto com uma missão. E hoje, antevejo em vós o que tanto busquei.',
             ],
         },
         {
             id: 'adeus_pos',
-            label: 'Adeus, guardião.',
+            label: 'Ficai em paz, guardião.',
             acao: 'fechar',
             repetivel: true,
             respostas: [
-                'Que os teus passos sejam firmes e o teu aço verdadeiro.',
-                'A ponte está aberta para ti. Passa quando estiveres pronto.',
-                'Boa sorte, guerreiro. Vais precisar dela.',
+                'Que os vossos passos sejam firmes e o vosso aço incansável.',
+                'A ponte permanece aberta para vós. Atravessai quando vos sentirdes pronto.',
+                'Boa fortuna, guerreiro. Bem haveis de precisar dela.',
             ],
         },
     ],
@@ -577,7 +577,18 @@ function tratarEscolha(escolha) {
 }
 
 window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && dialogoAberto) fecharDialogo();
+    if (!dialogoAberto) return;
+    if (e.key === 'Escape') { fecharDialogo(); return; }
+    if (typingInterval) {
+        clearInterval(typingInterval);
+        typingInterval = null;
+        falaTexto.textContent = currentTypingText;
+        falaWrap.style.cursor = 'default';
+        const cb = currentTypingCallback;
+        currentTypingText = '';
+        currentTypingCallback = null;
+        if (cb) cb();
+    }
 });
 
 // ==========================================
@@ -799,13 +810,13 @@ export function abrirDialogoMercador(themeKey = 'tavern') {
                 escolhaQuest,
                 {
                     id: 'adeus_mercador',
-                    label: 'Adeus, mercador.',
+                    label: 'Ficai em paz, mercadora.',
                     acao: 'fechar',
                     repetivel: true,
                     respostas: [
-                        'Que a sorte te acompanhe, viajante.',
-                        'Volta sempre — tenho coisas boas.',
-                        'Bom proveito do que te resta.',
+                        'Que a fortuna vos acompanhe, caminhante.',
+                        'Regressai sempre — guardo aqui boas mercadorias.',
+                        'Bom proveito do que vos resta de vida.',
                     ],
                 },
             ];
@@ -819,11 +830,11 @@ function construirEscolhaFetchQuest(fase) {
     if (fase === 'none') {
         return {
             id: 'fetch_oferta',
-            label: '⚔  Tens algum trabalho para mim?',
+            label: '⚔  Tendes algum trabalho para mim?',
             repetivel: true,
             respostas: [
-                'Ontem... fui apanhada por uma emboscada na estrada. Levaram-me o que eu trazia. Quatro objetos importantes — perdidos pelos caminhos. Trá-mos de volta e recompenso-te bem.',
-                'Uns bandidos saíram-me ao caminho ontem. Espalharam as minhas coisas pelo mapa. Se trouxeres os quatro objetos que perdi — saco, caderno, anel e pingente — recompenso-te com Cintilas.',
+                'Ontem... fui colhida por uma emboscada na estrada. Despojaram-me de tudo o que trazia. Quatro artefactos de grande valia — extraviados pelas sendas. Trazei-mos de volta e sereis bem recompensado.',
+                'Uns malfeitores cruzaram-se no meu caminho ontem. Dispersaram os meus haveres pelo mapa. Se recuperardes os quatro artefactos que perdi — saco, pergaminho, anel e pendente — recompensar-vos-ei com Cintilas.',
             ],
             acaoApos: () => {
                 // Aceita automaticamente ao receber a explicação
@@ -835,29 +846,29 @@ function construirEscolhaFetchQuest(fase) {
         const { coletados, meta } = getFetchProgresso();
         return {
             id: 'fetch_progresso',
-            label: `⚔  Sobre a tua tarefa  (${coletados}/${meta})`,
+            label: `⚔  Sobre a vossa tarefa  (${coletados}/${meta})`,
             repetivel: true,
             respostas: () => {
                 const { coletados: c, meta: m } = getFetchProgresso();
                 if (c === 0) return [
-                    'Ainda não trouxeste nada. Procura nos caminhos onde costumam haver emboscadas.',
-                    'Continuam por aí, viajante. Procura bem.',
+                    'Ainda nada me trouxestes. Procurai nos carreiros onde as emboscadas costumam ocorrer.',
+                    'Continuam por aí, caminhante. Procurai com afinco.',
                 ];
                 if (c < m) return [
-                    `Vais bem — ${c} de ${m}. Faltam ainda alguns. Continua.`,
-                    `${c}/${m}. Não desistas — os outros estão pelo mapa.`,
+                    `Ide bem — ${c} de ${m}. Faltam ainda alguns. Prossegui.`,
+                    `${c}/${m}. Não esmoreçais — os restantes jazem algures no mapa.`,
                 ];
-                return ['Já tens todos! Vem trazê-los.'];
+                return ['Já os tendes todos! Vinde entregar-mos.'];
             },
         };
     }
     if (fase === 'completa') {
         return {
             id: 'fetch_entregar',
-            label: '✅  Tenho tudo o que perdeste.',
+            label: '✅  Trago tudo o que perdestes.',
             repetivel: true,
             respostas: [
-                `Os meus tesouros! Não sei como te agradecer... Toma — ${FETCH_RECOMPENSA_CINTILAS} ✦ e uma Poção Maior. Mereceste cada uma.`,
+                `Os meus tesouros! Não sei como vos agradecer... Tomai — ${FETCH_RECOMPENSA_CINTILAS} ✦ e um Elixir de Maior Vigor. Merecestes cada um deles.`,
             ],
             acaoApos: () => {
                 if (entregarFetchQuest()) {
@@ -873,8 +884,8 @@ function construirEscolhaFetchQuest(fase) {
         label: '⚜  Sobre aquela emboscada...',
         repetivel: true,
         respostas: [
-            'Já recuperei tudo graças a ti. Que os caminhos te tratem melhor do que me trataram.',
-            'Sempre que precisares de algo, sabes onde estou.',
+            'Já recuperei tudo mercê da vossa ajuda. Que os caminhos vos tratem melhor do que me trataram a mim.',
+            'Sempre que precisardes de algo, sabeis onde me encontrar.',
         ],
     };
 }

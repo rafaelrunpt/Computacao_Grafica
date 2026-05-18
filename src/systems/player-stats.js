@@ -118,6 +118,7 @@ export function receberDano(amount) {
 
 export function curar(amount) {
     playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + amount);
+    if (playerStats.hp > 0) playerStats.derrotado = false;
     if (_onHPChange) _onHPChange();
 }
 

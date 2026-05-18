@@ -1,10 +1,10 @@
 // Quest do mercador (Alice): encontrar os 4 itens perdidos numa emboscada.
 
 export const ITENS_PERDIDOS = [
-    { id: 'saco_moedas',  nome: 'Saco de Moedas',     icone: '💰', cor: 0xffd24a, pos: { x:  22, z:  18 } },
-    { id: 'caderno',      nome: 'Caderno de Receitas', icone: '📜', cor: 0xeae0c8, pos: { x: -34, z:  46 } },
-    { id: 'anel',         nome: 'Anel de Família',     icone: '💍', cor: 0xff9aa0, pos: { x:  48, z: -22 } },
-    { id: 'pingente',     nome: 'Pingente Rúnico',     icone: '🔷', cor: 0x88aaff, pos: { x: -54, z: -48 } },
+    { id: 'saco_moedas',  nome: 'Saco de Cintilas',   icone: '💰', cor: 0xffd24a, pos: { x:  22, z:  18 } },
+    { id: 'pergaminho',   nome: 'Pergaminho de Alquimia', icone: '📜', cor: 0xeae0c8, pos: { x: -33, z:  24 } },
+    { id: 'anel',         nome: 'Anel de Família',    icone: '💍', cor: 0xff9aa0, pos: { x:  48, z: -22 } },
+    { id: 'pendente',     nome: 'Pendente Rúnico',    icone: '🔷', cor: 0x88aaff, pos: { x: -54, z: -48 } },
 ];
 
 const META = ITENS_PERDIDOS.length;

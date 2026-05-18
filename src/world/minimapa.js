@@ -32,26 +32,38 @@ export function renderizarMinimapa(renderer, scene, windowWidth, windowHeight, p
     if (mapaAberto) {
         if (border) border.style.display = 'none';
 
-        minimapCamera.left   = -mapWidth  / 2;
-        minimapCamera.right  =  mapWidth  / 2;
-        minimapCamera.top    =  mapHeight / 2;
-        minimapCamera.bottom = -mapHeight / 2;
+        // Ocupa o ecrã inteiro mantendo a relação de aspecto do mundo:
+        // expandimos o frustum ortográfico no eixo mais comprido do
+        // ecrã para o mapa caber sem distorção e sem letterbox negro.
+        const winAspect = windowWidth / windowHeight;
+        const mapAspect = mapWidth / mapHeight;
+        let halfW, halfH;
+        if (winAspect > mapAspect) {
+            halfH = mapHeight / 2;
+            halfW = halfH * winAspect;
+        } else {
+            halfW = mapWidth / 2;
+            halfH = halfW / winAspect;
+        }
+        // pequena margem para não tocar nos bordos do ecrã
+        const PAD = 1.05;
+        halfW *= PAD; halfH *= PAD;
+
+        minimapCamera.left   = -halfW;
+        minimapCamera.right  =  halfW;
+        minimapCamera.top    =  halfH;
+        minimapCamera.bottom = -halfH;
         minimapCamera.updateProjectionMatrix();
         minimapCamera.position.set(centerX, 50, centerZ);
         minimapCamera.lookAt(centerX, 0, centerZ);
 
-        const bigMapSize = Math.min(windowWidth, windowHeight) * 0.8;
-        const xPos = (windowWidth  - bigMapSize) / 2;
-        const yPos = (windowHeight - bigMapSize) / 2;
-
-        renderer.setViewport(xPos, yPos, bigMapSize, bigMapSize);
-        renderer.setScissor(xPos, yPos, bigMapSize, bigMapSize);
-        renderer.setScissorTest(true);
+        renderer.setViewport(0, 0, windowWidth, windowHeight);
+        renderer.setScissor(0, 0, windowWidth, windowHeight);
+        renderer.setScissorTest(false);
         // Força o shadow pass — sem render principal neste frame, o shadow map
         // estaria stale e mostraria sombras inconsistentes / em falta.
         renderer.shadowMap.needsUpdate = true;
         renderer.render(scene, minimapCamera);
-        renderer.setScissorTest(false);
 
     } else {
         if (border) border.style.display = 'block';

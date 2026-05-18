@@ -32,7 +32,7 @@ export function criarBartender(scene, doorPos, vendorPos) {
     _vendorPos = vendorPos.clone();
     _loader.load('assets/models/npcs/goblin_shop.glb', (gltf) => {
         _model = gltf.scene;
-        _model.scale.setScalar(0.13);
+        _model.scale.setScalar(0.25);
         _model.position.copy(_doorPos);
         _model.rotation.y = Math.PI;
         _model.traverse(c => {

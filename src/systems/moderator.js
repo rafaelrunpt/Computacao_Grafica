@@ -446,9 +446,9 @@ function setupEvents() {
     document.getElementById('mod-scene-castelo').onclick = () => moderator.switchScene('caselo');
 }
 
-// --- TOGGLE COM L ---
+// --- TOGGLE COM Ç ---
 window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'l') {
+    if (e.key.toLowerCase() === 'ç') {
         moderator.isOpen = !moderator.isOpen;
         modUI.style.display = moderator.isOpen ? 'block' : 'none';
         if (moderator.isOpen) {

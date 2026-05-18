@@ -58,10 +58,15 @@ export const matBossCapeLining = new THREE.MeshStandardMaterial({
 });
 
 // === TEXTURE SLOT: skin === (pele/rosto/pescoço — visível sob a máscara)
+// Tom levantado para acompanhar a chapa diamante do corpo (que com
+// metalness alta captura mais luz). Pequeno emissivo para a cabeça não
+// parecer um vazio escuro sob a sombra do colar/capa.
 export const matBossSkin = new THREE.MeshStandardMaterial({
-    color: 0x7a6e60,
-    roughness: 0.85,
-    metalness: 0.05,
+    color: 0xc4a890,
+    emissive: 0x3a2a1c,
+    emissiveIntensity: 0.6,
+    roughness: 0.75,
+    metalness: 0.08,
     flatShading: true,
 });
 
@@ -155,12 +160,41 @@ export function aplicarTexturaBoss(slot, url, opts = {}) {
         mat.needsUpdate = true;
     });
     if (opts.normalUrl && 'normalMap' in mat) {
-        _texLoader.load(opts.normalUrl, (n) => { mat.normalMap = n; mat.needsUpdate = true; });
+        _texLoader.load(opts.normalUrl, (n) => {
+            if (opts.repeat) {
+                n.wrapS = n.wrapT = THREE.RepeatWrapping;
+                n.repeat.set(opts.repeat[0], opts.repeat[1]);
+            }
+            mat.normalMap = n;
+            mat.needsUpdate = true;
+        });
     }
     if (opts.roughnessUrl && 'roughnessMap' in mat) {
-        _texLoader.load(opts.roughnessUrl, (r) => { mat.roughnessMap = r; mat.needsUpdate = true; });
+        _texLoader.load(opts.roughnessUrl, (r) => {
+            if (opts.repeat) {
+                r.wrapS = r.wrapT = THREE.RepeatWrapping;
+                r.repeat.set(opts.repeat[0], opts.repeat[1]);
+            }
+            mat.roughnessMap = r;
+            mat.needsUpdate = true;
+        });
     }
 }
+
+// ----------------------------------------------------------------------
+// Texturas do boss aplicadas no arranque
+// ----------------------------------------------------------------------
+const _ARMOR_TEX_BASE = 'assets/textures/boss/DiamondPlate-PNG/DiamondPlate007C_1K-PNG_';
+aplicarTexturaBoss('armor', _ARMOR_TEX_BASE + 'Color.png', {
+    repeat: [2, 2],
+    normalUrl:    _ARMOR_TEX_BASE + 'NormalGL.png',
+    roughnessUrl: _ARMOR_TEX_BASE + 'Roughness.png',
+});
+aplicarTexturaBoss('armor_dark', _ARMOR_TEX_BASE + 'Color.png', {
+    repeat: [2, 2],
+    normalUrl:    _ARMOR_TEX_BASE + 'NormalGL.png',
+    roughnessUrl: _ARMOR_TEX_BASE + 'Roughness.png',
+});
 
 // ----------------------------------------------------------------------
 // BOSS — construção do modelo

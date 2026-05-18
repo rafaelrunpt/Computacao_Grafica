@@ -97,18 +97,29 @@ function stoneCourse(orient, length, height, baseX, baseZ, faceNormal, gapY = 0)
     // faceNormal: direção para dentro da sala (1 ou -1) — só para offset visual
     const blockH = 0.42;
     const rows = Math.ceil(height / blockH);
+    const halfL = length / 2;
+    // Largura uniforme dos blocos. Ajustada para que length seja um múltiplo
+    // exacto, evitando blocos de bordas com tamanhos diferentes.
+    const targetW = 0.70;
+    const nFull = Math.max(1, Math.round(length / targetW));
+    const blockW = length / nFull;          // largura "inteira"
+    const halfW  = blockW / 2;              // meio-bloco usado nas filas ímpares
+
     for (let r = 0; r < rows; r++) {
         const y = r * blockH + blockH / 2 + gapY;
         if (y > height) continue;
-        // larguras irregulares
+        // Padrão "running bond" — filas ímpares começam e acabam com meio bloco
+        const startsWithHalf = (r % 2) === 1;
         let used = 0;
-        const offset = (r % 2 === 0) ? 0 : 0.25;
-        while (used < length) {
-            const bw = 0.55 + Math.random() * 0.35;
-            const x = -length / 2 + used + bw / 2 + (r % 2 === 0 ? 0 : offset);
-            if (x + bw / 2 > length / 2 + 0.01) break;
-            const bMat = (Math.random() < 0.25) ? matStoneDark : matStone;
-            const depth = 0.18 + Math.random() * 0.08;
+        let i = 0;
+        while (used < length - 0.001) {
+            // largura deste bloco: meio nas extremidades das filas ímpares
+            const isEdge = startsWithHalf && (used < 0.001 || used + blockW > length - 0.001);
+            const bw = isEdge ? halfW : blockW;
+            const x = -halfL + used + bw / 2;
+            // só a profundidade varia ligeiramente para dar relevo
+            const bMat = ((i + r) % 4 === 0) ? matStoneDark : matStone;
+            const depth = 0.20;
             const blockH2 = blockH - 0.02;
             const m = new THREE.Mesh(new THREE.BoxGeometry(bw - 0.04, blockH2, depth), bMat);
             if (orient === 'x') {
@@ -120,6 +131,7 @@ function stoneCourse(orient, length, height, baseX, baseZ, faceNormal, gapY = 0)
             m.castShadow = true;
             quartoScene.add(m);
             used += bw;
+            i++;
         }
     }
 }
@@ -338,12 +350,77 @@ quartoColliders.push(new THREE.Box3().setFromObject(chestG));
 
 // estado + interacção do baú
 let _bauAberto = false;
+let _bauColetado = false;
 let _lidAnimT = 0; // 0..1 — animação a abrir
-export function bauQuartoAberto() { return _bauAberto; }
+let _itemsAnimT = 0; // 0..1 — animação de subida dos itens
+let _itemsFadeOut = 0; // 0..1 — quando coletado, desvanece
+export function bauQuartoAberto()  { return _bauAberto; }
+export function bauQuartoColetado() { return _bauColetado; }
 export function abrirBauQuarto() {
     if (_bauAberto) return;
     _bauAberto = true;
 }
+export function coletarBauQuarto() {
+    if (!_bauAberto || _bauColetado) return false;
+    _bauColetado = true;
+    return true;
+}
+
+// ---- itens flutuantes sobre o baú (poções a rodar) ----
+const itensPivot = new THREE.Group();
+itensPivot.visible = false;
+chestG.add(itensPivot);
+itensPivot.position.set(0, 0.6, 0);
+
+function criarPocaoMesh(corVidro, corLiquido, corRolha) {
+    const g = new THREE.Group();
+    const corpo = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.10, 0.10, 0.18, 12),
+        new THREE.MeshStandardMaterial({ color: corVidro, transparent: true, opacity: 0.55, roughness: 0.25, metalness: 0.15, emissive: corLiquido, emissiveIntensity: 0.5 }),
+    );
+    g.add(corpo);
+    const liquido = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.085, 0.085, 0.12, 12),
+        new THREE.MeshStandardMaterial({ color: corLiquido, emissive: corLiquido, emissiveIntensity: 0.9, roughness: 0.4 }),
+    );
+    liquido.position.y = -0.025;
+    g.add(liquido);
+    const gargalo = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.045, 0.06, 0.08, 10),
+        new THREE.MeshStandardMaterial({ color: corVidro, transparent: true, opacity: 0.6, roughness: 0.3 }),
+    );
+    gargalo.position.y = 0.12;
+    g.add(gargalo);
+    const rolha = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.05, 0.05, 8),
+        new THREE.MeshStandardMaterial({ color: corRolha, roughness: 0.95 }),
+    );
+    rolha.position.y = 0.18;
+    g.add(rolha);
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    return g;
+}
+
+// 3 poções normais + 1 maior
+const pocoes = [];
+for (let i = 0; i < 3; i++) {
+    const p = criarPocaoMesh(0xa8e0ff, 0xff4a6a, 0x5a3a18);
+    const ang = (i / 3) * Math.PI * 2;
+    p.position.set(Math.cos(ang) * 0.22, 0, Math.sin(ang) * 0.22);
+    p.scale.setScalar(0.85);
+    itensPivot.add(p);
+    pocoes.push(p);
+}
+const mega = criarPocaoMesh(0xd0c0ff, 0xc060ff, 0x3a2a10);
+mega.scale.setScalar(1.1);
+mega.position.set(0, 0.22, 0);
+itensPivot.add(mega);
+pocoes.push(mega);
+
+// glow suave por cima do baú quando aberto
+const glow = new THREE.PointLight(0xffaaff, 0, 2.2, 2);
+glow.position.set(0, 0.7, 0);
+chestG.add(glow);
 
 // caixa de interacção em frente ao baú
 export const quartoBauBox = new THREE.Box3(
@@ -491,6 +568,33 @@ export function updateQuarto(deltaTime) {
         // ease-out: começa rápido, desacelera no fim
         const e = 1 - (1 - _lidAnimT) * (1 - _lidAnimT);
         lidPivot.rotation.x = -e * 1.35;
+    }
+
+    // animação dos itens — sobem do interior do baú e ficam a rodar
+    if (_bauAberto && !_bauColetado) {
+        if (_itemsAnimT < 1) _itemsAnimT = Math.min(1, _itemsAnimT + deltaTime * 1.2);
+        const e = 1 - Math.pow(1 - _itemsAnimT, 3);
+        const baseY = 0.25 + e * 0.55;
+        const bob = Math.sin(_t * 2.3) * 0.04;
+        itensPivot.position.y = baseY + bob;
+        itensPivot.rotation.y += deltaTime * 1.4;
+        itensPivot.visible = true;
+        // pequena rotação individual em torno do eixo
+        for (let i = 0; i < pocoes.length; i++) {
+            pocoes[i].rotation.y -= deltaTime * 0.8;
+            pocoes[i].position.y = (i === pocoes.length - 1 ? 0.22 : 0) + Math.sin(_t * 2 + i) * 0.03;
+        }
+        // escala que arranca em zero
+        const s = e;
+        itensPivot.scale.setScalar(s);
+        glow.intensity = e * 2.4 + Math.sin(_t * 6) * 0.3;
+    } else if (_bauColetado && _itemsFadeOut < 1) {
+        _itemsFadeOut = Math.min(1, _itemsFadeOut + deltaTime * 2.0);
+        const k = 1 - _itemsFadeOut;
+        itensPivot.scale.setScalar(k);
+        itensPivot.position.y = 0.8 + _itemsFadeOut * 0.4;
+        glow.intensity = k * 2.4;
+        if (_itemsFadeOut >= 1) itensPivot.visible = false;
     }
 }
 

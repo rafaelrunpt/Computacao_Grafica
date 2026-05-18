@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { player, coroaGroup, brincosGroup, oculosGroup, aureolaGroup, mascaraGroup } from '../entities/jogador.js';
 import { playerStats, registarCallbacksStats } from '../systems/player-stats.js';
 
-// ---- prompt de interação ----
+// ---- aviso de interacção ----
 const promptEl = document.createElement('div');
 promptEl.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.65);color:#fff;padding:8px 18px;border-radius:8px;font-family:sans-serif;font-size:16px;display:none;pointer-events:none;z-index:50;';
 document.body.appendChild(promptEl);
@@ -10,7 +10,7 @@ document.body.appendChild(promptEl);
 export function showPrompt(msg) { promptEl.textContent = msg; promptEl.style.display = 'block'; }
 export function hidePrompt()    { promptEl.style.display = 'none'; }
 
-// ---- HUD ----
+// ---- HUD (Mostrador de Estado) ----
 const hudEl = document.createElement('div');
 hudEl.id = 'game-hud';
 hudEl.style.cssText = `
@@ -20,7 +20,7 @@ hudEl.style.cssText = `
     font-family: 'Georgia', serif;
 `;
 
-// avatar canvas
+// canvas do avatar
 const avatarCanvas = document.createElement('canvas');
 avatarCanvas.width = 96; avatarCanvas.height = 96;
 avatarCanvas.style.cssText = `
@@ -72,7 +72,7 @@ export function buildAvatarScene() {
     clone.position.set(0, 0, 0);
     avatarScene.add(clone);
 
-    // localizar acessórios clonados para sincronizar visibilidade
+    // localizar artefactos clonados para sincronizar visibilidade
     _avatarCoroaClone   = clone.getObjectByName('coroaGroup')   || null;
     _avatarBrincosClone = clone.getObjectByName('brincosGroup') || null;
     _avatarOculosClone  = clone.getObjectByName('oculosGroup')  || null;
@@ -94,7 +94,7 @@ export function buildAvatarScene() {
 }
 
 export function syncAvatarMaterials() {
-    // visibilidade dos acessórios no avatar acompanha o boneco principal
+    // visibilidade dos artefactos no avatar acompanha o herói principal
     if (_avatarCoroaClone)   _avatarCoroaClone.visible   = coroaGroup.visible;
     if (_avatarBrincosClone) _avatarBrincosClone.visible = brincosGroup.visible;
     if (_avatarOculosClone)  _avatarOculosClone.visible  = oculosGroup.visible;
@@ -162,9 +162,9 @@ export function atualizarHUD() {
 
     const hpPct = Math.min(100, (playerStats.hp / playerStats.maxHp) * 100);
     hpBarFill.style.width = hpPct + '%';
-    hpLabelEl.textContent = `${playerStats.hp} / ${playerStats.maxHp} HP${playerStats.derrotado ? ' (em recuperação)' : ''}`;
+    hpLabelEl.textContent = `${playerStats.hp} / ${playerStats.maxHp} HP${playerStats.derrotado ? ' (a recuperar)' : ''}`;
 }
 
-// ligar stats → hud
+// ligar estatísticas → HUD
 registarCallbacksStats(atualizarHUD, () => atualizarHUD(), atualizarHUD);
 atualizarHUD();

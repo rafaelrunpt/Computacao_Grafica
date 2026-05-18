@@ -23,7 +23,7 @@ title.style.cssText = `
     text-transform: uppercase; margin-bottom: 8px;
     font-family: 'Georgia', serif;
 `;
-title.textContent = '✦ Pista da Runa ✦';
+title.textContent = '✦ Sussurro das Runas ✦';
 const body = document.createElement('div');
 overlay.append(title, body);
 document.body.appendChild(overlay);
