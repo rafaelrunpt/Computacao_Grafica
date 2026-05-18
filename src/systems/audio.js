@@ -49,6 +49,15 @@ export function inicializarAudio(camera, faixas, sfx) {
     onSettingChange('muted',        _aplicarVolumeMusica);
 }
 
+export function resumeAudio() {
+    if (_listener && _listener.context.state === 'suspended') {
+        _listener.context.resume().then(() => {
+            console.log('[AUDIO] Contexto retomado.');
+            _aplicarVolumeMusica();
+        });
+    }
+}
+
 export function switchMusic(nextTrackName, fadeTime = 1.5) {
     if (_currentTrack === nextTrackName) { _pendingTrack = null; return; }
     const next = _sounds[nextTrackName];

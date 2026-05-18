@@ -5,7 +5,7 @@
 // panorama do mundo. Dispensa-se com qualquer tecla / clique.
 // --------------------------------------------------------
 import * as THREE from 'three';
-import { switchMusic } from '../systems/audio.js';
+import { switchMusic, resumeAudio } from '../systems/audio.js';
 
 let _ativa = true;
 let _onIniciar = null;
@@ -419,6 +419,7 @@ splash.addEventListener('click', () => {
     splash.style.opacity = '0';
     splash.style.pointerEvents = 'none';
     _entrarFullscreenSafely();
+    resumeAudio();
     if (!_musicaIniciada) {
         switchMusic('title', 3.0);
         _musicaIniciada = true;
