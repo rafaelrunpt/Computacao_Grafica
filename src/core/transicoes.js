@@ -280,8 +280,8 @@ export function sairTavern() {
         if (player.parent) player.parent.remove(player);
         _worldScene.add(player);
         player.scale.setScalar(1.0); // Reset escala no mundo
-        // Reaparece em frente à entrada do inn (este, fora dos postes)
-        player.position.set(-37, 0, 36.5);
+        // Reaparece em frente à porta da taverna (posição real da porta no mundo)
+        player.position.set(-41.94, 0, 37.08);
         player.rotation.y = -Math.PI / 2;
         estado.cena = 'mundo';
         fade(0, () => { estado.ePressBloqueado = false; });

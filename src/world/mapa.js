@@ -180,7 +180,7 @@ export function removerGuardiao() {
     if (_guardiaoPassou) return;
     if (_guardianColliderBox) {
         const i = colliders.findIndex(c => c.box === _guardianColliderBox);
-        if (i !== -1) colliders.splice(i, 1);
+        if (i !== -1) { colliders.splice(i, 1); _gridDirty = true; }
         _guardianColliderBox = null;
     }
     _guardiaoPassou = true;
@@ -563,11 +563,11 @@ function criarInn(scene, cx, cz, scale = 0.1, rotationY = 0, yOffset = 0) {
         invalidateColliderGrid();
         console.log('[Inn] 12 colisores manuais adicionados (4 paredes + 2 postes + 6 segmentos diagonal).');
 
-        // Caixa de interação para entrar na taverna — área do alpendre entre
-        // os postes e a parede este. Ajusta se a porta do modelo estiver noutro sítio.
+        // Caixa de interação para entrar na taverna — pequena área junto à
+        // porta real (X: -41.94, Z: 37.08) para o prompt "E" só aparecer perto.
         tavernEnterBox = new THREE.Box3(
-            new THREE.Vector3(-43.30, 0,   35.00),
-            new THREE.Vector3(-38.50, 2.5, 39.00),
+            new THREE.Vector3(-42.80, 0,   36.20),
+            new THREE.Vector3(-41.05, 2.5, 37.95),
         );
     }, undefined, e => console.error('Erro gobble-inn:', e));
 }

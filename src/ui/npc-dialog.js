@@ -28,6 +28,11 @@ const ABERTURA = {
         'Voltaste. Diz lá — o que te traz cá?',
         'A passagem é tua. Fala, se quiseres.',
     ],
+    cedePassagem: [
+        'Sinto em ti um poder que antes não estava. A ponte é tua, guerreiro — passa.',
+        'O teu espírito mudou desde a última vez que aqui estiveste. Reconheço a força em ti. Passa.',
+        'Esta presença... carregas agora o peso de verdadeiras batalhas. Não te detenho mais. Vai.',
+    ],
 };
 
 const ESCOLHAS = {
@@ -227,7 +232,7 @@ caixa.style.cssText = `
     border-radius: 13px 13px 0 0;
     overflow: hidden;
     display: flex; flex-direction: column;
-    height: 360px;
+    height: 440px;
     border-width: 1px 1px 0 1px;
     border-style: solid;
     backdrop-filter: blur(28px);
@@ -311,7 +316,9 @@ escolhasDiv.style.cssText = `
     flex: 1;
     display: flex; flex-direction: column;
     justify-content: flex-start;
-    overflow: hidden; /* Impedir scroll na área de diálogo */
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
 `;
 
 // Click na área de texto para saltar typing
@@ -474,14 +481,14 @@ function mostrarEscolhas() {
     const theme = currentTheme;
 
     const numChoices = lista.length;
-    // Cálculo rigoroso para caber tudo em escolhasDiv (altura disponível ~220px)
-    const availableHeight = 224; 
-    const totalGaps = (numChoices - 1) * 8;
-    const baseButtonHeight = (availableHeight - totalGaps) / numChoices;
-    
-    const paddingY = Math.min(14, Math.max(4, (baseButtonHeight - 20) / 2));
-    const fontSize = Math.min(15, Math.max(11, baseButtonHeight / 2.5));
-    const gapSize = Math.min(10, Math.max(4, 220 / (numChoices * 4)));
+    // escolhasDiv real: caixa(440) - header(76) - falaWrap(100) - padding(10+20) = 234px
+    const availableHeight = 234;
+    const totalGaps = Math.max(0, numChoices - 1) * 6;
+    const baseButtonHeight = numChoices > 0 ? (availableHeight - totalGaps) / numChoices : 30;
+
+    const paddingY = Math.min(12, Math.max(4, (baseButtonHeight - 18) / 2));
+    const fontSize = Math.min(15, Math.max(11, baseButtonHeight / 2.6));
+    const gapSize = Math.min(8, Math.max(3, 140 / (numChoices * 4)));
 
     escolhasDiv.style.gap = `${gapSize}px`;
 
@@ -498,8 +505,7 @@ function mostrarEscolhas() {
             color: ${theme.choiceText}; font-family: ${theme.bodyFont};
             font-size: ${fontSize}px; line-height: 1.2; cursor: pointer;
             transition: all 0.2s ease;
-            flex-shrink: 1;
-            min-height: 0;
+            flex-shrink: 0;
             overflow: hidden;
             white-space: nowrap;
             text-overflow: ellipsis;
@@ -654,6 +660,31 @@ export function abrirDialogoGuardiao(level, callbackPassar, passouJa = false, th
         getAbertura: () => pick(passagemConcedida ? ABERTURA.posPassagem : ABERTURA.fraco),
         // null deixa o sistema antigo (ESCOLHAS por tier) tomar conta
         getEscolhas: null,
+    });
+}
+
+export function abrirDialogoGuardiaoCedePassagem(callbackPassar, themeKey = 'tavern') {
+    if (dialogoAberto) return;
+    onPassar = callbackPassar;
+    passagemConcedida = true;
+    lastTier = 'posPassagem';
+    usedIds.clear();
+
+    abrirDialogo({
+        nome: 'Guardião da Ponte',
+        subtitulo: 'Protetor da Passagem',
+        retratoUrl: '../../assets/textures/avatares/guardiao_avatar.png',
+        tema: themeKey,
+        getAbertura: () => pick(ABERTURA.cedePassagem),
+        getEscolhas: () => [
+            {
+                id: 'atravessar_ponte',
+                label: '⚔  Atravessar a ponte',
+                acao: 'passar_agora',
+                repetivel: true,
+                respostas: [''],
+            },
+        ],
     });
 }
 

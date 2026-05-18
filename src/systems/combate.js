@@ -1,5 +1,6 @@
 import { grassZones, limparZonaBatalha } from '../world/mapa.js';
 import { ganharXP, playerStats, receberDano, curar, recuperarTotal, getAtkEfetivo, getCuraPosCombate, getChanceEvasao } from './player-stats.js';
+import { ganharCintilas } from './currency.js';
 import { entrarCombate, sairCombate, getMundoSnapshot, sairBossParaCastelo } from '../core/transicoes.js';
 import { notificarVitoria as notificarVitoriaQuest } from './merchant-quest.js';
 import { combateInimigo, setBossMode, isBossMode } from '../world/combate-scene.js';
@@ -163,11 +164,49 @@ const inimigoBase = {
     hp: 30, maxHp: 30,
     atk: 4,
     xpDrop: 35,
+    cintilasDrop: 12,
 };
 let inimigoAtual = { ...inimigoBase };
 
+// ----------------------------------------------------------------------
+// DIFICULDADE ESCALÁVEL
+// ----------------------------------------------------------------------
+// Nível de dificuldade atual dos inimigos normais (não-boss). Começa em 1.
+// Pode ser alterado externamente via setNivelInimigo() — por exemplo
+// ao desbloquear novas regiões, ao subir o nível do jogador, ou para
+// uma curva pré-definida por zona/quest.
+//
+// A escala aplica-se em novoInimigo() e iniciarBossFight() e afecta
+// HP, ATK, XP e Cintilas a partir dos valores `*Base` declarados acima.
+// Mantém-se "puramente multiplicativo" para ser fácil de afinar.
+let _nivelInimigo = 1;
+const ESCALA = {
+    hp:       (lvl) => 1 + (lvl - 1) * 0.35,   // +35% HP por nível
+    atk:      (lvl) => 1 + (lvl - 1) * 0.20,   // +20% ATK por nível
+    xp:       (lvl) => 1 + (lvl - 1) * 0.50,   // +50% XP por nível
+    cintilas: (lvl) => 1 + (lvl - 1) * 0.60,   // +60% Cintilas por nível
+};
+
+export function setNivelInimigo(n) { _nivelInimigo = Math.max(1, n | 0); }
+export function getNivelInimigo()  { return _nivelInimigo; }
+
+// Calcula stats finais a partir da base + nível. Encapsulado para
+// se poder trocar a fórmula sem mexer no resto do combate.
+function escalarStats(base, lvl = _nivelInimigo) {
+    const hp = Math.round(base.hp * ESCALA.hp(lvl));
+    return {
+        nome: base.nome,
+        hp,
+        maxHp: hp,
+        atk:           Math.max(1, Math.round(base.atk           * ESCALA.atk(lvl))),
+        xpDrop:        Math.max(1, Math.round((base.xpDrop      ?? 0) * ESCALA.xp(lvl))),
+        cintilasDrop:  Math.max(0, Math.round((base.cintilasDrop ?? 0) * ESCALA.cintilas(lvl))),
+        nivel: lvl,
+    };
+}
+
 function novoInimigo() {
-    inimigoAtual = { ...inimigoBase };
+    inimigoAtual = escalarStats(inimigoBase);
 }
 
 function refreshHpUI() {
@@ -352,7 +391,9 @@ function pulsarPlayer() {
 // ----------------------------------------------------------------------
 function finalizarVitoria() {
     const boss = isBossMode();
-    setLog(`Venceste! ${inimigoAtual.nome} foi destruído. (+${inimigoAtual.xpDrop} XP)`);
+    const cintilasGanhas = inimigoAtual.cintilasDrop || 0;
+    const xpGanho = inimigoAtual.xpDrop || 0;
+    setLog(`Venceste! ${inimigoAtual.nome} foi destruído. (+${xpGanho} XP, +${cintilasGanhas} ✦)`);
     setBotoesAtivos(false);
     if (boss) pararFaseDesvio();
 
@@ -367,6 +408,7 @@ function finalizarVitoria() {
             if (f <= 0) {
                 clearInterval(fadeId);
                 ganharXP(inimigoAtual.xpDrop);
+                if (cintilasGanhas > 0) ganharCintilas(cintilasGanhas);
                 setTimeout(() => {
                     mostrarEcraVitoriaFinal();
                     // mantém-se na cena de combate em fundo escuro com o overlay
@@ -384,7 +426,8 @@ function finalizarVitoria() {
         combateInimigo.scale.setScalar(Math.max(0.01, f));
         if (f <= 0) {
             clearInterval(fadeId);
-            ganharXP(inimigoBase.xpDrop);
+            ganharXP(inimigoAtual.xpDrop);
+            if (cintilasGanhas > 0) ganharCintilas(cintilasGanhas);
             // Cura pós-vitória (Auréola dos Caídos)
             const cura = getCuraPosCombate();
             if (cura > 0 && playerStats.hp < playerStats.maxHp) {
@@ -506,6 +549,7 @@ const BOSS_DEFS = {
     hp: 140, maxHp: 140,
     atk: 9,
     xpDrop: 500,
+    cintilasDrop: 250,
 };
 let _bossFightTriggered = false;
 
@@ -515,7 +559,10 @@ export function iniciarBossFight() {
     _bossFightTriggered = true;
 
     estadoJogo.emCombate = true;
-    inimigoAtual = { ...BOSS_DEFS };
+    // O boss escala com o mesmo `_nivelInimigo`; podes futuramente
+    // forçar um nível mínimo aqui (ex: Math.max(_nivelInimigo, 3))
+    // se quiseres que o boss seja sempre acima de uma certa fasquia.
+    inimigoAtual = escalarStats(BOSS_DEFS);
     // cura o jogador para dar uma luta justa
     recuperarTotal();
     // reset à velocidade/rage da fase de desvio

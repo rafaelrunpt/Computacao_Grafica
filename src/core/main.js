@@ -27,7 +27,7 @@ import { buildAvatarScene, syncAvatarMaterials, avatarRenderer, avatarScene, ava
 // Para alternar entre as duas UIs de diálogo, troca este import:
 //   '../ui/npc-dialog.js'         → versão original
 //   '../ui/npc-dialog-arcano.js'  → versão Arcano (teste)
-import { abrirDialogoGuardiao, abrirDialogoGuardiaoCedePassagem, isDialogoAberto } from '../ui/npc-dialog-arcano.js';
+import { abrirDialogoGuardiao, abrirDialogoGuardiaoCedePassagem, isDialogoAberto } from '../ui/npc-dialog.js';
 import { abrirInventario, fecharInventario, isInventarioAberto } from '../ui/inventario-ui.js';
 import { abrirLockpick, isLockpickAberto } from '../ui/lockpick.js';
 import { criarLostItems, updateLostItems, getLostItemAt } from '../world/lost-items.js';
