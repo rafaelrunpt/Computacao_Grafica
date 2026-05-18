@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { criarBoss, updateBoss, getBossRoot } from './boss.js';
 
 // ----------------------------------------------------------------------
 // CENA DE COMBATE
@@ -12,9 +13,15 @@ export const combateScene = new THREE.Scene();
 combateScene.background = new THREE.Color(0x05000a);
 combateScene.fog = new THREE.FogExp2(0x100020, 0.045);
 
-// Posições fixas
-export const posPlayerCombate = new THREE.Vector3(-2.6, 0, 0);
-export const posInimigoCombate = new THREE.Vector3(2.8, 0.85, 0);
+// Posições fixas — são mutadas em runtime conforme entramos/saímos de
+// boss mode. Os módulos que importam estes Vector3 lêem sempre o valor
+// actual (mantêm a referência).
+const _posPlayerNormal  = new THREE.Vector3(-2.6, 0, 0);
+const _posInimigoNormal = new THREE.Vector3( 2.8, 0.85, 0);
+const _posPlayerBoss    = new THREE.Vector3(0, 0, 2.0);
+const _posInimigoBoss   = new THREE.Vector3(0, 0, -3.5);
+export const posPlayerCombate  = _posPlayerNormal.clone();
+export const posInimigoCombate = _posInimigoNormal.clone();
 
 // ---- Iluminação ambiental + chave + contraluz roxo ----
 combateScene.add(new THREE.AmbientLight(0x553388, 0.55));
@@ -349,6 +356,47 @@ combateInimigo.add(auraLight);
 
 combateScene.add(combateInimigo);
 
+// ----------------------------------------------------------------------
+// BOSS — adicionado à mesma cena, escondido por defeito.
+// É activado por `setBossMode(true)`; nessa altura o wraith é
+// escondido e o boss aparece na mesma marca (posInimigoCombate).
+// ----------------------------------------------------------------------
+// boss tem origem nos pés (base a y≈0), por isso ignoramos o offset Y
+// usado pelo wraith.
+const bossPos = posInimigoCombate.clone();
+bossPos.y = 0;
+criarBoss(combateScene, bossPos, {
+    acessorios: ['coroa_magica', 'mascara_eclipse', 'oculos_carga'],
+});
+const _bossRoot = getBossRoot();
+if (_bossRoot) {
+    _bossRoot.visible = false;
+    // virado para o jogador (player em -X)
+    _bossRoot.rotation.y = -Math.PI / 2 + 0.25;
+}
+
+let _bossMode = false;
+export function isBossMode() { return _bossMode; }
+export function setBossMode(on) {
+    _bossMode = !!on;
+    if (_bossRoot) _bossRoot.visible = _bossMode;
+    combateInimigo.visible = !_bossMode;
+    // muta as posições que outros módulos importaram por referência
+    if (_bossMode) {
+        posPlayerCombate.copy(_posPlayerBoss);
+        posInimigoCombate.copy(_posInimigoBoss);
+    } else {
+        posPlayerCombate.copy(_posPlayerNormal);
+        posInimigoCombate.copy(_posInimigoNormal);
+    }
+    // garante que o boss assenta na nova marca imediatamente (não
+    // espera pelo próximo updateCombateScene).
+    if (_bossRoot) {
+        _bossRoot.position.set(posInimigoCombate.x, 0, posInimigoCombate.z);
+        _bossRoot.rotation.y = 0; // virado para +Z (jogador/câmara)
+    }
+}
+
 // Proxy de material para preservar a API usada por systems/combate.js
 const _fadeMats = [wraithDark, wraithCloth, wingMat, flameMat, mistMat, glowMat,
                    belt.material, face.material];
@@ -390,9 +438,22 @@ export function updateCombateScene(deltaTime) {
     // pulsar a luz da arena
     arenaPulse.intensity = 1.2 + Math.sin(_t * 2.4) * 0.5;
 
+    // boss tem animação própria (flutuação, capa, olhos, etc.)
+    if (_bossMode) {
+        updateBoss(deltaTime);
+        if (_bossRoot) {
+            // fica na marca do inimigo + virado para +Z (player e câmara)
+            _bossRoot.position.x = posInimigoCombate.x;
+            _bossRoot.position.z = posInimigoCombate.z;
+            _bossRoot.rotation.y = Math.sin(_t * 0.5) * 0.08;
+        }
+    }
+
     // wraith a flutuar e a oscilar lentamente
     combateInimigo.position.y = posInimigoCombate.y + Math.sin(_t * 1.4) * 0.12;
-    combateInimigo.rotation.y = Math.sin(_t * 0.5) * 0.15;
+    // Virado para o player (que está em -X), mas com um leve giro
+    // para a câmara (que está em +Z) — assim a cara fica visível.
+    combateInimigo.rotation.y = -Math.PI / 2 + 0.35 + Math.sin(_t * 0.5) * 0.15;
     combateInimigo.rotation.z = Math.sin(_t * 0.8) * 0.04;
 
     // nevoa rotativa (dois anéis em sentidos opostos)
@@ -432,9 +493,11 @@ export function updateCombateScene(deltaTime) {
 
 // ---- Reset visual entre combates (volta a posição/rotação inicial) ----
 export function resetCombateScene() {
-    combateInimigo.position.copy(posInimigoCombate);
-    combateInimigo.rotation.set(0, 0, 0);
-    combateInimigo.visible = true;
+    // o wraith ocupa o spot normal mesmo durante o boss (ficaria atrás),
+    // mas é escondido por _bossMode.
+    combateInimigo.position.copy(_posInimigoNormal);
+    combateInimigo.rotation.set(0, -Math.PI / 2 + 0.35, 0);
+    combateInimigo.visible = !_bossMode;
     combateInimigo.scale.set(1, 1, 1);
     const ud = combateInimigo.userData;
     ud._fadeMats.forEach(m => {
@@ -442,4 +505,11 @@ export function resetCombateScene() {
         m.transparent = (ud._baseOpacity.get(m) ?? 1) < 1;
     });
     ud._emissiveMats.forEach((m, i) => { m.emissiveIntensity = ud._baseEmissive[i]; });
+    // garantir que o boss está visível e na marca correcta se boss mode
+    if (_bossMode && _bossRoot) {
+        _bossRoot.visible = true;
+        _bossRoot.scale.set(1, 1, 1);
+        _bossRoot.position.set(posInimigoCombate.x, 0, posInimigoCombate.z);
+        _bossRoot.rotation.y = 0;
+    }
 }

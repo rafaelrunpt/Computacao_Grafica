@@ -1,3 +1,5 @@
+import { getReducaoCooldown, getLevelDamageMult } from './player-stats.js';
+
 // ----------------------------------------------------------------------
 // CATÁLOGO DE ATAQUES (físicos — sem magia)
 // ----------------------------------------------------------------------
@@ -66,6 +68,35 @@ export const ATAQUES = {
         hits: 2,
         anim: { tipo: 'danca', cor: '#c4b3ff', lunge: 1.1, dur: 780, impacto: 280, impacto2: 580, shake: 5 },
     },
+    // Ataque NORMAL — vendido na taverna pelo bartender.
+    // Múltiplos cortes giratórios à volta do inimigo.
+    golpe_giratorio: {
+        id: 'golpe_giratorio',
+        nome: 'Tornado de Lâminas',
+        desc: 'Três cortes giratórios rápidos. Físico.',
+        icone: '🌪',
+        cooldown: 2,
+        multATK: 0.85,
+        bonusMin: 1, bonusMax: 3,
+        precisao: 0.85,
+        hits: 3,
+        anim: { tipo: 'danca', cor: '#ffd86a', lunge: 1.3, dur: 940, impacto: 260, impacto2: 540, impacto3: 820, shake: 7 },
+    },
+    // Ataque MÁGICO — vendido pelo mercador na loja.
+    // Golpe único e devastador com energia arcana.
+    relampago_arcano: {
+        id: 'relampago_arcano',
+        nome: 'Relâmpago Arcano',
+        desc: 'Raio mágico de alto dano. Ignora parte da defesa.',
+        icone: '⚡',
+        cooldown: 3,
+        multATK: 2.0,
+        bonusMin: 6, bonusMax: 10,
+        precisao: 0.95,
+        hits: 1,
+        magico: true,
+        anim: { tipo: 'talho', cor: '#7ad8ff', lunge: 0.6, dur: 880, impacto: 460, shake: 14 },
+    },
 };
 
 // ----------------------------------------------------------------------
@@ -103,8 +134,12 @@ export function aplicarCooldown(idx) {
     if (!id) return;
     const at = ATAQUES[id];
     if (at.cooldown > 0) {
-        ataqueState.cooldowns[id] = at.cooldown;
-        _justApplied.add(id);
+        // Aplica redução de equipamento (ex.: Óculos do Vidente: −1).
+        const cd = Math.max(0, at.cooldown - getReducaoCooldown());
+        if (cd > 0) {
+            ataqueState.cooldowns[id] = cd;
+            _justApplied.add(id);
+        }
     }
 }
 
@@ -146,13 +181,13 @@ export function equiparAtaque(slotIdx, ataqueId) {
 export function resolverAtaque(idx, atkBase) {
     const at = getSlotAtaque(idx);
     if (!at) return null;
+    const levelMult = getLevelDamageMult();
     let totalDano = 0, hitsAcertos = 0;
     for (let h = 0; h < at.hits; h++) {
         if (Math.random() <= at.precisao) {
             const range = at.bonusMax - at.bonusMin + 1;
-            const dano = Math.max(1,
-                Math.round(atkBase * at.multATK) + at.bonusMin + Math.floor(Math.random() * range)
-            );
+            const danoBase = Math.round(atkBase * at.multATK) + at.bonusMin + Math.floor(Math.random() * range);
+            const dano = Math.max(1, Math.round(danoBase * levelMult));
             totalDano += dano;
             hitsAcertos++;
         }

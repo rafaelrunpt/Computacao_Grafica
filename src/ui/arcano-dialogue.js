@@ -282,6 +282,7 @@
       this.npcs = {};
       this.handlers = {};
       this.history = [];
+      this._historyByNpc = {};
       this._recorded = new Set();
       this.isOpen = false;
       this._currentId = null;
@@ -307,7 +308,9 @@
       this._currentId = npcId;
       this.isOpen = true;
       this.root.dataset.open = '1';
-      this.history = [];
+      // Persiste a crónica por NPC entre interacções
+      if (!this._historyByNpc[npcId]) this._historyByNpc[npcId] = [];
+      this.history = this._historyByNpc[npcId];
       this._recorded = new Set();
       this._renderNameplate(npc);
       this._renderPortrait(npc);

@@ -97,8 +97,9 @@ export class Bau {
         recompensaGroup.visible = false;
         grupo.add(recompensaGroup);
 
-        if (itemId === 'coroa_magica') this._criarVisualCoroa(recompensaGroup);
-        else                           this._criarVisualPocao(recompensaGroup);
+        if (itemId === 'coroa_magica')         this._criarVisualCoroa(recompensaGroup);
+        else if (itemId === 'mascara_eclipse') this._criarVisualMascara(recompensaGroup);
+        else                                   this._criarVisualPocao(recompensaGroup);
 
         scene.add(grupo);
         this._mesh      = grupo;
@@ -137,6 +138,24 @@ export class Bau {
         pedra.position.set(0, 0.02, 0.32);
         group.add(pedra);
         group.userData.brilho = pedra;
+    }
+
+    _criarVisualMascara(group) {
+        const matBanda = new THREE.MeshStandardMaterial({ color: 0x0a0612, roughness: 0.6, metalness: 0.5, emissive: 0x10001f, emissiveIntensity: 0.5 });
+        const matRuna  = new THREE.MeshStandardMaterial({ color: 0xa84bff, emissive: 0xa040ff, emissiveIntensity: 2.0, roughness: 0.3, metalness: 0.2 });
+        // tira horizontal curva
+        const banda = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.22, 0.22, 0.12, 24, 1, true, -Math.PI * 0.55, Math.PI * 1.1),
+            matBanda
+        );
+        banda.position.set(0, 0, 0);
+        banda.rotation.y = Math.PI / 2;
+        group.add(banda);
+        // runa frontal
+        const runa = new THREE.Mesh(new THREE.OctahedronGeometry(0.075, 0), matRuna);
+        runa.position.set(0, 0, 0.22);
+        group.add(runa);
+        group.userData.brilho = runa;
     }
 
     _criarVisualPocao(group) {

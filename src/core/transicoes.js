@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import { player } from '../entities/jogador.js';
 import { lojaScene, lojaSpawnPos } from '../world/loja.js';
-import { caseloScene, caseloSpawnPos } from '../world/castelo.js';
-import { tavernScene, tavernSpawnPos } from '../world/tavern.js';
-import { combateScene, posPlayerCombate, resetCombateScene } from '../world/combate-scene.js';
+import { caseloScene, caseloSpawnPos, bossCrystalSafePos } from '../world/castelo.js';
+import { tavernScene, tavernSpawnPos, tavernQuartoReturnPos } from '../world/tavern.js';
+import { quartoScene, quartoSpawnPos } from '../world/quarto.js';
+import { combateScene, posPlayerCombate, resetCombateScene, isBossMode } from '../world/combate-scene.js';
 import { hidePrompt } from '../ui/hud.js';
 import { switchMusic } from '../systems/audio.js';
 
 // ---- estado da cena ----
-export const estado = { cena: 'mundo', ePressBloqueado: false };
+export const estado = { cena: 'quarto', ePressBloqueado: false };
 
 // ---- fade negro ----
 const fadeEl = document.createElement('div');
@@ -16,20 +17,37 @@ fadeEl.style.cssText = `
     position: fixed; inset: 0;
     background: #000; opacity: 0;
     pointer-events: none;
-    transition: opacity 0.5s;
+    transition: opacity 0.2s;
     z-index: 100;
 `;
 document.body.appendChild(fadeEl);
 
 export function fade(toOpacity, callback) {
+    const currentOpacity = parseFloat(window.getComputedStyle(fadeEl).opacity);
+    if (currentOpacity === toOpacity) {
+        if (callback) callback();
+        return;
+    }
     fadeEl.style.opacity = toOpacity;
-    fadeEl.addEventListener('transitionend', callback, { once: true });
+    
+    let called = false;
+    const onEnd = (e) => {
+        if (called) return;
+        if (e && e.target !== fadeEl) return;
+        called = true;
+        fadeEl.removeEventListener('transitionend', onEnd);
+        if (callback) callback();
+    };
+    fadeEl.addEventListener('transitionend', onEnd);
+    // Fallback de segurança caso o evento não dispare
+    setTimeout(onEnd, 250); 
 }
 
 // ---- posições dos jogadores por cena ----
 export const lojaPlayer   = { x: 0, y: 0, z: 0, rotY: 0 };
 export const caseloPlayer = { x: 0, y: 0, z: 0, rotY: 0 };
 export const tavernPlayer = { x: 0, y: 0, z: 0, rotY: 0 };
+export const quartoPlayer = { x: 0, y: 0, z: 0, rotY: 0 };
 
 // ---- posição do player no mundo antes de entrar em combate (para regressar ao mesmo sítio) ----
 const _mundoSnapshot = { x: 0, z: 0, rotY: 0 };
@@ -208,6 +226,7 @@ export function entrarCaselo() {
     if (estado.ePressBloqueado) return;
     estado.ePressBloqueado = true;
     hidePrompt();
+    switchMusic('castle', 1.0);
     iniciarTransicaoCastelo(() => {
         caseloPlayer.x = caseloSpawnPos.x;
         caseloPlayer.y = caseloSpawnPos.y;
@@ -224,6 +243,7 @@ export function sairCaselo() {
     if (estado.ePressBloqueado) return;
     estado.ePressBloqueado = true;
     hidePrompt();
+    switchMusic('dark', 1.0);
     fade(1, () => {
         if (player.parent) player.parent.remove(player);
         _worldScene.add(player);
@@ -246,6 +266,7 @@ export function entrarTavern() {
         tavernPlayer.rotY = Math.PI;
         if (player.parent) player.parent.remove(player);
         tavernScene.add(player);
+        player.scale.setScalar(1.2); // Personagem 1.2x na taverna
         estado.cena = 'tavern';
         fade(0, () => { estado.ePressBloqueado = false; });
     });
@@ -258,10 +279,47 @@ export function sairTavern() {
     fade(1, () => {
         if (player.parent) player.parent.remove(player);
         _worldScene.add(player);
+        player.scale.setScalar(1.0); // Reset escala no mundo
         // Reaparece em frente à entrada do inn (este, fora dos postes)
         player.position.set(-37, 0, 36.5);
         player.rotation.y = -Math.PI / 2;
         estado.cena = 'mundo';
+        fade(0, () => { estado.ePressBloqueado = false; });
+    });
+}
+
+// ---- entrar / sair quarto (a partir da taverna) ----
+export function entrarQuarto() {
+    if (estado.ePressBloqueado) return;
+    estado.ePressBloqueado = true;
+    hidePrompt();
+    fade(1, () => {
+        quartoPlayer.x = quartoSpawnPos.x;
+        quartoPlayer.y = quartoSpawnPos.y;
+        quartoPlayer.z = quartoSpawnPos.z;
+        quartoPlayer.rotY = 0; // virado para dentro do quarto (norte → cama)
+        if (player.parent) player.parent.remove(player);
+        quartoScene.add(player);
+        player.scale.setScalar(1.0);
+        estado.cena = 'quarto';
+        fade(0, () => { estado.ePressBloqueado = false; });
+    });
+}
+
+export function sairQuarto() {
+    if (estado.ePressBloqueado) return;
+    estado.ePressBloqueado = true;
+    hidePrompt();
+    switchMusic('tavern', 1.5);
+    fade(1, () => {
+        if (player.parent) player.parent.remove(player);
+        tavernScene.add(player);
+        player.scale.setScalar(1.2); // mesma escala da taverna
+        tavernPlayer.x = tavernQuartoReturnPos.x;
+        tavernPlayer.y = tavernQuartoReturnPos.y;
+        tavernPlayer.z = tavernQuartoReturnPos.z;
+        tavernPlayer.rotY = 0; // virado para sul (longe da porta)
+        estado.cena = 'tavern';
         fade(0, () => { estado.ePressBloqueado = false; });
     });
 }
@@ -281,8 +339,11 @@ export function entrarCombate(onAfterEnter) {
         if (player.parent) player.parent.remove(player);
         resetCombateScene();
         combateScene.add(player);
+        player.scale.setScalar(1.0); // Garante escala normal no combate
         player.position.copy(posPlayerCombate);
-        player.rotation.y = Math.PI / 2;
+        // arena normal: player olha para +X (wraith).
+        // arena boss: player olha para -Z (boss à frente).
+        player.rotation.y = isBossMode() ? Math.PI : Math.PI / 2;
         estado.cena = 'combate';
         fade(0, () => { if (onAfterEnter) onAfterEnter(); });
     });
@@ -296,6 +357,27 @@ export function sairCombate(onAfterExit) {
         player.position.set(_mundoSnapshot.x, _mundoSnapshot.y, _mundoSnapshot.z);
         player.rotation.y = _mundoSnapshot.rotY;
         estado.cena = 'mundo';
+        fade(0, () => { if (onAfterExit) onAfterExit(); });
+    });
+}
+
+// Saída específica do boss fight: em vez de regressar ao mundo, devolve
+// o jogador ao castelo, em frente ao cristal, para poder tentar de novo.
+export function sairBossParaCastelo(onAfterExit) {
+    if (estado.cena !== 'combate') return;
+    fade(1, () => {
+        if (player.parent) player.parent.remove(player);
+        caseloScene.add(player);
+        player.scale.setScalar(1.0);
+        // alinha caseloPlayer com o spot seguro junto ao cristal
+        caseloPlayer.x = bossCrystalSafePos.x;
+        caseloPlayer.y = bossCrystalSafePos.y;
+        caseloPlayer.z = bossCrystalSafePos.z;
+        caseloPlayer.rotY = Math.PI; // virado para o cristal (norte)
+        player.position.set(caseloPlayer.x, caseloPlayer.y, caseloPlayer.z);
+        player.rotation.y = caseloPlayer.rotY;
+        player.userData.baseY = caseloPlayer.y;
+        estado.cena = 'caselo';
         fade(0, () => { if (onAfterExit) onAfterExit(); });
     });
 }
@@ -316,22 +398,32 @@ export function mudarCena(target) {
     if (target === 'mundo') {
         if (estado.cena === 'loja') sairLoja();
         else if (estado.cena === 'caselo') sairCaselo();
+        else if (estado.cena === 'tavern') sairTavern();
     } else if (target === 'loja') {
-        if (estado.cena === 'caselo') {
+        if (estado.cena !== 'mundo') {
             if (player.parent) player.parent.remove(player);
             _worldScene.add(player);
+            player.scale.setScalar(1.0);
             estado.cena = 'mundo';
         }
         switchMusic('shop', 1.0);
         entrarLoja();
     } else if (target === 'caselo') {
-        if (estado.cena === 'loja') {
+        if (estado.cena !== 'mundo') {
             if (player.parent) player.parent.remove(player);
             _worldScene.add(player);
+            player.scale.setScalar(1.0);
             estado.cena = 'mundo';
         }
-        switchMusic('dark', 1.0);
         entrarCaselo();
+    } else if (target === 'tavern') {
+        if (estado.cena !== 'mundo') {
+            if (player.parent) player.parent.remove(player);
+            _worldScene.add(player);
+            player.scale.setScalar(1.0);
+            estado.cena = 'mundo';
+        }
+        entrarTavern();
     }
 }
 

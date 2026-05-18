@@ -1,6 +1,7 @@
 import { THEMES } from './dialogue-themes.js';
 import { getCintilas, gastarCintilas, ganharCintilas } from '../systems/currency.js';
-import { adicionarItem, CATALOGO } from '../systems/inventario.js';
+import { adicionarItem, CATALOGO, quantidade } from '../systems/inventario.js';
+import { ATAQUES, ataqueState, desbloquearAtaque, equiparAtaque } from '../systems/ataques.js';
 import {
     getFase as getFetchFase, getProgresso as getFetchProgresso,
     aceitarFetchQuest, entregarFetchQuest,
@@ -22,19 +23,15 @@ const ABERTURA = {
         'Reconheço a chama de um guerreiro experiente. Esta ponte pode ser tua... se assim o desejares.',
         'Paro-te por tradição, não por dúvida. Vejo em ti um espírito forjado em combate.',
     ],
+    posPassagem: [
+        'A ponte está aberta para ti, viajante. Em que posso ajudar-te?',
+        'Voltaste. Diz lá — o que te traz cá?',
+        'A passagem é tua. Fala, se quiseres.',
+    ],
 };
 
 const ESCOLHAS = {
     fraco: [
-        {
-            id: 'urgente',
-            label: 'Preciso de passar — é urgente.',
-            respostas: [
-                'A urgência não substitui o valor, jovem. Volta quando as tuas cicatrizes contarem histórias.',
-                'Muitos disseram o mesmo. Muitos regressaram sem passar. Cresce em poder, depois fala comigo.',
-                'A pressa é fraqueza disfarçada. Nenhuma urgência abre esta passagem antes do tempo.',
-            ],
-        },
         {
             id: 'requisito',
             label: 'O que tenho de fazer para passar?',
@@ -45,21 +42,12 @@ const ESCOLHAS = {
             ],
         },
         {
-            id: 'identidade_fraco',
-            label: 'Quem és tu, guardião?',
-            respostas: [
-                'Sou o Guardião desta ponte há trezentos e quarenta anos. Nenhum indigno passou enquanto eu respirei.',
-                'Um guerreiro ancião cuja armadura enferrujou mas cujo propósito nunca vacilou. Guardo esta travessia desde antes da tua avó nascer.',
-                'O último de uma ordem esquecida. Os meus irmãos caíram. Eu fico. Esta ponte é o meu juramento.',
-            ],
-        },
-        {
             id: 'norte_fraco',
             label: 'Que perigos há no norte?',
             respostas: [
-                'Um castelo sombrio corrompido por uma força ancestral. Criaturas que outrora eram homens. Não és forte o suficiente... ainda.',
-                'O mal cresce a cada lua cheia nas terras do norte. As zonas do sul onde vieste estão infestadas, mas o castelo é o verdadeiro perigo.',
-                'O sábio da aldeia sabe mais do que diz sobre o que há no norte. Mas para atravessar, primeiro tens de me convencer com poder.',
+                'Um castelo sombrio corrompido por uma força ancestral. Criaturas que outrora eram homens.',
+                'O mal cresce a cada lua cheia nas terras do norte. O castelo é o verdadeiro perigo.',
+                'Terras corrompidas, criaturas sem razão. Mas para atravessar, primeiro tens de me convencer com poder.',
             ],
         },
         {
@@ -74,43 +62,32 @@ const ESCOLHAS = {
             ],
         },
     ],
-    forte: [
+    posPassagem: [
         {
-            id: 'passar',
-            label: 'Quero atravessar a ponte.',
-            acao: 'passar',
-            repetivel: true,
-            respostas: [
-                'O teu valor está à vista. Passa, guerreiro — e que a tua lâmina seja afiada no que te espera.',
-                'Reconheço a tua força. Esta ponte é tua. Vai, e não olhes para trás sem razão.',
-                'Trezentos anos de guarda... e finalmente um digno passa. Vai. A tua missão aguarda-te.',
-            ],
-        },
-        {
-            id: 'norte_forte',
+            id: 'norte_pos',
             label: 'O que há no norte?',
             respostas: [
                 'Um castelo corrompido por sombras antigas. Criaturas que já foram homens. Vai preparado.',
                 'O mal cresce lá dentro há décadas. O que encontrares no castelo... não será simples de derrotar.',
-                'Terras corrompidas, criaturas sem razão, e no centro — um cristal negro que pulsa como um coração doente.',
+                'Terras corrompidas e, no centro, um cristal negro que pulsa como um coração doente.',
             ],
         },
         {
-            id: 'identidade_forte',
+            id: 'identidade_pos',
             label: 'Quem és tu, guardião?',
             respostas: [
-                'Um guerreiro que escolheu o dever sobre a glória. Trezentos anos neste posto. Tu és dos poucos dignos que vi passar.',
-                'O último da Ordem da Ponte. Os outros tombaram. Eu fico até que alguém suficientemente forte leve a luta ao norte.',
-                'Apenas um velho soldado com uma missão. Mas hoje, vejo em ti o que procurava. Vai em frente.',
+                'Um guerreiro que escolheu o dever sobre a glória. Trezentos anos neste posto.',
+                'O último da Ordem da Ponte. Os outros tombaram. Eu fico até que alguém leve a luta ao norte.',
+                'Apenas um velho soldado com uma missão. E hoje, vejo em ti o que procurava.',
             ],
         },
         {
-            id: 'adeus',
+            id: 'adeus_pos',
             label: 'Adeus, guardião.',
             acao: 'fechar',
             repetivel: true,
             respostas: [
-                'Que os teus passos sejam firmes e o teu aço verdadeiro. Vai.',
+                'Que os teus passos sejam firmes e o teu aço verdadeiro.',
                 'A ponte está aberta para ti. Passa quando estiveres pronto.',
                 'Boa sorte, guerreiro. Vais precisar dela.',
             ],
@@ -130,6 +107,7 @@ let typingInterval = null;
 let currentTypingText = '';
 let currentTypingCallback = null;
 let historyLog = [];
+const historyByNpc = {};
 let summaryExpanded = false;
 
 const usedIds = new Set();
@@ -360,9 +338,7 @@ document.body.appendChild(overlay);
 //  Lógica de UI
 // ==========================================
 
-function addToHistory(role, text) {
-    historyLog.push({ role, text });
-    
+function renderHistoryEntry(role, text) {
     const entry = document.createElement('div');
     entry.style.cssText = `
         border-left: 2px solid ${role === 'npc' ? currentTheme.accent : 'rgba(255,255,255,0.2)'};
@@ -388,11 +364,20 @@ function addToHistory(role, text) {
     
     entry.append(label, content);
     summaryContent.appendChild(entry);
-    
+}
+
+function addToHistory(role, text) {
+    historyLog.push({ role, text });
+    renderHistoryEntry(role, text);
     // Auto-scroll history box se não estiver expandido (mostra o fundo)
     if (!summaryExpanded) {
         summaryBox.scrollTop = summaryBox.scrollHeight;
     }
+}
+
+function renderHistoryFromLog() {
+    summaryContent.innerHTML = '';
+    for (const e of historyLog) renderHistoryEntry(e.role, e.text);
 }
 
 function aplicarTema(themeKey) {
@@ -476,11 +461,10 @@ function escolhasDisponiveis() {
             return true;
         });
     }
-    // Fallback: guardião (sistema antigo).
-    const tier = playerLevel >= 2 ? 'forte' : 'fraco';
-    if (passagemConcedida) {
-        return [{ id: 'passar_agora', label: '⚔  Atravessar a ponte', acao: 'passar_agora', repetivel: true }];
-    }
+    // Fallback: guardião — sem opção de "passar" no diálogo
+    // (a passagem é concedida fora do diálogo, em main.js, quando o jogador
+    // tem nível 2+ e interage). O diálogo só serve para conversa.
+    const tier = passagemConcedida ? 'posPassagem' : 'fraco';
     return ESCOLHAS[tier].filter(e => e.repetivel || !usedIds.has(e.id));
 }
 
@@ -599,7 +583,10 @@ function abrirDialogo(config) {
     currentNpcConfig = config;
     respondendoAtual = true;
     summaryExpanded = false;
-    historyLog = [];
+    // Persiste a crónica por NPC entre interacções (chave = nome do NPC)
+    const npcKey = config.nome || '_default_';
+    if (!historyByNpc[npcKey]) historyByNpc[npcKey] = [];
+    historyLog = historyByNpc[npcKey];
 
     aplicarTema(config.tema || 'tavern');
 
@@ -618,7 +605,7 @@ function abrirDialogo(config) {
     overlay.style.display = 'flex';
     escolhasDiv.innerHTML = '';
     falaTexto.textContent = '';
-    summaryContent.innerHTML = '';
+    renderHistoryFromLog();
 
     summaryContent.style.maxHeight = '0';
     summaryContent.style.padding = '0 16px';
@@ -650,13 +637,13 @@ function abrirDialogo(config) {
 // ==========================================
 //  API pública
 // ==========================================
-export function abrirDialogoGuardiao(level, callbackPassar, themeKey = 'tavern') {
+export function abrirDialogoGuardiao(level, callbackPassar, passouJa = false, themeKey = 'tavern') {
     if (dialogoAberto) return;
     playerLevel = level;
     onPassar = callbackPassar;
-    passagemConcedida = false;
+    passagemConcedida = !!passouJa;
 
-    const tier = level >= 2 ? 'forte' : 'fraco';
+    const tier = passagemConcedida ? 'posPassagem' : 'fraco';
     if (tier !== lastTier) { usedIds.clear(); lastTier = tier; }
 
     abrirDialogo({
@@ -664,14 +651,14 @@ export function abrirDialogoGuardiao(level, callbackPassar, themeKey = 'tavern')
         subtitulo: 'Protetor da Passagem',
         retratoUrl: '../../assets/textures/avatares/guardiao_avatar.png',
         tema: themeKey,
-        getAbertura: () => pick(level >= 2 ? ABERTURA.forte : ABERTURA.fraco),
-        // null deixa o sistema antigo (ESCOLHAS+passagemConcedida) tomar conta
+        getAbertura: () => pick(passagemConcedida ? ABERTURA.posPassagem : ABERTURA.fraco),
+        // null deixa o sistema antigo (ESCOLHAS por tier) tomar conta
         getEscolhas: null,
     });
 }
 
 // ---- Mercador ----
-const MERCADOR_PRECOS = { pocao: 15, mega: 35 };
+const MERCADOR_PRECOS = { pocao: 15, mega: 35, oculos_carga: 20, relampago_arcano: 180 };
 
 const MERCADOR_FALAS_OFERTA = {
     pocao: [
@@ -683,6 +670,16 @@ const MERCADOR_FALAS_OFERTA = {
         'Esta é mais forte — {p} ✦. Usa-a com cabeça.',
         '{p} ✦ por isto. Não desperdices num arranhão.',
         'Guarda-a para quando contar mesmo. {p} ✦.',
+    ],
+    oculos_carga: [
+        'Olha bem para eles — {p} ✦. Vês os ataques antes deles acontecerem.',
+        '{p} ✦. Quem os usa nunca espera demais por uma carga.',
+        'Raros, estes. {p} ✦ é uma pechincha.',
+    ],
+    relampago_arcano: [
+        'Energia arcana destilada — {p} ✦. Aponta, e arde.',
+        '{p} ✦. Não há armadura que aguente este raio.',
+        'Aprendi-o há anos com um vidente cego. {p} ✦ e é teu.',
     ],
     semCintilas: [
         'Não tens Cintilas suficientes, viajante.',
@@ -730,9 +727,44 @@ export function abrirDialogoMercador(themeKey = 'tavern') {
             const fase = getFetchFase();
             const escolhaQuest = construirEscolhaFetchQuest(fase);
 
-            return [
+            const oculosJaComprados = quantidade('oculos_carga') > 0;
+            const escolhasCompra = [
                 compraEscolha('comprar_pocao', 'pocao', MERCADOR_PRECOS.pocao, MERCADOR_FALAS_OFERTA.pocao),
                 compraEscolha('comprar_mega',  'mega',  MERCADOR_PRECOS.mega,  MERCADOR_FALAS_OFERTA.mega),
+            ];
+            // Óculos: peça única, desaparece da loja depois de comprados
+            if (!oculosJaComprados) {
+                escolhasCompra.push(compraEscolha(
+                    'comprar_oculos', 'oculos_carga',
+                    MERCADOR_PRECOS.oculos_carga, MERCADOR_FALAS_OFERTA.oculos_carga
+                ));
+            }
+
+            // ATAQUE MÁGICO — Relâmpago Arcano (compra única).
+            const arcanoAprendido = ataqueState.desbloqueados.has('relampago_arcano');
+            if (!arcanoAprendido) {
+                const at = ATAQUES['relampago_arcano'];
+                const preco = MERCADOR_PRECOS.relampago_arcano;
+                escolhasCompra.push({
+                    id: 'comprar_relampago_arcano',
+                    repetivel: false,
+                    label: `${at.icone}  ${at.nome} — ${preco} ✦${(c >= preco) ? '' : '  (insuficiente)'}`,
+                    respostas: () => (c >= preco)
+                        ? MERCADOR_FALAS_OFERTA.relampago_arcano.map(f => _falaCom(f, preco))
+                        : MERCADOR_FALAS_OFERTA.semCintilas,
+                    acaoImediata: () => {
+                        if (c < preco) return;
+                        gastarCintilas(preco);
+                        desbloquearAtaque('relampago_arcano');
+                        // equipar automaticamente num slot livre
+                        const slotLivre = ataqueState.slots.indexOf(null);
+                        if (slotLivre !== -1) equiparAtaque(slotLivre, 'relampago_arcano');
+                    },
+                });
+            }
+
+            return [
+                ...escolhasCompra,
                 escolhaQuest,
                 {
                     id: 'adeus_mercador',

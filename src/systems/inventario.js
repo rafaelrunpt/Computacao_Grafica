@@ -1,4 +1,4 @@
-import { playerStats, curar } from './player-stats.js';
+import { playerStats, curar, recalcularMaxHp } from './player-stats.js';
 
 // ----------------------------------------------------------------------
 // CATÁLOGO DE ITENS — definição estática (id → metadados + efeito)
@@ -10,9 +10,42 @@ export const CATALOGO = {
     coroa_magica: {
         id: 'coroa_magica',
         nome: 'Coroa da Pedra Mágica',
-        descricao: 'Equipável (cabeça). +10% de ataque.',
-        efeito: { tipo: 'equipar', slot: 'cabeca' },
+        descricao: 'Acessório. +10% de ataque.',
+        efeito: { tipo: 'equipar', slot: 'acessorio' },
         icone: '👑',
+        equipMsg: 'Equipaste a Coroa. +10% ATK!',
+    },
+    brincos_vida: {
+        id: 'brincos_vida',
+        nome: 'Brincos da Aurora',
+        descricao: 'Acessório. +10 HP máximo.',
+        efeito: { tipo: 'equipar', slot: 'acessorio' },
+        icone: '💎',
+        equipMsg: 'Equipaste os Brincos. +10 HP máx.',
+    },
+    oculos_carga: {
+        id: 'oculos_carga',
+        nome: 'Óculos do Vidente',
+        descricao: 'Acessório. Revelam o próximo ataque do inimigo em combate.',
+        efeito: { tipo: 'equipar', slot: 'acessorio' },
+        icone: '🕶',
+        equipMsg: 'Equipaste os Óculos. Vês o que aí vem.',
+    },
+    aureola_caidos: {
+        id: 'aureola_caidos',
+        nome: 'Auréola dos Caídos',
+        descricao: 'Acessório. Recupera 5 HP no fim de cada combate vencido.',
+        efeito: { tipo: 'equipar', slot: 'acessorio' },
+        icone: '😇',
+        equipMsg: 'Equipaste a Auréola. +5 HP após cada vitória.',
+    },
+    mascara_eclipse: {
+        id: 'mascara_eclipse',
+        nome: 'Máscara do Eclipse',
+        descricao: 'Acessório. 25% de chance de evitar o dano de um ataque.',
+        efeito: { tipo: 'equipar', slot: 'acessorio' },
+        icone: '🌑',
+        equipMsg: 'Equipaste a Máscara. 25% de esquiva.',
     },
 };
 
@@ -24,7 +57,8 @@ function notificarEquip() { _equipListeners.forEach(fn => { try { fn(); } catch 
 // ----------------------------------------------------------------------
 // ESTADO DO INVENTÁRIO — { id → quantidade }
 // ----------------------------------------------------------------------
-const _stock = { pocao: 3, mega: 1, elixir: 0, coroa_magica: 0 };
+// O jogador arranca sem itens. As poções iniciais vêm do baú do quarto.
+const _stock = { pocao: 0, mega: 0, elixir: 0, coroa_magica: 0, brincos_vida: 0, oculos_carga: 0, aureola_caidos: 0, mascara_eclipse: 0 };
 
 let _onChange = null;
 export function registarOnChange(cb) { _onChange = cb; }
@@ -33,10 +67,15 @@ function notificar() { if (_onChange) _onChange(); }
 // ---- consultas ----
 export function getItens() {
     // devolve apenas os que existem no stock (mesmo qtd 0 — UI decide)
-    return Object.keys(CATALOGO).map(id => ({
-        ...CATALOGO[id],
-        quantidade: _stock[id] || 0,
-    }));
+    return Object.keys(CATALOGO).map(id => {
+        const item = CATALOGO[id];
+        const equipavel = item.efeito && item.efeito.tipo === 'equipar';
+        return {
+            ...item,
+            quantidade: _stock[id] || 0,
+            equipado: equipavel && playerStats.equipped[item.efeito.slot] === id,
+        };
+    });
 }
 
 export function temItem(id) { return (_stock[id] || 0) > 0; }
@@ -84,12 +123,15 @@ export function usarItem(id) {
         if (atual === id) {
             // já equipado → desequipar
             playerStats.equipped[slot] = null;
+            recalcularMaxHp();
             notificarEquip();
-            return { ok: true, mensagem: `Removeste a ${item.nome}.` };
+            return { ok: true, mensagem: `Removeste ${item.nome}.` };
         }
+        // Apenas 1 acessório por vez: substitui o que estiver no slot.
         playerStats.equipped[slot] = id;
+        recalcularMaxHp();
         notificarEquip();
-        return { ok: true, mensagem: `Equipaste a ${item.nome}. +10% ATK!` };
+        return { ok: true, mensagem: item.equipMsg || `Equipaste ${item.nome}.` };
     }
 
     if (ef.tipo === 'curarTotal') {

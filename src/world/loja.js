@@ -52,10 +52,9 @@ loader.load('../../assets/models/constructions/shop_interior.glb', (gltf) => {
         }
     });
 
-    console.log(`[Loja] ${lojaColliders.length} colisores gerados a partir do GLB.`);
+    console.log(`[Loja] shop_interior.glb carregado.`);
 
     lojaScene.add(shopModel);
-    console.log('[Loja] shop_interior.glb carregado — colisões via raycast.');
 }, undefined, e => console.error('Erro shop_interior GLB:', e));
 
 // ---- Mercador ----
@@ -105,24 +104,15 @@ export function updateMerchant(_dt, playerPos) {
 }
 
 // ---- parâmetros de movimento ----
-// O STEP_MAX é o critério único: subidas até este valor são permitidas (degraus, rampas suaves),
-// acima disso bloqueia (móveis, paredes). Calibra para o teu asset:
-//   - degraus de escadaria típicos: ~0.15 a ~0.25m → STEP_MAX ≥ 0.25 deixa-os subir
-//   - móveis/balcões baixos: ~0.4m+ → STEP_MAX < 0.4 bloqueia-os
-// Sweet spot: 0.30
-export const LOJA_FLOOR_Y = 0.0;     // Y devolvido se o raycast falhar (fora do asset).
-const RAY_START_Y = 10;              // altura de onde lançamos o raio para baixo.
-export const STEP_MAX = 0.30;        // maior subida num único passo (degrau).
-const DROP_MAX = 1.2;                // maior queda permitida.
+export const LOJA_FLOOR_Y = 0.0;     
+const RAY_START_Y = 10;              
+export const STEP_MAX = 0.30;        
+const DROP_MAX = 1.2;                
 
 // Mantido por compatibilidade com o moderator (visualização) — vazio agora.
 export const stairsZones = [];
 
 // ---- zonas explicitamente bloqueadas ----
-// Paredes decorativas que coincidentemente têm degraus pequenos (≤ STEP_MAX) e o algoritmo
-// não consegue distinguir de uma escada real. Aqui defines essas zonas à mão.
-// Dentro de uma zona destas, qualquer movimento é negado (não sobe nem desce).
-// Para ajustar: usa "📍 MOSTRAR POSIÇÃO" no menu L em cada canto da parede.
 export const blockedZones = [
     // Parede de entrada (sul) — lado ESQUERDO da porta
     new THREE.Box3(
@@ -147,11 +137,8 @@ export const blockedZones = [
 ];
 
 // ---- zonas de altura fixa ----
-// Dentro destas zonas, o Y é forçado a `y` (ignora o raycast).
-// Útil para passagens de tábuas / pontes onde o raio cairia entre as tábuas e o player afundava.
-// Têm PRIORIDADE sobre as blockedZones (se uma zona de altura fixa cobrir o ponto, é caminhável).
 export const fixedHeightZones = [
-    // Ponte superior — atravessa de leste para oeste (z entre -4.4 e -2.5).
+    // Ponte superior
     {
         box: new THREE.Box3(
             new THREE.Vector3(-5.5, -1, -4.4),
@@ -159,7 +146,7 @@ export const fixedHeightZones = [
         ),
         y: 4.0,
     },
-    // Corredor oeste — NORTE (sem parede, larguria normal X ∈ [-5.5, -4.0]).
+    // Corredor oeste — NORTE
     {
         box: new THREE.Box3(
             new THREE.Vector3(-5.5, -1, -3.92),
@@ -167,7 +154,7 @@ export const fixedHeightZones = [
         ),
         y: 4.0,
     },
-    // Corredor oeste — SUL (com parede em X=-4.44 a fechar o lado leste).
+    // Corredor oeste — SUL
     {
         box: new THREE.Box3(
             new THREE.Vector3(-5.5,  -1, -1.19),
@@ -198,7 +185,6 @@ const raycaster = new THREE.Raycaster();
 const downVector = new THREE.Vector3(0, -1, 0);
 
 // Devolve o Y da superfície (chão / degrau / balcão) em (x, z), ou null se nada por baixo.
-// Zonas de altura fixa têm prioridade sobre o raycast.
 export function getLojaHeight(x, z) {
     const fixedY = _fixedHeightAt(x, z);
     if (fixedY !== null) return fixedY;
@@ -209,12 +195,9 @@ export function getLojaHeight(x, z) {
 }
 
 // ---- inflação da colisão (corpo do player) ----
-// Faz um raycast HORIZONTAL a duas alturas (cabeça + tronco) entre a posição atual e
-// a próxima. Se acertar em geometria, bloqueia — o player pára antes de a cabeça/corpo
-// entrar dentro da parede.
-const PLAYER_RADIUS = 0.25;   // margem extra além do destino (evita encostar)
-const PLAYER_TORSO_Y = 0.9;   // altura do tronco
-const PLAYER_HEAD_Y = 1.55;   // altura da cabeça
+const PLAYER_RADIUS = 0.25;   
+const PLAYER_TORSO_Y = 0.9;   
+const PLAYER_HEAD_Y = 1.55;   
 const _wallStart = new THREE.Vector3();
 const _wallDir = new THREE.Vector3();
 function _wallBetween(cx, cy, cz, nx, nz) {
@@ -240,26 +223,22 @@ function _wallBetween(cx, cy, cz, nx, nz) {
 }
 
 // Tenta um passo de (currentX, currentY, currentZ) para (nextX, nextZ).
-// Boxes 3D sólidas verificadas com Y real do jogador (não usam o hack Y=1 das blockedZones).
-// Adiciona aqui objectos que ficam em pisos elevados: baú, paredes da ponte, etc.
 const _solidBoxes3D = [
-    // Parede norte da ponte — impede sair por Z < -4
+    // Parede norte da ponte
     new THREE.Box3(new THREE.Vector3(-4, 3.0, -4.5), new THREE.Vector3(1.7, 6.0, -4.0)),
-    // Parede sul da ponte — impede sair por Z > -2.5
+    // Parede sul da ponte
     new THREE.Box3(new THREE.Vector3(-4, 3.0, -2.5), new THREE.Vector3(1.7, 6.0, -2.0)),
-    // Tapa o buraco no canto leste da ponte — evita soft lock em X≈-3.88, Z≈-1.42
+    // Tapa o buraco no canto leste da ponte
     new THREE.Box3(new THREE.Vector3(-4.6, 2.5, -2.6), new THREE.Vector3(-3.4, 6.0, -1.0)),
     // Colisão tamanho player em X=0.65, Z=-0.68
     new THREE.Box3(new THREE.Vector3(0.40, 0.0, -0.93), new THREE.Vector3(1.10, 3.0, -0.43)),
-    // Parede lateral da escada — evita cair do lado (X≈1.3, Z de -1.75 a -0.31)
+    // Parede lateral da escada
     new THREE.Box3(new THREE.Vector3(1.26, 0.0, -1.75), new THREE.Vector3(1.50, 3.0, -0.31)),
 ];
 
 // Devolve o Y do destino se for atravessável, ou null se bloqueado.
-// Ordem: solid3D → fixedHeight → blocked → wall-ahead → raycast vertical.
 const _pb = new THREE.Box3();
 export function tryMoveLoja(currentY, nextX, nextZ, currentX = nextX, currentZ = nextZ) {
-    // Colisão 3D com objectos sólidos — usa Y real do jogador
     _pb.set(
         new THREE.Vector3(nextX - 0.25, currentY,        nextZ - 0.25),
         new THREE.Vector3(nextX + 0.25, currentY + 1.70, nextZ + 0.25)
@@ -270,7 +249,6 @@ export function tryMoveLoja(currentY, nextX, nextZ, currentX = nextX, currentZ =
         if (_pb.intersectsBox(box)) return null;
     }
 
-    // Wall-ahead (corpo do player): bloqueia se houver geometria à altura da cabeça/tronco.
     if (_wallBetween(currentX, currentY, currentZ, nextX, nextZ)) return null;
 
     const fixedY = _fixedHeightAt(nextX, nextZ);
@@ -290,7 +268,6 @@ export function tryMoveLoja(currentY, nextX, nextZ, currentX = nextX, currentZ =
 }
 
 // ---- zona de saída (Box3 para deteção) ----
-// Ajustado para o modelo novo se necessário. Geralmente a porta está no centro sul.
 export const lojaSaidaBox = new THREE.Box3(
     new THREE.Vector3(-1.5, 0, 4.5),
     new THREE.Vector3( 1.5, 2, 6.0)

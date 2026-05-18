@@ -98,11 +98,12 @@ function screenShake(amp, dur) {
     if (_shakeRAF) cancelAnimationFrame(_shakeRAF);
     const t0 = performance.now();
     const body = document.body;
-    const original = body.style.transform;
     function step(now) {
         const e = now - t0;
         if (e >= dur) {
-            body.style.transform = original;
+            // sempre repõe o offset a zero — se "original" tivesse ficado
+            // a meio de um shake interrompido, evitava-se o reset.
+            body.style.transform = '';
             _shakeRAF = null;
             return;
         }

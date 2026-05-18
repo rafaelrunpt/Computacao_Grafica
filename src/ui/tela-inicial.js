@@ -5,9 +5,11 @@
 // panorama do mundo. Dispensa-se com qualquer tecla / clique.
 // --------------------------------------------------------
 import * as THREE from 'three';
+import { switchMusic } from '../systems/audio.js';
 
 let _ativa = true;
 let _onIniciar = null;
+let _musicaIniciada = false;
 
 // --------------------------------------------------------
 // CÂMARA — orbita lenta com leve dolly + bobbing
@@ -196,7 +198,7 @@ foot.style.cssText = `
     font-family: 'Courier New', monospace;
     pointer-events: none;
 `;
-foot.innerHTML = `PROJECTO WEBGL  ·  THREE.JS`;
+foot.innerHTML = `DESENVOLVIDO POR ALEXANDRE PEREIRA, FRANCISCO MONTEIRO E JOÃO GUEDES<br>PROJECTO WEBGL  ·  THREE.JS`;
 overlay.appendChild(foot);
 
 // esconde toda a UI de jogo enquanto a tela inicial está activa
@@ -364,6 +366,67 @@ function _tickParticulas() {
 _tickParticulas();
 
 // --------------------------------------------------------
+// SPLASH SCREEN — Bypass Autoplay
+// --------------------------------------------------------
+const splash = document.createElement('div');
+splash.id = 'autoplay-bypass';
+splash.style.cssText = `
+    position: fixed; inset: 0;
+    z-index: 400;
+    background: #000;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: opacity 1.5s ease;
+`;
+
+const splashContent = document.createElement('div');
+splashContent.style.textAlign = 'center';
+splashContent.innerHTML = `
+    <div style="font-size: 11px; letter-spacing: 6px; color: #5a4a30; margin-bottom: 24px;">DESENVOLVIDO EM WEBGL</div>
+    <div style="font-size: 22px; letter-spacing: 14px; color: #f0d080; text-shadow: 0 0 20px rgba(212,168,48,0.4); animation: splashPulse 2s ease-in-out infinite;">DESPERTAR ANIDIA</div>
+    <div style="font-size: 10px; letter-spacing: 3px; color: #666; margin-top: 50px;">CLIQUE PARA INICIAR EM ECRÃ INTEIRO</div>
+    <div style="font-size: 9px; letter-spacing: 2px; color: #3a3a3a; margin-top: 6px;">(activa som e entra em fullscreen)</div>
+`;
+splash.appendChild(splashContent);
+
+const splashStyle = document.createElement('style');
+splashStyle.textContent = `
+@keyframes splashPulse {
+    0%, 100% { opacity: 0.6; transform: scale(0.98); }
+    50%      { opacity: 1;   transform: scale(1.02); }
+}
+`;
+document.head.appendChild(splashStyle);
+document.body.appendChild(splash);
+
+// Pede fullscreen logo na primeira interacção (gesto do utilizador
+// obrigatório por política do browser) e arranca a música do título.
+function _entrarFullscreenSafely() {
+    const el = document.documentElement;
+    const req = el.requestFullscreen
+             || el.webkitRequestFullscreen
+             || el.mozRequestFullScreen
+             || el.msRequestFullscreen;
+    if (!req) return;
+    try {
+        const p = req.call(el);
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (_) { /* ignora — alguns browsers atiram se já em fullscreen */ }
+}
+
+splash.addEventListener('click', () => {
+    splash.style.opacity = '0';
+    splash.style.pointerEvents = 'none';
+    _entrarFullscreenSafely();
+    if (!_musicaIniciada) {
+        switchMusic('title', 3.0);
+        _musicaIniciada = true;
+    }
+    setTimeout(() => splash.remove(), 1600);
+});
+
+// --------------------------------------------------------
 // API
 // --------------------------------------------------------
 export function isTelaInicialAberta() { return _ativa; }
@@ -383,6 +446,14 @@ function iniciar() {
 overlay.addEventListener('click', iniciar);
 window.addEventListener('keydown', (e) => {
     if (!_ativa) return;
+
+    // Se o splash ainda estiver visível, a primeira tecla apenas o remove (e inicia música)
+    const s = document.getElementById('autoplay-bypass');
+    if (s) {
+        s.click();
+        return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
     iniciar();

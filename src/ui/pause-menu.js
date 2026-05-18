@@ -3,6 +3,7 @@
 // --------------------------------------------------------
 import { settings, setSetting, resetSettings } from '../systems/settings.js';
 import { playerStats, getAtkEfetivo } from '../systems/player-stats.js';
+import { CATALOGO as CATALOGO_INV } from '../systems/inventario.js';
 
 let _aberto = false;
 let _bloqueado = false;
@@ -235,38 +236,65 @@ function renderEstatisticas() {
         <div>XP: <span style="color:#a0c0ff;">${playerStats.xp} / ${playerStats.xpToNext}</span></div>
         <div>HP: <span style="color:#ff9090;">${playerStats.hp} / ${playerStats.maxHp}</span></div>
         <div>ATK: <span style="color:#c0a060;">${playerStats.atk ?? '—'}</span>${getAtkEfetivo() !== playerStats.atk ? ` <span style="color:#aaffbb;">(${getAtkEfetivo()} c/ bónus)</span>` : ''}</div>
-        <div>Equipamento (cabeça): <span style="color:#ffe0a0;">${playerStats.equipped?.cabeca === 'coroa_magica' ? '👑 Coroa da Pedra Mágica (+10% ATK)' : '— nenhum —'}</span></div>
+        <div>Acessório equipado: <span style="color:#ffe0a0;">${(() => {
+            const id = playerStats.equipped?.acessorio;
+            if (!id) return '— nenhum —';
+            const it = (CATALOGO_INV && CATALOGO_INV[id]) || null;
+            return it ? `${it.icone} ${it.nome}` : id;
+        })()}</span></div>
     `;
     conteudo.appendChild(wrap);
 }
 
 function renderTutorial() {
     conteudo.innerHTML = `
-        <div style="font-size:14px;line-height:1.7;">
+        <div style="font-size:13px;line-height:1.6;">
             <div style="font-size:13px;color:#c8a96e;letter-spacing:1px;margin-bottom:8px;">COMO JOGAR</div>
-            <p>Bem-vindo, herói. O reino foi corrompido — limpa as zonas escuras a sul para mostrar ao guardião que estás à altura, e depois entra no castelo para enfrentar o boss.</p>
-            <ul style="padding-left:18px;">
-                <li>Move-te com <b>W A S D</b> e interage com <b>E</b>.</li>
-                <li>Entra em zonas corrompidas para iniciar combate.</li>
-                <li>Usa o <b>inventário (I)</b> para curar-te entre lutas.</li>
-                <li>Visita a <b>loja</b> para te equipares.</li>
-                <li>Vence inimigos para ganhar XP e subir de nível.</li>
-            </ul>
-        </div>
-    `;
-}
+            <p style="margin:0 0 10px;">
+                Acordas num quarto desconhecido. Fala com o bartender, sai pela porta para a taverna,
+                e descobre o mundo: zonas corruptas para limpar, lojas para te apetrechares, e um castelo
+                onde te espera o boss final.
+            </p>
 
-function renderCreditos() {
-    conteudo.innerHTML = `
-        <div style="font-size:14px;line-height:1.8;text-align:center;">
-            <div style="font-size:13px;color:#c8a96e;letter-spacing:1px;margin-bottom:12px;">CRÉDITOS</div>
-            <div style="font-size:18px;color:#ffe0a0;text-shadow:0 0 8px #a07000;">Retro RPG</div>
-            <div style="margin-top:8px;color:#c8a96e;">Projecto WebGL / Three.js</div>
-            <div style="margin-top:18px;font-size:12px;color:#a08050;font-style:italic;">
-                Desenvolvido por Francisco Monteiro<br>
-                Música, modelos e arte — assets do projecto<br>
-                Engine: Three.js
-            </div>
+            <div style="color:#c8a96e;margin-top:10px;margin-bottom:4px;letter-spacing:1px;">🎮 MOVIMENTO</div>
+            <ul style="padding-left:18px;margin:0 0 8px;">
+                <li><b>W A S D</b> — andar &nbsp;·&nbsp; <b>E</b> — interagir &nbsp;·&nbsp; <b>I</b> — inventário</li>
+                <li><b>Esc</b> — pausa/opções</li>
+            </ul>
+
+            <div style="color:#c8a96e;margin-top:8px;margin-bottom:4px;letter-spacing:1px;">⚔ COMBATE NORMAL</div>
+            <ul style="padding-left:18px;margin:0 0 8px;">
+                <li>Em zonas escuras, prime <b>E</b> no centro para entrar em combate.</li>
+                <li>Ataques têm cooldown — usa o slot certo para o momento certo.</li>
+                <li>Vencer dá XP, subir de nível aumenta o dano.</li>
+            </ul>
+
+            <div style="color:#c8a96e;margin-top:8px;margin-bottom:4px;letter-spacing:1px;">🏰 CASTELO & ACESSÓRIOS</div>
+            <ul style="padding-left:18px;margin:0 0 8px;">
+                <li>Cinco pedestais — coloca cada um dos 5 acessórios para desbloquear o boss.</li>
+                <li>Acessórios dão buffs: HP, cura pós-combate, evasão, etc.</li>
+                <li>Ao preencher os 5, o cristal do totem acende — interage com <b>E</b> para entrar.</li>
+            </ul>
+
+            <div style="color:#c8a96e;margin-top:8px;margin-bottom:4px;letter-spacing:1px;">👑 BOSS FIGHT</div>
+            <ul style="padding-left:18px;margin:0 0 8px;">
+                <li>Esquerda (esquivar) — <b>A/D</b> mudam de lane, <b>W</b> salta, <b>S</b> agacha.</li>
+                <li>Direita (acção) — <b>J</b> ATAQUE &nbsp;·&nbsp; <b>K</b> ITENS &nbsp;·&nbsp; <b>L</b> FUGIR.</li>
+                <li>Painel de ataque aberto: <b>J K L ;</b> escolhem o slot. Itens: também <b>U I O P</b>.</li>
+                <li><b>Esc</b> fecha qualquer painel.</li>
+            </ul>
+
+            <div style="color:#c8a96e;margin-top:8px;margin-bottom:4px;letter-spacing:1px;">🎯 ATAQUES DO BOSS</div>
+            <ul style="padding-left:18px;margin:0 0 8px;">
+                <li><b style="color:#ff8080;">Aéreo</b> (anel vermelho no chão) — cai numa lane. Sai dessa lane ou salta.</li>
+                <li><b style="color:#ffcc80;">Rasante</b> (barra laranja no chão) — varre o chão. <b>Salta</b>.</li>
+                <li><b style="color:#c8a0ff;">Lateral</b> (coluna roxa + seta) — vem do lado indicado. Muda de lane ou <b>agacha</b>.</li>
+                <li><b style="color:#a0ffc8;">Varredura</b> (parede verde à altura do peito) — atravessa as 3 lanes. <b>Agacha</b>.</li>
+            </ul>
+            <p style="margin:6px 0 0;font-size:12px;color:#a08050;font-style:italic;">
+                À medida que o boss perde vida, os projécteis aceleram (até aos 30%).
+                Abaixo dos 25% entra em fúria — o aviso aparece com cores trocadas.
+            </p>
         </div>
     `;
 }
@@ -278,7 +306,6 @@ const tabs = [
     { id: 'ctrl',      label: 'Controlos',     render: renderControlos },
     { id: 'stats',     label: 'Estatísticas',  render: renderEstatisticas },
     { id: 'tut',       label: 'Tutorial',      render: renderTutorial },
-    { id: 'cred',      label: 'Créditos',      render: renderCreditos },
 ];
 
 let _abaActiva = 'audio';

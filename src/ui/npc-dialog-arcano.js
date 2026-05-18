@@ -12,38 +12,31 @@ const ABERTURA = {
         'Para! Sinto em ti a inexperiência de um novato. Esta travessia não te pertence... ainda.',
         'Nenhum passa sem provar o seu valor. Tu, estranho, ainda não o fizeste.',
     ],
-    forte: [
-        'Aproximas-te com o peso de muitas batalhas nos teus passos. Talvez sejas digno desta travessia.',
-        'Reconheço a chama de um guerreiro experiente. Esta ponte pode ser tua... se assim o desejares.',
-        'Paro-te por tradição, não por dúvida. Vejo em ti um espírito forjado em combate.',
+    posPassagem: [
+        'A ponte está aberta para ti, viajante. Em que posso ajudar-te?',
+        'Voltaste. Diz lá — o que te traz cá?',
+        'A passagem é tua. Fala, se quiseres.',
+    ],
+    cedePassagem: [
+        'Sinto em ti um poder que antes não estava. A ponte é tua, guerreiro — passa.',
+        'O teu espírito mudou desde a última vez que aqui estiveste. Reconheço a força em ti. Passa.',
+        'Esta presença... carregas agora o peso de verdadeiras batalhas. Não te detenho mais. Vai.',
     ],
 };
 
 const ESCOLHAS = {
     fraco: [
-        { id: 'urgente', label: 'Preciso de passar — é urgente.',
-          respostas: [
-            'A urgência não substitui o valor, jovem. Volta quando as tuas cicatrizes contarem histórias.',
-            'Muitos disseram o mesmo. Muitos regressaram sem passar. Cresce em poder, depois fala comigo.',
-            'A pressa é fraqueza disfarçada. Nenhuma urgência abre esta passagem antes do tempo.',
-          ] },
         { id: 'requisito', label: 'O que tenho de fazer para passar?',
           respostas: [
             'Prova o teu valor em combate. Regressa quando tiveres crescido em experiência e poder.',
             'Enfrenta as criaturas destas terras. Quando o teu espírito for suficientemente forte, eu saberei.',
             'Não há atalho. Combate, aprende, cresce. Depois voltamos a falar.',
           ] },
-        { id: 'identidade_fraco', label: 'Quem és tu, guardião?',
-          respostas: [
-            'Sou o Guardião desta ponte há trezentos e quarenta anos. Nenhum indigno passou enquanto eu respirei.',
-            'Um guerreiro ancião cuja armadura enferrujou mas cujo propósito nunca vacilou. Guardo esta travessia desde antes da tua avó nascer.',
-            'O último de uma ordem esquecida. Os meus irmãos caíram. Eu fico. Esta ponte é o meu juramento.',
-          ] },
         { id: 'norte_fraco', label: 'Que perigos há no norte?',
           respostas: [
-            'Um castelo sombrio corrompido por uma força ancestral. Criaturas que outrora eram homens. Não és forte o suficiente... ainda.',
-            'O mal cresce a cada lua cheia nas terras do norte. As zonas do sul onde vieste estão infestadas, mas o castelo é o verdadeiro perigo.',
-            'O sábio da aldeia sabe mais do que diz sobre o que há no norte. Mas para atravessar, primeiro tens de me convencer com poder.',
+            'Um castelo sombrio corrompido por uma força ancestral. Criaturas que outrora eram homens.',
+            'O mal cresce a cada lua cheia nas terras do norte. O castelo é o verdadeiro perigo.',
+            'Terras corrompidas, criaturas sem razão. Mas para atravessar, primeiro tens de me convencer com poder.',
           ] },
         { id: 'adeus', label: 'Adeus, guardião.', acao: 'fechar', repetivel: true,
           respostas: [
@@ -52,28 +45,22 @@ const ESCOLHAS = {
             'Volta quando as tuas cicatrizes me convencerem.',
           ] },
     ],
-    forte: [
-        { id: 'passar', label: 'Quero atravessar a ponte.', acao: 'passar', repetivel: true,
-          respostas: [
-            'O teu valor está à vista. Passa, guerreiro — e que a tua lâmina seja afiada no que te espera.',
-            'Reconheço a tua força. Esta ponte é tua. Vai, e não olhes para trás sem razão.',
-            'Trezentos anos de guarda... e finalmente um digno passa. Vai. A tua missão aguarda-te.',
-          ] },
-        { id: 'norte_forte', label: 'O que há no norte?',
+    posPassagem: [
+        { id: 'norte_pos', label: 'O que há no norte?',
           respostas: [
             'Um castelo corrompido por sombras antigas. Criaturas que já foram homens. Vai preparado.',
             'O mal cresce lá dentro há décadas. O que encontrares no castelo... não será simples de derrotar.',
-            'Terras corrompidas, criaturas sem razão, e no centro — um cristal negro que pulsa como um coração doente.',
+            'Terras corrompidas e, no centro, um cristal negro que pulsa como um coração doente.',
           ] },
-        { id: 'identidade_forte', label: 'Quem és tu, guardião?',
+        { id: 'identidade_pos', label: 'Quem és tu, guardião?',
           respostas: [
-            'Um guerreiro que escolheu o dever sobre a glória. Trezentos anos neste posto. Tu és dos poucos dignos que vi passar.',
-            'O último da Ordem da Ponte. Os outros tombaram. Eu fico até que alguém suficientemente forte leve a luta ao norte.',
-            'Apenas um velho soldado com uma missão. Mas hoje, vejo em ti o que procurava. Vai em frente.',
+            'Um guerreiro que escolheu o dever sobre a glória. Trezentos anos neste posto.',
+            'O último da Ordem da Ponte. Os outros tombaram. Eu fico até que alguém leve a luta ao norte.',
+            'Apenas um velho soldado com uma missão. E hoje, vejo em ti o que procurava.',
           ] },
-        { id: 'adeus', label: 'Adeus, guardião.', acao: 'fechar', repetivel: true,
+        { id: 'adeus_pos', label: 'Adeus, guardião.', acao: 'fechar', repetivel: true,
           respostas: [
-            'Que os teus passos sejam firmes e o teu aço verdadeiro. Vai.',
+            'Que os teus passos sejam firmes e o teu aço verdadeiro.',
             'A ponte está aberta para ti. Passa quando estiveres pronto.',
             'Boa sorte, guerreiro. Vais precisar dela.',
           ] },
@@ -91,10 +78,9 @@ let dlg = null;
 const NPC_ID = 'guardiao';
 
 function buildMenuChoices() {
-    const tier = playerLevel >= 2 ? 'forte' : 'fraco';
-    if (passagemConcedida) {
-        return [{ label: '⚔  Atravessar a ponte', to: '__passar_agora__' }];
-    }
+    // A passagem é concedida fora do diálogo (em main.js, quando o jogador
+    // tem nível 2+ e interage). O diálogo serve apenas para conversar.
+    const tier = passagemConcedida ? 'posPassagem' : 'fraco';
     return ESCOLHAS[tier]
         .filter(e => e.repetivel || !usedIds.has(e.id))
         .map(e => ({
@@ -121,8 +107,6 @@ function ensureDialogue() {
         if (!npc) return;
 
         if (choice.to === '__passar_agora__') {
-            // fecha e chama callback (a fechadura corre via dlg.close() já no framework)
-            // mas o framework não fecha para to !== 'END'; forçamos.
             setTimeout(() => {
                 dlg.close();
                 if (onPassar) onPassar();
@@ -134,7 +118,6 @@ function ensureDialogue() {
         if (!meta) return;
 
         if (!meta.repetivel) usedIds.add(meta.id);
-        if (meta.acao === 'passar') passagemConcedida = true;
 
         const resposta = pick(meta.respostas);
         const isFechar = meta.acao === 'fechar';
@@ -151,14 +134,14 @@ function ensureDialogue() {
     return dlg;
 }
 
-export function abrirDialogoGuardiao(level, callbackPassar /*, themeKey */) {
+export function abrirDialogoGuardiao(level, callbackPassar, passouJa = false /*, themeKey */) {
     if (dialogoAberto) return;
     dialogoAberto = true;
     playerLevel = level;
     onPassar = callbackPassar;
-    passagemConcedida = false;
+    passagemConcedida = !!passouJa;
 
-    const tier = level >= 2 ? 'forte' : 'fraco';
+    const tier = passagemConcedida ? 'posPassagem' : 'fraco';
     if (tier !== lastTier) { usedIds.clear(); lastTier = tier; }
 
     ensureDialogue();
@@ -177,6 +160,37 @@ export function abrirDialogoGuardiao(level, callbackPassar /*, themeKey */) {
     rebuildMenuNode(npc, abertura);
 
     dlg.open(NPC_ID);
+}
+
+export function abrirDialogoGuardiaoCedePassagem(callbackPassar) {
+    if (dialogoAberto) return;
+    dialogoAberto = true;
+    onPassar = callbackPassar;
+    passagemConcedida = true;
+    lastTier = 'posPassagem';
+
+    ensureDialogue();
+
+    const fala = pick(ABERTURA.cedePassagem);
+    const npc = {
+        name: 'Guardião',
+        title: 'da Ponte',
+        mono: 'G',
+        portraitUrl: 'assets/textures/avatares/guardiao_avatar.png',
+        portrait: { hue: 268, secondHue: 220 },
+        start: 'cede',
+        nodes: {
+            cede: {
+                text: fala,
+                choices: [{ label: '⚔  Atravessar a ponte', to: '__passar_agora__' }],
+            },
+        },
+    };
+    dlg.registerNPC(NPC_ID, npc);
+    dlg.open(NPC_ID);
+
+    // intercept handler: this dialog has a single special choice
+    // (já existe o listener de 'choice' geral; precisamos de reconhecer __passar_agora__)
 }
 
 export function fecharDialogo() {

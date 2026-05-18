@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { player, coroaGroup } from '../entities/jogador.js';
+import { player, coroaGroup, brincosGroup, oculosGroup, aureolaGroup, mascaraGroup } from '../entities/jogador.js';
 import { playerStats, registarCallbacksStats } from '../systems/player-stats.js';
 
 // ---- prompt de interação ----
@@ -55,6 +55,10 @@ let _avatarBuilt = false;
 let _avatarOriginalMeshes = [];
 let _avatarSyncCounter = 0;
 let _avatarCoroaClone = null;
+let _avatarBrincosClone = null;
+let _avatarOculosClone = null;
+let _avatarAureolaClone = null;
+let _avatarMascaraClone = null;
 
 export function buildAvatarScene() {
     if (_avatarBuilt) return;
@@ -68,8 +72,12 @@ export function buildAvatarScene() {
     clone.position.set(0, 0, 0);
     avatarScene.add(clone);
 
-    // localizar a coroa clonada para sincronizar visibilidade
-    _avatarCoroaClone = clone.getObjectByName('coroaGroup') || null;
+    // localizar acessórios clonados para sincronizar visibilidade
+    _avatarCoroaClone   = clone.getObjectByName('coroaGroup')   || null;
+    _avatarBrincosClone = clone.getObjectByName('brincosGroup') || null;
+    _avatarOculosClone  = clone.getObjectByName('oculosGroup')  || null;
+    _avatarAureolaClone = clone.getObjectByName('aureolaGroup') || null;
+    _avatarMascaraClone = clone.getObjectByName('mascaraGroup') || null;
 
     const origMeshes = [], cloneMeshes = [];
     headGroup.traverse(c => { if (c.isMesh) origMeshes.push(c); });
@@ -86,8 +94,12 @@ export function buildAvatarScene() {
 }
 
 export function syncAvatarMaterials() {
-    // visibilidade da coroa no avatar acompanha a do boneco principal
-    if (_avatarCoroaClone) _avatarCoroaClone.visible = coroaGroup.visible;
+    // visibilidade dos acessórios no avatar acompanha o boneco principal
+    if (_avatarCoroaClone)   _avatarCoroaClone.visible   = coroaGroup.visible;
+    if (_avatarBrincosClone) _avatarBrincosClone.visible = brincosGroup.visible;
+    if (_avatarOculosClone)  _avatarOculosClone.visible  = oculosGroup.visible;
+    if (_avatarAureolaClone) _avatarAureolaClone.visible = aureolaGroup.visible;
+    if (_avatarMascaraClone) _avatarMascaraClone.visible = mascaraGroup.visible;
 
     if (++_avatarSyncCounter % 10 !== 0) return;
     for (const { orig, clone } of _avatarOriginalMeshes) {

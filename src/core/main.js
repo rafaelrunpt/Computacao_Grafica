@@ -1,29 +1,38 @@
 import * as THREE from 'three';
-import { criarMapa, verificaColisao, shopDoorInteract, castleEnterBox, tavernEnterBox, guardianInteractBox, removerGuardiao, updateGuardiao, matWater, matBattleGrass, matCorruptHalo, matContTrunk, matContLeaves, matContRock, zonasSulLimpas, getBridgeHeight, getBauInteractBox, abrirBau, bauJaAberto, updateBau, bauJaColetado, coletarBau, fadeables, cullables } from '../world/mapa.js';
-import { player, updatePlayerAnimation, setCoroaVisivel, updateCoroaAnimacao } from '../entities/jogador.js';
+import { criarMapa, verificaColisao, shopDoorInteract, castleEnterBox, tavernEnterBox, guardianInteractBox, removerGuardiao, updateGuardiao, isGuardiaoPassagemConcedida, matWater, matBattleGrass, matBattleSky, matCorruptHalo, matContTrunk, matContLeaves, matContRock, zonasSulLimpas, isShopDesbloqueada, resetZonasBatalha, getBridgeHeight, getBauInteractBox, abrirBau, bauJaAberto, updateBau, bauJaColetado, coletarBau, getBauMascaraInteractBox, abrirBauMascara, bauMascaraJaAberto, updateBauMascara, bauMascaraJaColetado, coletarBauMascara, fadeables, cullables } from '../world/mapa.js';
+import { player, updatePlayerAnimation, setCoroaVisivel, setBrincosVisivel, setOculosVisivel, setAureolaVisivel, setMascaraVisivel, updateCoroaAnimacao } from '../entities/jogador.js';
 import { adicionarItem, registarOnEquipChange, CATALOGO } from '../systems/inventario.js';
 import { ganharCintilas } from '../systems/currency.js';
 import { mostrarRecompensa } from '../ui/popup-recompensa.js';
-import { verificarEncontro, estadoJogo } from '../systems/combate.js';
+import { verificarEncontro, estadoJogo, zonaBatalhaProximoCentro, iniciarCombateEm, iniciarBossFight } from '../systems/combate.js';
+import { atualizarFaseDesvio } from '../systems/boss-attacks.js';
 import { renderizarMinimapa } from '../world/minimapa.js';
 import { lojaScene, lojaColliders, lojaSaidaBox, getLojaHeight, tryMoveLoja, getBauLojaInteractBox, bauLojaJaAberto, bauLojaJaColetado, abrirBauLoja, coletarBauLoja, updateBauLoja, getMerchantInteractBox, updateMerchant } from '../world/loja.js';
 import { abrirDialogoMercador, isDialogoMercadorAberto } from '../ui/merchant-dialog.js';
-import { caseloScene, caseloColliders, caseloSaidaBox, caseloMiniCam, bossCrystal } from '../world/castelo.js';
-import { tavernScene, getTavernHeight, tryMoveTavern, tavernSaidaBox } from '../world/tavern.js';
+import { caseloScene, caseloColliders, caseloSaidaBox, caseloMiniCam, bossCrystal, bossCrystalInteractBox, PEDESTAIS, pedestalProximoDe, colocarItemPedestal, todosPedestaisCheios, atualizarPedestais } from '../world/castelo.js';
+import { mostrarPista, esconderPista, isPistaAberta } from '../ui/pista-popup.js';
+import { quantidade as qtdInv, removerItem as removerInv } from '../systems/inventario.js';
+import { tavernScene, getTavernHeight, tryMoveTavern, tavernSaidaBox, tavernBarmanBox, quartoEnterBox, bartenderIntroBox, bartenderVendorBox, bartenderIntroFeita, marcarBartenderIntroFeita, updateTavernNPCs } from '../world/tavern.js';
+import { abrirIntroBartender, isIntroBartenderAberta } from '../ui/intro-bartender.js';
+import { abrirBartenderShop, isBartenderShopAberta } from '../ui/bartender-shop.js';
+import { quartoScene, tryMoveQuarto, getQuartoHeight, quartoSaidaBox, updateQuarto, quartoSpawnPos, quartoBauBox, bauQuartoAberto, abrirBauQuarto, quartoCamaBox } from '../world/quarto.js';
+import { curar } from '../systems/player-stats.js';
+import { todasZonasLimpas } from '../world/mapa.js';
 import { combateScene, updateCombateScene } from '../world/combate-scene.js';
-import { renderer, mainCamera, lojaCamera, caseloCamera, tavernCamera, combateCamera } from './renderer.js';
+import { renderer, mainCamera, lojaCamera, caseloCamera, tavernCamera, quartoCamera, combateCamera, combateBossCamera } from './renderer.js';
+import { isBossMode } from '../world/combate-scene.js';
 import { keys, registarCallbackInput } from './input.js';
-import { ganharXP, playerStats } from '../systems/player-stats.js';
+import { ganharXP, playerStats, recalcularMaxHp } from '../systems/player-stats.js';
 import { buildAvatarScene, syncAvatarMaterials, avatarRenderer, avatarScene, avatarCam, showPrompt, hidePrompt } from '../ui/hud.js';
 // Para alternar entre as duas UIs de diálogo, troca este import:
 //   '../ui/npc-dialog.js'         → versão original
 //   '../ui/npc-dialog-arcano.js'  → versão Arcano (teste)
-import { abrirDialogoGuardiao, isDialogoAberto } from '../ui/npc-dialog.js';
+import { abrirDialogoGuardiao, abrirDialogoGuardiaoCedePassagem, isDialogoAberto } from '../ui/npc-dialog-arcano.js';
 import { abrirInventario, fecharInventario, isInventarioAberto } from '../ui/inventario-ui.js';
 import { abrirLockpick, isLockpickAberto } from '../ui/lockpick.js';
 import { criarLostItems, updateLostItems, getLostItemAt } from '../world/lost-items.js';
 import { coletarItemPerdido } from '../systems/merchant-fetch-quest.js';
-import { estado, lojaPlayer, caseloPlayer, tavernPlayer, setWorldScene, entrarLoja, sairLoja, entrarCaselo, sairCaselo, entrarTavern, sairTavern } from './transicoes.js';
+import { estado, lojaPlayer, caseloPlayer, tavernPlayer, quartoPlayer, setWorldScene, entrarLoja, sairLoja, entrarCaselo, sairCaselo, entrarTavern, sairTavern, entrarQuarto, sairQuarto, fade } from './transicoes.js';
 import moderator from '../systems/moderator.js'; // Ativa ferramentas de debug
 import { isPauseAberto, togglePause } from '../ui/pause-menu.js';
 import { tickFps } from '../ui/fps-counter.js';
@@ -56,6 +65,8 @@ const FADE_SPEED = 8;
 // Tira-os do render E do shadow pass. Trade-off: sombras desaparecem
 // quando o objecto que as projecta sai do cone à frente da câmara.
 const _camFwd = new THREE.Vector3();
+const _camRight = new THREE.Vector3();
+const _moveDir = new THREE.Vector3();
 const _toObj  = new THREE.Vector3();
 // dot mínimo para um objecto continuar visível: -0.15 dá um cone de ~107°
 // à frente da câmara — margem para os lados sem mostrar nada que esteja
@@ -183,12 +194,21 @@ lojaMiniCam.lookAt(0, 0, 0);
 // ---- injetar cena do mundo nas transições ----
 setWorldScene(scene);
 
-// ---- sincronizar coroa equipada com o boneco 3D ----
-function sincronizarCoroa() {
-    setCoroaVisivel(playerStats.equipped?.cabeca === 'coroa_magica');
+// ---- estado das quests ----
+// estados: 'oferecer' (ainda não falou), 'aceite' (em curso), 'completa'
+const questAureola = { estado: 'oferecer' };
+
+// ---- sincronizar acessório equipado com o boneco 3D ----
+function sincronizarAcessorio() {
+    const eq = playerStats.equipped?.acessorio;
+    setCoroaVisivel(eq === 'coroa_magica');
+    setBrincosVisivel(eq === 'brincos_vida');
+    setOculosVisivel(eq === 'oculos_carga');
+    setAureolaVisivel(eq === 'aureola_caidos');
+    setMascaraVisivel(eq === 'mascara_eclipse');
 }
-registarOnEquipChange(sincronizarCoroa);
-sincronizarCoroa();
+registarOnEquipChange(sincronizarAcessorio);
+sincronizarAcessorio();
 
 // ---- toggleMapa / toggleInventario ----
 let mapaAberto = false;
@@ -219,14 +239,22 @@ registarCallbackInput(
 // ÁUDIO (gerido em systems/audio.js)
 // --------------------------------------------------------
 inicializarAudio(mainCamera, {
-    mundo: '../../assets/music/tema_mundo.mp3',
-    dark:  '../../assets/music/darkwoods.mp3',
-    shop:  '../../assets/music/shop.mp3',
+    title:   '../../assets/music/main_tittle.mp3',
+    mundo:   '../../assets/music/tema_mundo.mp3',
+    dark:    '../../assets/music/darkwoods.mp3',
+    shop:    '../../assets/music/shop.mp3',
+    tavern:  '../../assets/music/taverna.mp3',
     batalha: '../../assets/music/batalha.mp3',
+    castle:  '../../assets/music/castle.mp3',
+    boss:    '../../assets/music/boss.mp3',
 }, {
     fechadura: '../../assets/sounds/fechadura.mp3',
     abrir_bau: '../../assets/sounds/abrir_bau.mp3',
+    trovao:    '../../assets/sounds/trovao.mp3',
     transicao_batalha: '../../assets/sounds/transicao_batalha.mp3',
+    step_grass: '../../assets/sounds/footsteps/relva.mp3',
+    step_wood:  '../../assets/sounds/footsteps/wood.mp3',
+    step_stone: '../../assets/sounds/footsteps/stone.mp3',
 });
 
 // --------------------------------------------------------
@@ -274,7 +302,7 @@ function animateMundo(deltaTime) {
             const trackDesejada = estaNaZonaDark ? 'dark' : 'mundo';
             const atual = getCurrentTrack();
             if (!atual) switchMusic(trackDesejada);
-            else if (atual !== 'shop' && atual !== trackDesejada) switchMusic(trackDesejada, 2.0);
+            else if (atual !== 'shop' && atual !== 'tavern' && atual !== trackDesejada) switchMusic(trackDesejada, 2.0);
 
             isMoving = true;
             const targetAngle = Math.atan2(dirX, dirZ);
@@ -296,21 +324,29 @@ function animateMundo(deltaTime) {
             new THREE.Vector3(player.position.x - r, 0, player.position.z - r),
             new THREE.Vector3(player.position.x + r, 1.7, player.position.z + r)
         );
-
         if (guardianInteractBox && pb.intersectsBox(guardianInteractBox)) {
+            const passou = isGuardiaoPassagemConcedida();
             showPrompt('E — Falar com o guardião');
-            if (keys.e) { keys.e = false; abrirDialogoGuardiao(playerStats.level, () => removerGuardiao()); }
+            if (keys.e) {
+                keys.e = false;
+                if (!passou && playerStats.level >= 2) {
+                    // Nível 2+: o guardião reconhece o poder do jogador e cede passagem.
+                    abrirDialogoGuardiaoCedePassagem(() => removerGuardiao());
+                } else {
+                    abrirDialogoGuardiao(playerStats.level, () => removerGuardiao(), passou);
+                }
+            }
         } else if (shopDoorInteract && pb.intersectsBox(shopDoorInteract)) {
-            if (zonasSulLimpas()) {
+            if (isShopDesbloqueada() || zonasSulLimpas()) {
                 showPrompt('E — Entrar na loja');
                 if (keys.e) { switchMusic('shop', 1.0); entrarLoja(); }
             } else { showPrompt('Limpa as zonas corrompidas do sul para entrar'); }
         } else if (castleEnterBox && pb.intersectsBox(castleEnterBox)) {
             showPrompt('E — Entrar no castelo');
-            if (keys.e) entrarCaselo();
+            if (keys.e) { playSFX('trovao'); entrarCaselo(); }
         } else if (tavernEnterBox && pb.intersectsBox(tavernEnterBox)) {
             showPrompt('E — Entrar na taverna');
-            if (keys.e) { keys.e = false; entrarTavern(); }
+            if (keys.e) { keys.e = false; switchMusic('tavern', 1.0); entrarTavern(); }
         } else if (getBauInteractBox() && pb.intersectsBox(getBauInteractBox())) {
             if (!bauJaColetado()) {
                 if (!bauJaAberto()) {
@@ -343,6 +379,36 @@ function animateMundo(deltaTime) {
                     }
                 }
             } else { hidePrompt(); }
+        } else if (getBauMascaraInteractBox() && pb.intersectsBox(getBauMascaraInteractBox())) {
+            if (!bauMascaraJaColetado()) {
+                if (!bauMascaraJaAberto()) {
+                    showPrompt('E — Forçar fechadura');
+                    if (keys.e) {
+                        keys.e = false;
+                        abrirLockpick({
+                            onSuccess: () => {
+                                if (abrirBauMascara()) playSFX('fechadura');
+                            },
+                        });
+                    }
+                } else {
+                    showPrompt('E — Coletar recompensa');
+                    if (keys.e) {
+                        keys.e = false;
+                        if (coletarBauMascara()) {
+                            playSFX('abrir_bau');
+                            adicionarItem('mascara_eclipse', 1);
+                            const item = CATALOGO['mascara_eclipse'];
+                            mostrarRecompensa({
+                                icone: item.icone,
+                                nome: item.nome,
+                                descricao: item.descricao,
+                            });
+                            hidePrompt();
+                        }
+                    }
+                }
+            } else { hidePrompt(); }
         } else {
             const lost = getLostItemAt(pb);
             if (lost) {
@@ -355,14 +421,25 @@ function animateMundo(deltaTime) {
                     }
                 }
             } else {
-                hidePrompt();
+                const zonaBatalha = zonaBatalhaProximoCentro(player.position.x, player.position.z);
+                if (zonaBatalha) {
+                    showPrompt('E — Iniciar combate');
+                    if (keys.e) {
+                        keys.e = false;
+                        iniciarCombateEm(player.position.x, player.position.z);
+                    }
+                } else {
+                    hidePrompt();
+                }
             }
         }
     }
 
-    updatePlayerAnimation(isMoving, deltaTime);
+    const currentSurface = getBridgeHeight(player.position.x, player.position.z) > 0 ? 'wood' : 'grass';
+    updatePlayerAnimation(isMoving, deltaTime, currentSurface);
     updateCoroaAnimacao(deltaTime);
     updateBau(deltaTime);
+    updateBauMascara(deltaTime);
     updateLostItems(deltaTime);
     updateGuardiao(deltaTime);
     if (!moderator.lockY) {
@@ -428,17 +505,32 @@ function animateLoja(deltaTime) {
         if (keys.a) dirX -= 1; if (keys.d) dirX += 1;
     }
 
-
     if (dirX !== 0 || dirZ !== 0) {
         isMoving = true;
-        const targetAngle = Math.atan2(dirX, dirZ);
+
+        // Movimento relativo à câmara
+        const cam = moderator.freeCam ? mainCamera : lojaCamera;
+        cam.getWorldDirection(_camFwd);
+        _camFwd.y = 0;
+        _camFwd.normalize();
+        _camRight.crossVectors(THREE.Object3D.DEFAULT_UP, _camFwd);
+
+        _moveDir.set(0, 0, 0);
+        if (keys.w) _moveDir.add(_camFwd);
+        if (keys.s) _moveDir.sub(_camFwd);
+        if (keys.a) _moveDir.add(_camRight);
+        if (keys.d) _moveDir.sub(_camRight);
+        _moveDir.normalize();
+
+        const targetAngle = Math.atan2(_moveDir.x, _moveDir.z);
         let diff = targetAngle - lojaPlayer.rotY;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff >  Math.PI) diff -= Math.PI * 2;
         lojaPlayer.rotY += diff * rotationSpeed;
-        const len = Math.sqrt(dirX*dirX + dirZ*dirZ);
+        
         const speedMultiplier = 60 * deltaTime;
-        const mx = (dirX/len)*moveSpeed * speedMultiplier, mz = (dirZ/len)*moveSpeed * speedMultiplier;
+        const mx = _moveDir.x * moveSpeed * speedMultiplier;
+        const mz = _moveDir.z * moveSpeed * speedMultiplier;
         
         // Predição
         const nextX = lojaPlayer.x + mx;
@@ -515,20 +607,15 @@ function animateLoja(deltaTime) {
     player.position.set(lojaPlayer.x, lojaPlayer.y, lojaPlayer.z);
     player.userData.baseY = lojaPlayer.y;
     player.rotation.y = lojaPlayer.rotY;
-    updatePlayerAnimation(isMoving, deltaTime);
+    updatePlayerAnimation(isMoving, deltaTime, 'wood');
 
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
     renderer.render(lojaScene, moderator.freeCam ? mainCamera : lojaCamera);
 
+    // Minimapa/bússola só no mundo exterior
     const border = document.getElementById('minimap-border');
-    if (border) border.style.display = 'block';
-    const size = 116, xPos = 52, yPos = 52;
-    renderer.setViewport(xPos, yPos, size, size);
-    renderer.setScissor(xPos, yPos, size, size);
-    renderer.setScissorTest(true);
-    renderer.render(lojaScene, lojaMiniCam);
-    renderer.setScissorTest(false);
+    if (border) border.style.display = 'none';
 }
 
 function animateCaselo(deltaTime) {
@@ -540,14 +627,31 @@ function animateCaselo(deltaTime) {
 
     if (dirX !== 0 || dirZ !== 0) {
         isMoving = true;
-        const targetAngle = Math.atan2(dirX, dirZ);
+
+        // Movimento relativo à câmara
+        const cam = moderator.freeCam ? mainCamera : caseloCamera;
+        cam.getWorldDirection(_camFwd);
+        _camFwd.y = 0;
+        _camFwd.normalize();
+        _camRight.crossVectors(THREE.Object3D.DEFAULT_UP, _camFwd);
+
+        _moveDir.set(0, 0, 0);
+        if (keys.w) _moveDir.add(_camFwd);
+        if (keys.s) _moveDir.sub(_camFwd);
+        if (keys.a) _moveDir.add(_camRight);
+        if (keys.d) _moveDir.sub(_camRight);
+        _moveDir.normalize();
+
+        const targetAngle = Math.atan2(_moveDir.x, _moveDir.z);
         let diff = targetAngle - caseloPlayer.rotY;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff >  Math.PI) diff -= Math.PI * 2;
         caseloPlayer.rotY += diff * rotationSpeed;
-        const len = Math.sqrt(dirX*dirX + dirZ*dirZ);
+        
         const speedMultiplier = 60 * deltaTime;
-        const mx = (dirX/len)*moveSpeed * speedMultiplier, mz = (dirZ/len)*moveSpeed * speedMultiplier;
+        const mx = _moveDir.x * moveSpeed * speedMultiplier;
+        const mz = _moveDir.z * moveSpeed * speedMultiplier;
+        
         if (!verificaColisaoCaselo(caseloPlayer.x + mx, caseloPlayer.z)) caseloPlayer.x += mx;
         if (!verificaColisaoCaselo(caseloPlayer.x, caseloPlayer.z + mz)) caseloPlayer.z += mz;
     }
@@ -561,47 +665,125 @@ function animateCaselo(deltaTime) {
     if (caseloSaidaBox.intersectsBox(pb2)) {
         showPrompt('E — Sair do castelo');
         if (keys.e) { keys.e = false; sairCaselo(); }
-    } else { hidePrompt(); }
+        if (isPistaAberta()) esconderPista();
+    } else if (todosPedestaisCheios() && bossCrystalInteractBox.intersectsBox(pb2)) {
+        // só fica accionável depois dos 5 pedestais estarem cheios
+        showPrompt('E — Confrontar o Soberano da Corrupção');
+        if (keys.e) {
+            keys.e = false;
+            iniciarBossFight();
+        }
+        if (isPistaAberta()) esconderPista();
+    } else {
+        // proximidade a um dos pedestais
+        const idx = pedestalProximoDe(caseloPlayer.x, caseloPlayer.z);
+        if (idx >= 0) {
+            const ped = PEDESTAIS[idx];
+            if (ped.placed) {
+                showPrompt(`✦ ${CATALOGO[ped.itemId]?.nome || 'Item'} já colocado`);
+                if (isPistaAberta()) esconderPista();
+            } else if (ped.itemId && qtdInv(ped.itemId) > 0) {
+                showPrompt(`E — Colocar ${CATALOGO[ped.itemId].icone} ${CATALOGO[ped.itemId].nome}`);
+                if (keys.e) {
+                    keys.e = false;
+                    if (colocarItemPedestal(idx)) {
+                        removerInv(ped.itemId, 1);
+                        // se o item estava equipado, desequipa-o
+                        if (playerStats.equipped?.acessorio === ped.itemId) {
+                            playerStats.equipped.acessorio = null;
+                            recalcularMaxHp();
+                            sincronizarAcessorio();
+                        }
+                        // Empurra o jogador para fora do círculo (o pilar tem
+                        // agora colisão, mas evita que fique encavalitado).
+                        const [px, pz] = ped.pos;
+                        const dx = caseloPlayer.x - px;
+                        const dz = caseloPlayer.z - pz;
+                        const d = Math.hypot(dx, dz) || 1;
+                        const empurraoDist = 0.95;     // sai do raio da coluna (0.45) + folga
+                        caseloPlayer.x = px + (dx / d) * empurraoDist;
+                        caseloPlayer.z = pz + (dz / d) * empurraoDist;
+                        esconderPista();
+                        playSFX('fechadura');
+                        if (todosPedestaisCheios()) {
+                            mostrarPista('As cinco runas estão completas. O cristal pulsa — aproxima-te e premе E quando estiveres pronto.');
+                        }
+                    }
+                }
+            } else {
+                // sem o item ou pedestal por revelar → mostra a pista
+                showPrompt('E — Examinar a runa');
+                if (keys.e) {
+                    keys.e = false;
+                    mostrarPista(ped.pista);
+                }
+            }
+        } else {
+            hidePrompt();
+            if (isPistaAberta()) esconderPista();
+        }
+    }
 
+    atualizarPedestais(deltaTime);
     bossCrystal.rotation.y += deltaTime * 1.2;
-    bossCrystal.position.y = 2.2 + Math.sin(Date.now() * 0.002) * 0.15;
+    // Pousa em cima do totem (z = -3.5). Sobe e desce suavemente.
+    bossCrystal.position.y = 1.85 + Math.sin(Date.now() * 0.002) * 0.15;
+    // Quando todos os pedestais estiverem cheios, o cristal acelera e brilha
+    if (todosPedestaisCheios()) {
+        bossCrystal.material.emissiveIntensity = 2.4 + Math.sin(performance.now() * 0.006) * 1.0;
+        bossCrystal.rotation.y += deltaTime * 2.0;
+    }
 
     player.position.set(caseloPlayer.x, caseloPlayer.y, caseloPlayer.z);
     if (!moderator.lockY) player.userData.baseY = caseloPlayer.y;
     player.rotation.y = caseloPlayer.rotY;
-    updatePlayerAnimation(isMoving, deltaTime);
+    updatePlayerAnimation(isMoving, deltaTime, 'stone');
+
+    // anima o shader de corrupção da abóbada do castelo
+    matBattleSky.uniforms.uTime.value += deltaTime;
 
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
     renderer.render(caseloScene, moderator.freeCam ? mainCamera : caseloCamera);
 
+    // Minimapa/bússola só no mundo exterior
     const border = document.getElementById('minimap-border');
-    if (border) border.style.display = 'block';
-    const size = 116, xPos = 52, yPos = 52;
-    renderer.setViewport(xPos, yPos, size, size);
-    renderer.setScissor(xPos, yPos, size, size);
-    renderer.setScissorTest(true);
-    renderer.render(caseloScene, caseloMiniCam);
-    renderer.setScissorTest(false);
+    if (border) border.style.display = 'none';
 }
 
 function animateTavern(deltaTime) {
     let isMoving = false, dirX = 0, dirZ = 0;
-    if (!isInventarioAberto()) {
+    if (!isInventarioAberto() && !isIntroBartenderAberta() && !isBartenderShopAberta()) {
         if (keys.w) dirZ -= 1; if (keys.s) dirZ += 1;
         if (keys.a) dirX -= 1; if (keys.d) dirX += 1;
     }
 
     if (dirX !== 0 || dirZ !== 0) {
         isMoving = true;
-        const targetAngle = Math.atan2(dirX, dirZ);
+
+        // Movimento relativo à câmara
+        const cam = moderator.freeCam ? mainCamera : tavernCamera;
+        cam.getWorldDirection(_camFwd);
+        _camFwd.y = 0;
+        _camFwd.normalize();
+        _camRight.crossVectors(THREE.Object3D.DEFAULT_UP, _camFwd);
+
+        _moveDir.set(0, 0, 0);
+        if (keys.w) _moveDir.add(_camFwd);
+        if (keys.s) _moveDir.sub(_camFwd);
+        if (keys.a) _moveDir.add(_camRight);
+        if (keys.d) _moveDir.sub(_camRight);
+        _moveDir.normalize();
+
+        const targetAngle = Math.atan2(_moveDir.x, _moveDir.z);
         let diff = targetAngle - tavernPlayer.rotY;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff >  Math.PI) diff -= Math.PI * 2;
         tavernPlayer.rotY += diff * rotationSpeed;
-        const len = Math.sqrt(dirX*dirX + dirZ*dirZ);
+        
         const speedMultiplier = 60 * deltaTime;
-        const mx = (dirX/len)*moveSpeed * speedMultiplier, mz = (dirZ/len)*moveSpeed * speedMultiplier;
+        const mx = _moveDir.x * moveSpeed * speedMultiplier;
+        const mz = _moveDir.z * moveSpeed * speedMultiplier;
 
         const nextX = tavernPlayer.x + mx;
         const nextZ = tavernPlayer.z + mz;
@@ -631,25 +813,211 @@ function animateTavern(deltaTime) {
         new THREE.Vector3(tavernPlayer.x + r, tavernPlayer.y + 1.7,  tavernPlayer.z + r),
     );
 
-    if (tavernSaidaBox.intersectsBox(pb)) {
+    // bloqueia movimento/interacções enquanto a intro do bartender está aberta
+    if (isIntroBartenderAberta() || isBartenderShopAberta()) {
+        hidePrompt();
+    } else if (tavernSaidaBox.intersectsBox(pb)) {
         showPrompt('E — Sair da taverna');
-        if (keys.e) { keys.e = false; sairTavern(); }
+        if (keys.e) { keys.e = false; switchMusic('mundo', 1.0); sairTavern(); }
+        if (isPistaAberta()) esconderPista();
+    } else if (quartoEnterBox && quartoEnterBox.intersectsBox(pb)) {
+        showPrompt('E — Subir ao quarto');
+        if (keys.e) { keys.e = false; entrarQuarto(); }
+        if (isPistaAberta()) esconderPista();
+    } else if (!bartenderIntroFeita() && bartenderIntroBox.intersectsBox(pb)) {
+        // intro automática — assim que o jogador sai do quarto e dá um passo.
+        // Guard com isIntroBartenderAberta() para só disparar uma vez.
+        if (!isIntroBartenderAberta()) {
+            abrirIntroBartender(() => {
+                marcarBartenderIntroFeita();
+                mostrarPista('O bartender afastou-se para o seu canto da taverna. Procura-o se precisares de poções ou ataques.');
+            });
+        }
+        hidePrompt();
+    } else if (bartenderIntroFeita() && bartenderVendorBox.intersectsBox(pb)) {
+        showPrompt('E — Falar com o bartender');
+        if (keys.e) {
+            keys.e = false;
+            abrirBartenderShop();
+        }
+        if (isPistaAberta()) esconderPista();
+    } else if (tavernBarmanBox.intersectsBox(pb)) {
+        // ---- Quest do estalajadeiro: Auréola dos Caídos ----
+        if (questAureola.estado === 'completa') {
+            showPrompt('✦ Estalajadeiro: "Que a tua luz nunca se apague."');
+            if (isPistaAberta()) esconderPista();
+        } else if (questAureola.estado === 'aceite') {
+            if (todasZonasLimpas()) {
+                showPrompt('E — Reclamar recompensa');
+                if (keys.e) {
+                    keys.e = false;
+                    questAureola.estado = 'completa';
+                    adicionarItem('aureola_caidos', 1);
+                    const it = CATALOGO['aureola_caidos'];
+                    mostrarRecompensa({ icone: it.icone, nome: it.nome, descricao: it.descricao });
+                    esconderPista();
+                }
+            } else {
+                showPrompt('E — Falar com o estalajadeiro');
+                if (keys.e) {
+                    keys.e = false;
+                    mostrarPista('Estalajadeiro: "Ainda há sombras lá fora. Limpa tudo, depois volta — guardo-te a auréola."');
+                }
+            }
+        } else {
+            showPrompt('E — Falar com o estalajadeiro');
+            if (keys.e) {
+                keys.e = false;
+                questAureola.estado = 'aceite';
+                mostrarPista('Estalajadeiro: "Estas terras choram pelos caídos. Purifica todas as zonas corruptas do mapa e a Auréola dos Caídos será tua."');
+            }
+        }
     } else {
         hidePrompt();
+        if (isPistaAberta()) esconderPista();
     }
 
     player.position.set(tavernPlayer.x, tavernPlayer.y, tavernPlayer.z);
     player.userData.baseY = tavernPlayer.y;
     player.rotation.y = tavernPlayer.rotY;
-    updatePlayerAnimation(isMoving, deltaTime);
+    updatePlayerAnimation(isMoving, deltaTime, 'stone');
+
+    updateTavernNPCs(deltaTime, player.position);
 
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
     renderer.render(tavernScene, moderator.freeCam ? mainCamera : tavernCamera);
+
+    // Minimapa/bússola só no mundo exterior
+    const border = document.getElementById('minimap-border');
+    if (border) border.style.display = 'none';
+}
+
+function animateQuarto(deltaTime) {
+    let isMoving = false, dirX = 0, dirZ = 0;
+    if (!isInventarioAberto()) {
+        if (keys.w) dirZ -= 1; if (keys.s) dirZ += 1;
+        if (keys.a) dirX -= 1; if (keys.d) dirX += 1;
+    }
+
+    if (dirX !== 0 || dirZ !== 0) {
+        isMoving = true;
+
+        const cam = moderator.freeCam ? mainCamera : quartoCamera;
+        cam.getWorldDirection(_camFwd);
+        _camFwd.y = 0; _camFwd.normalize();
+        _camRight.crossVectors(THREE.Object3D.DEFAULT_UP, _camFwd);
+
+        _moveDir.set(0, 0, 0);
+        if (keys.w) _moveDir.add(_camFwd);
+        if (keys.s) _moveDir.sub(_camFwd);
+        if (keys.a) _moveDir.add(_camRight);
+        if (keys.d) _moveDir.sub(_camRight);
+        _moveDir.normalize();
+
+        const targetAngle = Math.atan2(_moveDir.x, _moveDir.z);
+        let diff = targetAngle - quartoPlayer.rotY;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff >  Math.PI) diff -= Math.PI * 2;
+        quartoPlayer.rotY += diff * rotationSpeed;
+
+        const speedMultiplier = 60 * deltaTime;
+        const mx = _moveDir.x * moveSpeed * speedMultiplier;
+        const mz = _moveDir.z * moveSpeed * speedMultiplier;
+
+        const nextX = quartoPlayer.x + mx;
+        const nextZ = quartoPlayer.z + mz;
+
+        if (moderator.noClip) {
+            quartoPlayer.x = nextX;
+            quartoPlayer.z = nextZ;
+        } else {
+            const newY = tryMoveQuarto(quartoPlayer.y, nextX, nextZ);
+            if (newY !== null) {
+                quartoPlayer.x = nextX;
+                quartoPlayer.z = nextZ;
+                quartoPlayer.y = newY;
+            } else {
+                // tenta deslizar por um eixo
+                const nyx = tryMoveQuarto(quartoPlayer.y, nextX, quartoPlayer.z);
+                if (nyx !== null) { quartoPlayer.x = nextX; quartoPlayer.y = nyx; }
+                else {
+                    const nyz = tryMoveQuarto(quartoPlayer.y, quartoPlayer.x, nextZ);
+                    if (nyz !== null) { quartoPlayer.z = nextZ; quartoPlayer.y = nyz; }
+                }
+            }
+        }
+    }
+
+    if (!moderator.noClip) {
+        quartoPlayer.y = getQuartoHeight(quartoPlayer.x, quartoPlayer.z);
+    }
+
+    const r = 0.25;
+    const pb = new THREE.Box3(
+        new THREE.Vector3(quartoPlayer.x - r, quartoPlayer.y,       quartoPlayer.z - r),
+        new THREE.Vector3(quartoPlayer.x + r, quartoPlayer.y + 1.7, quartoPlayer.z + r),
+    );
+
+    if (quartoSaidaBox.intersectsBox(pb)) {
+        showPrompt('E — Voltar à taverna');
+        if (keys.e) { keys.e = false; sairQuarto(); }
+    } else if (quartoBauBox && quartoBauBox.intersectsBox(pb) && !bauQuartoAberto()) {
+        showPrompt('E — Abrir baú');
+        if (keys.e) {
+            keys.e = false;
+            abrirBauQuarto();
+            playSFX('abrir_bau');
+            // poções iniciais — agora vêm daqui
+            adicionarItem('pocao', 3);
+            adicionarItem('mega', 1);
+            const it = CATALOGO['pocao'];
+            mostrarRecompensa({
+                icone: it.icone,
+                nome: 'Poções de Cura',
+                descricao: '×3 Poção de Cura  +  ×1 Poção Maior',
+            });
+        }
+    } else if (quartoCamaBox && quartoCamaBox.intersectsBox(pb)) {
+        showPrompt('E — Dormir (repõe as áreas corruptas)');
+        if (keys.e) {
+            keys.e = false;
+            estado.ePressBloqueado = true;
+            hidePrompt();
+            fade(1, () => {
+                const n = resetZonasBatalha();
+                curar(9999); // dormir cura totalmente
+                fade(0, () => { estado.ePressBloqueado = false; });
+                mostrarPista(n > 0
+                    ? `Dormiste. ${n} zona${n>1?'s':''} corrupta${n>1?'s':''} voltaram a manifestar-se.`
+                    : 'Dormiste. HP totalmente recuperado.');
+            });
+        }
+    } else {
+        hidePrompt();
+    }
+
+    player.position.set(quartoPlayer.x, quartoPlayer.y, quartoPlayer.z);
+    player.userData.baseY = quartoPlayer.y;
+    player.rotation.y = quartoPlayer.rotY;
+    updatePlayerAnimation(isMoving, deltaTime, 'wood');
+
+    updateQuarto(deltaTime);
+
+    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+    renderer.setScissorTest(false);
+    renderer.render(quartoScene, moderator.freeCam ? mainCamera : quartoCamera);
+
+    const border = document.getElementById('minimap-border');
+    if (border) border.style.display = 'none';
 }
 
 function animateCombate(deltaTime) {
-    // sem WASD nem colisões — combate é controlado pela UI (botões)
+    // sem WASD nem colisões — combate é controlado pela UI (botões).
+    // No boss fight, no entanto, o jogador usa WASD para se desviar dos
+    // ataques do boss enquanto escolhe na UI.
+    atualizarFaseDesvio(deltaTime);
+    // animação dos passos só faz sentido quando o player se mexe activamente
     updatePlayerAnimation(false, deltaTime);
     updateCombateScene(deltaTime);
 
@@ -659,7 +1027,8 @@ function animateCombate(deltaTime) {
 
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
-    renderer.render(combateScene, moderator.freeCam ? mainCamera : combateCamera);
+    const camCombate = isBossMode() ? combateBossCamera : combateCamera;
+    renderer.render(combateScene, moderator.freeCam ? mainCamera : camCombate);
 }
 
 function animate() {
@@ -694,10 +1063,13 @@ function animate() {
     renderer.setScissorTest(false);
     renderer.clear();
 
-    // garante que o minimapa volta a aparecer fora do combate
-    if (estado.cena !== 'combate') {
+    // Minimapa/bússola: só aparece no mundo exterior
+    {
         const border = document.getElementById('minimap-border');
-        if (border && border.style.display === 'none') border.style.display = 'block';
+        if (border) {
+            const queremos = (estado.cena === 'mundo') ? 'block' : 'none';
+            if (border.style.display !== queremos) border.style.display = queremos;
+        }
     }
 
     if (isPauseAberto()) {
@@ -714,14 +1086,18 @@ function animate() {
         } else if (estado.cena === 'tavern') {
             renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
             renderer.render(tavernScene, tavernCamera);
+        } else if (estado.cena === 'quarto') {
+            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+            renderer.render(quartoScene, quartoCamera);
         } else if (estado.cena === 'combate') {
             renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
-            renderer.render(combateScene, combateCamera);
+            renderer.render(combateScene, isBossMode() ? combateBossCamera : combateCamera);
         }
     } else if (estado.cena === 'mundo')   animateMundo(deltaTime);
     else if (estado.cena === 'loja')    animateLoja(deltaTime);
     else if (estado.cena === 'caselo')  animateCaselo(deltaTime);
     else if (estado.cena === 'tavern')  animateTavern(deltaTime);
+    else if (estado.cena === 'quarto')  animateQuarto(deltaTime);
     else if (estado.cena === 'combate') animateCombate(deltaTime);
 
     avatarRenderer.render(avatarScene, avatarCam);
@@ -729,11 +1105,17 @@ function animate() {
 
 criarMapa(scene);
 criarLostItems(scene);
-scene.add(player);
 
-// ao fechar a tela inicial: arranca a música ambiente do mundo
-onTelaInicialFechar(() => {
-    switchMusic('mundo', 2.5);
-});
+// O jogador arranca sempre no quarto inicial
+quartoScene.add(player);
+quartoPlayer.x = quartoSpawnPos.x;
+quartoPlayer.y = quartoSpawnPos.y;
+quartoPlayer.z = quartoSpawnPos.z;
+quartoPlayer.rotY = Math.PI; // virado para a cama (norte)
+player.position.set(quartoSpawnPos.x, quartoSpawnPos.y, quartoSpawnPos.z);
+player.rotation.y = quartoPlayer.rotY;
+
+// ao fechar a tela inicial: sem música por enquanto (quarto é silencioso)
+onTelaInicialFechar(() => {});
 
 animate();

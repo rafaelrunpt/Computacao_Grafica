@@ -8,6 +8,7 @@ let _listener = null;
 const _sounds = {}; // Música
 const _sfx = {};    // Sound Effects
 let _currentTrack = null;
+let _pendingTrack = null; // pedido feito antes do buffer ter carregado
 const _activeFades = new Map();
 const _audioLoader = new THREE.AudioLoader();
 
@@ -22,6 +23,12 @@ export function inicializarAudio(camera, faixas, sfx) {
             _sounds[nome].setBuffer(buffer);
             _sounds[nome].setLoop(true);
             _sounds[nome].setVolume(0);
+            // Se este track foi pedido antes de carregar, arranca-o agora.
+            if (_pendingTrack && _pendingTrack.name === nome) {
+                const t = _pendingTrack;
+                _pendingTrack = null;
+                switchMusic(t.name, t.fadeTime);
+            }
         }, undefined, () => console.warn(`Aviso: ${faixas[nome]} não encontrado.`));
     }
 
@@ -43,24 +50,45 @@ export function inicializarAudio(camera, faixas, sfx) {
 }
 
 export function switchMusic(nextTrackName, fadeTime = 1.5) {
-    if (_currentTrack === nextTrackName) return;
+    if (_currentTrack === nextTrackName) { _pendingTrack = null; return; }
     const next = _sounds[nextTrackName];
-    if (!next || !next.buffer) return;
+    if (!next || !next.buffer) {
+        // Buffer ainda não carregou — guarda o pedido e arranca quando
+        // a callback de load disparar.
+        _pendingTrack = { name: nextTrackName, fadeTime };
+        return;
+    }
 
     if (_currentTrack) _fadeOut(_sounds[_currentTrack], fadeTime);
     _fadeIn(next, fadeTime);
     _currentTrack = nextTrackName;
+    _pendingTrack = null;
 }
 
-export function playSFX(name, delay = 0) {
+export function playSFX(name, delay = 0, forceRestart = true, loop = false) {
     const s = _sfx[name];
     if (!s || !s.buffer) return;
 
-    setTimeout(() => {
-        if (s.isPlaying) s.stop();
+    const action = () => {
+        if (s.isPlaying) {
+            if (!forceRestart) return;
+            s.stop();
+        }
+        
+        s.setLoop(loop);
         s.setVolume(getSfxTargetVolume());
         s.play();
-    }, delay);
+    };
+
+    if (delay > 0) setTimeout(action, delay);
+    else action();
+}
+
+export function stopSFX(name) {
+    const s = _sfx[name];
+    if (s && s.isPlaying) {
+        s.stop();
+    }
 }
 
 export function getCurrentTrack() { return _currentTrack; }

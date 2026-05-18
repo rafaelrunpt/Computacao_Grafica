@@ -3,6 +3,7 @@ import { player } from '../entities/jogador.js';
 import { battleZoneObjects, limparZonaBatalha } from '../world/mapa.js';
 import { atualizarHUD } from '../ui/hud.js';
 import { adicionarItem, getItens, CATALOGO } from './inventario.js';
+import { getCintilas, ganharCintilas, setCintilas } from './currency.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mainCamera, renderer } from '../core/renderer.js';
 import { mudarCena, estado, lojaPlayer, caseloPlayer } from '../core/transicoes.js';
@@ -261,6 +262,21 @@ modUI.innerHTML = `
             <button id="mod-defeat-btn" style="background:#9e1818;color:#fff;border:none;cursor:pointer;padding:5px;font-weight:bold;">DERROTAR</button>
         </div>
 
+        <div style="font-size:10px;color:#80c8ff;margin:10px 0 4px 0;letter-spacing:1px;">CINTILAS ✦</div>
+        <div style="margin-bottom:6px;">
+            <label style="font-size:11px;">SET CINTILAS:</label>
+            <div style="display:flex;gap:4px;margin-top:3px;">
+                <input type="number" min="0" id="mod-cint-val" value="0" style="flex:1;background:#000;color:#fff;border:1px solid #80c8ff;padding:2px;">
+                <button id="mod-cint-btn" style="background:#80c8ff;color:#000;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;">SET</button>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-bottom:8px;">
+            <button id="mod-cint-add-50"  style="background:#a0c8ff;color:#000;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">+50</button>
+            <button id="mod-cint-add-200" style="background:#80b0e0;color:#000;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">+200</button>
+            <button id="mod-cint-add-1000" style="background:#6090c8;color:#fff;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">+1k</button>
+            <button id="mod-cint-zero"    style="background:#9e3b45;color:#fff;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">ZERAR</button>
+        </div>
+
         <div style="font-size:10px;color:#a060f0;margin:10px 0 4px 0;letter-spacing:1px;">ITENS</div>
         <button id="mod-toggle-itens" style="width:100%;background:rgba(160, 96, 240, 0.2);color:#a060f0;border:1px solid #a060f0;cursor:pointer;padding:6px;font-weight:bold;margin-bottom:4px;">ABRIR CATÁLOGO DE ITENS</button>
         <div id="mod-itens-panel" style="display:none;background:rgba(0,0,0,0.3);border:1px solid #a060f0;border-radius:4px;padding:8px;margin-bottom:8px;">
@@ -333,7 +349,8 @@ function renderEstado() {
         <span style="color:#a0c0ff;">XP ${playerStats.xp}/${playerStats.xpToNext}</span><br>
         <span style="color:#ff9090;">HP ${playerStats.hp}/${playerStats.maxHp}</span>
         ${playerStats.derrotado ? '<span style="color:#ff4040;"> ⟡ DERROTADO ⟡</span>' : ''}
-        <span style="color:#c0a060;"> · ATK ${playerStats.atk}</span>
+        <span style="color:#c0a060;"> · ATK ${playerStats.atk}</span><br>
+        <span style="color:#80c8ff;">✦ ${getCintilas()} cintilas</span>
         <hr style="border:0;border-top:1px solid #444;margin:4px 0;">
         <div style="font-size:10px;">${itens}</div>
     `;
@@ -368,6 +385,17 @@ function setupEvents() {
     document.getElementById('mod-maxhp-btn').onclick = () => moderator.setMaxHP(document.getElementById('mod-maxhp-val').value);
     document.getElementById('mod-heal-btn').onclick   = () => moderator.fullHeal();
     document.getElementById('mod-defeat-btn').onclick = () => moderator.derrotar();
+
+    // --- cintilas ---
+    document.getElementById('mod-cint-btn').onclick = () => {
+        const v = parseInt(document.getElementById('mod-cint-val').value, 10) || 0;
+        setCintilas(Math.max(0, v));
+        renderEstado();
+    };
+    document.getElementById('mod-cint-add-50').onclick   = () => { ganharCintilas(50);   renderEstado(); };
+    document.getElementById('mod-cint-add-200').onclick  = () => { ganharCintilas(200);  renderEstado(); };
+    document.getElementById('mod-cint-add-1000').onclick = () => { ganharCintilas(1000); renderEstado(); };
+    document.getElementById('mod-cint-zero').onclick     = () => { setCintilas(0);       renderEstado(); };
     document.getElementById('mod-tp-btn').onclick = () => {
         moderator.teleport(
             document.getElementById('mod-tp-x').value,
@@ -426,10 +454,11 @@ window.addEventListener('keydown', (e) => {
         if (moderator.isOpen) {
             setupEvents();
             renderEstado();
-            // reflectir HP/MaxHP actuais nos inputs ao abrir
+            // reflectir HP/MaxHP/cintilas actuais nos inputs ao abrir
             document.getElementById('mod-hp-val').value    = playerStats.hp;
             document.getElementById('mod-maxhp-val').value = playerStats.maxHp;
             document.getElementById('mod-lvl-val').value   = playerStats.level;
+            document.getElementById('mod-cint-val').value  = getCintilas();
         }
     }
 });

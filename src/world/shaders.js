@@ -252,6 +252,120 @@ export const matBattleGrass = new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
 });
 
+// ---- shader de "céu" corrupto — variante sem o disco ----
+// Mesmo aspecto visual de matBattleGrass mas sem a máscara circular
+// nem o discard: cobre toda a geometria. Usado no castelo para o
+// "céu" acima das paredes.
+export const matBattleSky = new THREE.ShaderMaterial({
+    uniforms: {
+        uTime:      { value: 0 },
+        uGrass:     { value: grassTex },
+        uDarken:    { value: 1.0 },
+        uScale:     { value: 1.0 },
+        uTimeBoost: { value: 1.0 },
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vWorldPos;
+        void main() {
+            vUv = uv;
+            vec4 wp = modelMatrix * vec4(position, 1.0);
+            vWorldPos = wp.xyz;
+            gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+    `,
+    fragmentShader: `
+        uniform float uTime;
+        uniform float uDarken;
+        uniform float uScale;
+        uniform float uTimeBoost;
+        uniform sampler2D uGrass;
+        varying vec2 vUv;
+        varying vec3 vWorldPos;
+
+        float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float sn(vec2 p){
+            vec2 i = floor(p); vec2 f = fract(p); f = f*f*(3.0 - 2.0*f);
+            return mix(mix(hash(i),           hash(i + vec2(1.0, 0.0)), f.x),
+                       mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+        }
+        float fbm(vec2 p){
+            float v = 0.0, a = 0.5;
+            for (int i = 0; i < 3; i++) { v += a * sn(p); p = p * 2.1 + vec2(3.1, 1.7); a *= 0.5; }
+            return v;
+        }
+        vec2 rot(vec2 p, float a) {
+            float c = cos(a), s = sin(a);
+            return mat2(c, -s, s, c) * p;
+        }
+
+        void main() {
+            float T = uTime * uTimeBoost;
+            // Coordenadas em world-space (com uScale, para padrões mais
+            // densos em objectos pequenos como runas).
+            vec2 wuv = vWorldPos.xz * 0.18 * uScale;
+
+            // textura de relva tingida de roxo
+            vec3 grassRGB = texture2D(uGrass, wuv).rgb;
+            float grassL  = (grassRGB.r + grassRGB.g + grassRGB.b) / 3.0;
+            vec3 corrupted = mix(
+                vec3(0.10, 0.02, 0.18),
+                vec3(0.45, 0.12, 0.65),
+                grassL
+            );
+
+            // vórtice
+            vec2 swirl = rot(wuv, T * 0.12);
+            float swirlN = fbm(swirl * 1.6 + vec2(T * 0.05, 0.0));
+
+            // veias radiais simuladas a partir do swirl + ruído
+            float veins = pow(sn(wuv * 5.0 + T * 0.3), 5.0)
+                        + pow(sn(wuv * 3.5 - T * 0.2 + 1.7), 7.0) * 0.6;
+
+            // sparkles
+            float spark = pow(sn(wuv * 4.0 + T * 0.45), 8.0);
+            spark      += pow(sn(wuv * 6.0 - T * 0.28 + 5.1), 9.0) * 0.7;
+
+            float pulse     = 0.5 + 0.5 * sin(T * 2.2);
+            float slowPulse = 0.5 + 0.5 * sin(T * 0.7);
+
+            vec3 deepDark = vec3(0.05, 0.01, 0.12);
+            vec3 mid      = vec3(0.40, 0.10, 0.60);
+            vec3 bright   = vec3(0.75, 0.28, 0.98);
+            vec3 sparkCol = vec3(1.00, 0.55, 1.00);
+            vec3 ember    = vec3(1.00, 0.70, 0.40);
+
+            vec3 col = mix(deepDark, corrupted, 0.85);
+            col      = mix(col, mid,    swirlN * 0.55);
+            col      = mix(col, bright, veins * (0.65 + 0.35 * pulse));
+            col      = mix(col, sparkCol, spark * (0.55 + 0.45 * pulse));
+            col      = mix(col, ember,    spark * 0.10);
+
+            // pulse global suave
+            col *= 0.85 + 0.25 * slowPulse;
+
+            // factor de escurecimento (1.0 = normal)
+            col *= uDarken;
+
+            gl_FragColor = vec4(col, 1.0);
+        }
+    `,
+    side: THREE.DoubleSide,
+});
+
+// ---- variante escura do shader de corrupção ----
+// Usa o mesmo shader mas com factor de escurecimento, para detalhes
+// (ex.: runas no chão do castelo) que devem ter o mesmo padrão mas
+// mais discretos que o "céu".
+export const matBattleDark = matBattleSky.clone();
+matBattleDark.uniforms = {
+    uTime:      matBattleSky.uniforms.uTime,   // partilha o tempo (mesma animação)
+    uGrass:     matBattleSky.uniforms.uGrass,
+    uDarken:    { value: 0.55 },               // um pouco mais escuro que o céu
+    uScale:     { value: 14.0 },               // padrão muito mais denso (runas pequenas)
+    uTimeBoost: { value: 2.2 },                // animação mais rápida — magia bem viva
+};
+
 // ---- shader de água ----
 export const matWater = new THREE.ShaderMaterial({
     transparent: true,

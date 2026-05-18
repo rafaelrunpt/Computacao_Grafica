@@ -22,6 +22,15 @@ export function gastarCintilas(qtd) {
 export function temCintilas(qtd) { return state.cintilas >= qtd; }
 export function onCintilasChange(fn) { listeners.add(fn); }
 
+// Define um valor absoluto (debug menu). Não dispara o toast — é um set
+// silencioso. Notifica os listeners para a HUD/loja actualizarem.
+export function setCintilas(qtd) {
+    const delta = qtd - state.cintilas;
+    state.cintilas = Math.max(0, qtd | 0);
+    listeners.forEach(fn => { try { fn(state.cintilas, delta); } catch {} });
+    return state.cintilas;
+}
+
 // ----------------------------------------------------------------------
 // Toast pequeno "+N ✦ Cintilas" no canto superior direito
 // ----------------------------------------------------------------------

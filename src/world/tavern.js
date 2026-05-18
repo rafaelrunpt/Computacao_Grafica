@@ -6,20 +6,41 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 export const tavernScene = new THREE.Scene();
 tavernScene.background = new THREE.Color(0x120e08);
 
-// ---- iluminação ----
-tavernScene.add(new THREE.AmbientLight(0xffe8c0, 0.35));
+// Luz ambiente ténue para visibilidade geral (não tão clara)
+tavernScene.add(new THREE.AmbientLight(0xffffff, 0.08));
 
-const spot1 = new THREE.SpotLight(0xffd9a0, 70, 22, Math.PI * 0.38, 0.4, 1.5);
-spot1.position.set(0, 9, 2);
-spot1.target.position.set(0, 0, 2);
-spot1.castShadow = true;
-tavernScene.add(spot1, spot1.target);
+// Material comum para as chamas
+const matFlame = new THREE.MeshStandardMaterial({ 
+    color: 0xffaa44, 
+    emissive: 0xff6622, 
+    emissiveIntensity: 3.0,
+    transparent: true,
+    opacity: 0.85
+});
 
-const spot2 = new THREE.SpotLight(0xffd9a0, 50, 18, Math.PI * 0.30, 0.4, 1.5);
-spot2.position.set(0, 9, -4);
-spot2.target.position.set(0, 0, -4);
-spot2.castShadow = true;
-tavernScene.add(spot2, spot2.target);
+// ---- Tocha na parede (Segunda Chama + Luz) ----
+const torchFlame2 = new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.32, 8), matFlame);
+torchFlame2.position.set(-9.48, 2.65, 2.00);
+tavernScene.add(torchFlame2);
+
+const torchLight2 = new THREE.PointLight(0xff8a44, 40, 12, 1.4);
+torchLight2.position.set(-9.48, 2.75, 2.00);
+torchLight2.castShadow = true;
+torchLight2.shadow.mapSize.set(512, 512);
+torchLight2.shadow.bias = -0.005;
+tavernScene.add(torchLight2);
+
+// ---- Tocha na parede (Terceira Chama + Luz) ----
+const torchFlame3 = new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.32, 8), matFlame);
+torchFlame3.position.set(-10.51, 2.65, 1.99);
+tavernScene.add(torchFlame3);
+
+const torchLight3 = new THREE.PointLight(0xff8a44, 40, 12, 1.4);
+torchLight3.position.set(-10.51, 2.75, 1.99);
+torchLight3.castShadow = true;
+torchLight3.shadow.mapSize.set(512, 512);
+torchLight3.shadow.bias = -0.005;
+tavernScene.add(torchLight3);
 
 // ---- modelo ----
 const loader = new GLTFLoader();
@@ -30,7 +51,27 @@ loader.load('../../assets/models/constructions/medieval_tavern_interior.glb', (g
     tavernModel.position.set(0, 0, 0);
     tavernModel.scale.setScalar(1.0);
     tavernModel.traverse(c => {
-        if (c.isMesh) {
+        // Remover TODAS as luzes que vêm no ficheiro GLB
+        if (c.isLight) {
+            c.intensity = 0;
+            c.visible = false;
+            if (c.parent) c.parent.remove(c);
+        }
+        
+        // Remover objetos físicos de velas/tochas originais pelo nome
+        const name = c.name.toLowerCase();
+        if (name.includes('candle') || name.includes('vela') || name.includes('torch') || name.includes('lamp')) {
+            c.visible = false;
+            if (c.isMesh) {
+                c.geometry?.dispose();
+                if (c.material) {
+                    if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
+                    else c.material.dispose();
+                }
+            }
+        }
+
+        if (c.isMesh && c.visible) {
             c.castShadow = true;
             c.receiveShadow = true;
             if (c.material) {
@@ -42,7 +83,7 @@ loader.load('../../assets/models/constructions/medieval_tavern_interior.glb', (g
         }
     });
     tavernScene.add(tavernModel);
-    console.log('[Taverna] medieval_tavern_interior.glb carregado.');
+    console.log('[Taverna] medieval_tavern_interior.glb carregado sem luzes internas.');
 }, undefined, e => console.error('Erro tavern GLB:', e));
 
 // ---- movimento / chão ----
@@ -72,11 +113,145 @@ export function tryMoveTavern(currentY, nextX, nextZ) {
     return targetY;
 }
 
-// ---- Box3 de saída — ajustar quando souberes a posição da porta no GLB ----
+// ---- Box3 de saída (Porta em X: -5.04, Z: 9.62) ----
 export const tavernSaidaBox = new THREE.Box3(
-    new THREE.Vector3(-1.5, 0, 4.0),
-    new THREE.Vector3( 1.5, 2, 5.5),
+    new THREE.Vector3(-6.5, 0, 8.5),
+    new THREE.Vector3(-3.5, 3, 10.5),
 );
 
-// ---- posição inicial do jogador na taverna ----
-export const tavernSpawnPos = new THREE.Vector3(0, 0, 3.5);
+// ---- zona de interacção com o estalajadeiro (atrás do balcão) ----
+// O balcão na cena do GLB fica em x ~4..6, z ~-1..1. Posicionamos a
+// caixa em frente ao balcão para o jogador se aproximar.
+export const tavernBarmanBox = new THREE.Box3(
+    new THREE.Vector3(2.5, 0, -1.5),
+    new THREE.Vector3(5.5, 3,  1.5),
+);
+export const tavernBarmanPos = new THREE.Vector3(4.5, 0, 0);
+
+// ---- posição inicial do jogador na taverna (ajustada para perto da nova porta) ----
+export const tavernSpawnPos = new THREE.Vector3(-5.0, 0, 8.0);
+
+// ----------------------------------------------------------------------
+// NPCs goblin — Estalajadeiro (atrás do balcão) + Bartender (intro/vendedor)
+// ----------------------------------------------------------------------
+export let estalajadeiroModel = null;
+export let bartenderModel    = null;
+
+// posições do bartender — começa junto à porta do quarto e, depois da
+// intro, desloca-se para a zona central da taverna como vendedor.
+const BARTENDER_DOOR_POS   = new THREE.Vector3(5.27, 0, 5.8);
+const BARTENDER_VENDOR_POS = new THREE.Vector3(-6.38, 0, -7.46);
+
+// estado da intro (apenas para a história — não persiste entre sessões)
+let _bartenderIntroDone = false;
+let _bartenderMoving = false;   // a deslocar-se para a posição de vendedor
+export function bartenderIntroFeita() { return _bartenderIntroDone; }
+export function marcarBartenderIntroFeita() {
+    _bartenderIntroDone = true;
+    _bartenderMoving = true;
+}
+
+// caixas de interacção
+export const bartenderIntroBox = new THREE.Box3(
+    new THREE.Vector3(4.4, 0, 4.8),
+    new THREE.Vector3(6.1, 3, 6.6),
+);
+export let bartenderVendorBox = new THREE.Box3(
+    new THREE.Vector3(-5.77 - 1.0, 0, -4.54 - 1.0),
+    new THREE.Vector3(-5.77 + 1.0, 2.4, -4.54 + 1.0),
+);
+
+// ---- estalajadeiro (goblin_animations.glb) — atrás do balcão ----
+loader.load('../../assets/models/npcs/goblin_animations.glb', (gltf) => {
+    estalajadeiroModel = gltf.scene;
+    estalajadeiroModel.scale.setScalar(0.02);
+    estalajadeiroModel.position.copy(tavernBarmanPos);
+    estalajadeiroModel.position.y = 0;
+    estalajadeiroModel.rotation.y = -Math.PI / 2; // virado para o jogador
+    estalajadeiroModel.traverse(c => {
+        if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; }
+    });
+    tavernScene.add(estalajadeiroModel);
+}, undefined, e => console.error('Erro estalajadeiro GLB:', e));
+
+// ---- bartender (goblin_shop.glb) — intro junto à porta do quarto ----
+loader.load('../../assets/models/npcs/goblin_shop.glb', (gltf) => {
+    bartenderModel = gltf.scene;
+    bartenderModel.scale.setScalar(0.13);
+    bartenderModel.position.copy(BARTENDER_DOOR_POS);
+    bartenderModel.rotation.y = Math.PI; // virado para a porta do quarto (sul)
+    bartenderModel.traverse(c => {
+        if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; }
+    });
+    tavernScene.add(bartenderModel);
+}, undefined, e => console.error('Erro bartender GLB:', e));
+
+// animação simples — pequena oscilação + virar-se para o jogador.
+// Quando _bartenderMoving === true, anda lerp até à posição de vendedor.
+export function updateTavernNPCs(dt, playerPos) {
+    const t = performance.now() * 0.002;
+
+    
+
+    // Animação da segunda tocha na parede
+    if (torchLight2 && torchFlame2) {
+        const flicker2 = Math.sin(t * 14) * 4 + Math.sin(t * 22) * 2;
+        torchLight2.intensity = 35 + flicker2;
+        const s2 = 0.96 + Math.sin(t * 13) * 0.04;
+        torchFlame2.scale.set(s2, 1.0 + Math.sin(t * 11) * 0.12, s2);
+        torchFlame2.rotation.y += dt * 1.5;
+    }
+
+    // Animação da terceira tocha na parede
+    if (torchLight3 && torchFlame3) {
+        const flicker3 = Math.sin(t * 10) * 4 + Math.sin(t * 28) * 2;
+        torchLight3.intensity = 35 + flicker3;
+        const s3 = 0.94 + Math.sin(t * 16) * 0.06;
+        torchFlame3.scale.set(s3, 1.0 + Math.sin(t * 12) * 0.14, s3);
+        torchFlame3.rotation.y += dt * 1.8;
+    }
+
+    if (estalajadeiroModel) {
+        estalajadeiroModel.position.y = Math.sin(t) * 0.02;
+    }
+    if (bartenderModel) {
+        bartenderModel.position.y = Math.sin(t + 1.2) * 0.02;
+
+        // movimento da intro → posição de vendedor
+        if (_bartenderMoving) {
+            const target = BARTENDER_VENDOR_POS;
+            const dx = target.x - bartenderModel.position.x;
+            const dz = target.z - bartenderModel.position.z;
+            const dist = Math.hypot(dx, dz);
+            if (dist < 0.05) {
+                bartenderModel.position.x = target.x;
+                bartenderModel.position.z = target.z;
+                _bartenderMoving = false;
+            } else {
+                const step = Math.min(2.0 * 0.016, dist); // ~2 unid/s
+                bartenderModel.position.x += (dx / dist) * step;
+                bartenderModel.position.z += (dz / dist) * step;
+                bartenderModel.rotation.y = Math.atan2(dx, dz);
+            }
+        } else if (_bartenderIntroDone && playerPos) {
+            // depois da intro, virar-se para o jogador quando perto
+            const dx = playerPos.x - bartenderModel.position.x;
+            const dz = playerPos.z - bartenderModel.position.z;
+            if (dx * dx + dz * dz < 16) {
+                const tgt = Math.atan2(dx, dz);
+                let diff = tgt - bartenderModel.rotation.y;
+                while (diff >  Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                bartenderModel.rotation.y += diff * 0.08;
+            }
+        }
+    }
+}
+
+// ---- porta para o quarto (X:5.27, Z:4.42) ----
+export const quartoEnterBox = new THREE.Box3(
+    new THREE.Vector3(4.6, 0, 3.7),
+    new THREE.Vector3(5.9, 3, 5.1),
+);
+// posição de regresso à taverna ao sair do quarto (em frente à porta, virado para sul)
+export const tavernQuartoReturnPos = new THREE.Vector3(5.27, 0, 5.2);

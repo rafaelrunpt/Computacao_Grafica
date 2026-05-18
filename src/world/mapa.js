@@ -4,7 +4,7 @@ import { makeTerrainShader, terraTex, matBattleGrass, matContRock, matCorruptHal
 import { criarRio, getBridgePassage } from './rio.js';
 import { Bau } from './bau.js';
 
-export { matBattleGrass, matWater, matContTrunk, matContLeaves, matContRock, matCorruptHalo } from './shaders.js';
+export { matBattleGrass, matBattleSky, matWater, matContTrunk, matContLeaves, matContRock, matCorruptHalo } from './shaders.js';
 export { getBridgeHeight } from './rio.js';
 
 export const mapBounds = { minX: -100, maxX: 100, minZ: -100, maxZ: 100 };
@@ -60,6 +60,17 @@ let _guardianColliderBox = null;
 let _guardianMoving = false;
 let _guardianWalkTime = 0;
 let _guardianPhase = 0; // 0: idle, 1: rotating to side, 2: walking, 3: rotating to front
+let _guardiaoPassou = false;
+export function isGuardiaoPassagemConcedida() { return _guardiaoPassou; }
+
+function _atualizarGuardianInteractBoxPos() {
+    if (!_guardianMesh) return;
+    const p = _guardianMesh.position;
+    guardianInteractBox = new THREE.Box3(
+        new THREE.Vector3(p.x - 1.4, 0, p.z - 1.4),
+        new THREE.Vector3(p.x + 1.4, 2.5, p.z + 1.4)
+    );
+}
 
 export function updateGuardiao(deltaTime) {
     if (!_guardianMesh || !_guardianMoving) return;
@@ -126,6 +137,7 @@ export function updateGuardiao(deltaTime) {
             _guardianMesh.rotation.y = targetRot;
             _guardianMoving = false;
             _guardianPhase = 0;
+            _atualizarGuardianInteractBoxPos();
         } else {
             _guardianMesh.rotation.y += Math.sign(diff) * rotSpeed;
         }
@@ -151,16 +163,30 @@ export function coletarBau()         { return _bau?.coletar()        ?? false; }
 export function updateBau(dt)        { _bau?.update(dt); }
 export function registarOnBauAbrir(fn) { _bau?.registarOnAbrir(fn); }
 
+// Baú secreto da Máscara do Eclipse — escondido no sudoeste,
+// longe das zonas de batalha visíveis, atrás das árvores.
+let _bauMascara = null;
+export function getBauMascaraInteractBox() { return _bauMascara?.getInteractBox() ?? null; }
+export function bauMascaraJaAberto()       { return _bauMascara?.jaAberto()       ?? false; }
+export function bauMascaraJaColetado()     { return _bauMascara?.jaColetado()     ?? false; }
+export function abrirBauMascara()          { return _bauMascara?.abrir()          ?? false; }
+export function coletarBauMascara()        { return _bauMascara?.coletar()        ?? false; }
+export function updateBauMascara(dt)       { _bauMascara?.update(dt); }
+
 // ---- utilitários ----
 function addCollider(box, isRiver = false) { colliders.push({ box, isRiver }); _gridDirty = true; }
 
 export function removerGuardiao() {
-    if (!_guardianColliderBox) return;
-    const i = colliders.findIndex(c => c.box === _guardianColliderBox);
-    if (i !== -1) colliders.splice(i, 1);
-    _guardianColliderBox = null;
-    guardianInteractBox = null;
+    if (_guardiaoPassou) return;
+    if (_guardianColliderBox) {
+        const i = colliders.findIndex(c => c.box === _guardianColliderBox);
+        if (i !== -1) colliders.splice(i, 1);
+        _guardianColliderBox = null;
+    }
+    _guardiaoPassou = true;
     _guardianMoving = true; // Ativa o movimento para o lado
+    // mantém guardianInteractBox para permitir falar com ele depois;
+    // a caixa é actualizada para a nova posição quando ele acabar de se mover.
 }
 
 function makeBox(w, h, d, mat, x, y, z, scene, solid = true) {
@@ -945,8 +971,18 @@ export function criarMapa(scene) {
     _bau = new Bau(scene, 70, 0, 70, 'coroa_magica');
     colliders.push({ box: _bau.getColliderBox(), isRiver: false }); _gridDirty = true;
 
+    // baú secreto da Máscara do Eclipse — canto sudoeste, profundo
+    _bauMascara = new Bau(scene, -78, 0, 78, 'mascara_eclipse', Math.PI * 0.25);
+    colliders.push({ box: _bauMascara.getColliderBox(), isRiver: false }); _gridDirty = true;
+
     console.log('Mapa criado.');
 }
+
+// zonas previamente limpas — guardadas para poderem ser repostas pelo
+// reset do quarto (dormir na cama). Cada item guarda o zoneObj e as
+// "cleanColors" das árvores corrompidas associadas, para restaurar
+// fielmente o estado original.
+const _clearedZones = [];
 
 // remove visualmente uma zona de batalha e retira-a dos encontros
 export function limparZonaBatalha(playerX, playerZ) {
@@ -957,26 +993,72 @@ export function limparZonaBatalha(playerX, playerZ) {
         // remove meshes roxos da zona (solo + tufos)
         for (const m of zo.meshes) zo.scene.remove(m);
         // restaura cor natural das árvores contaminadas desta zona
+        const treeSnapshots = [];
         for (const tree of zo.trees) {
+            const matSnap = [];
             tree.traverse(c => {
                 if (!c.isMesh || !c.material.userData.cleanColor) return;
+                matSnap.push({
+                    mat: c.material,
+                    corruptColor:    c.material.color.clone(),
+                    corruptEmissive: c.material.emissive.clone(),
+                    corruptIntensity: c.material.emissiveIntensity,
+                });
                 c.material.color.copy(c.material.userData.cleanColor);
                 c.material.emissive.setRGB(0, 0, 0);
                 c.material.emissiveIntensity = 0;
             });
+            treeSnapshots.push(matSnap);
         }
         // retira do array de encontros
         const gi = grassZones.indexOf(zo.box);
         if (gi !== -1) grassZones.splice(gi, 1);
         battleZoneObjects.splice(i, 1);
+
+        _clearedZones.push({ zoneObj: zo, treeSnapshots });
         return true;
     }
     return false;
 }
 
+// Restaura todas as zonas de batalha que tinham sido limpas — repõe os
+// monstros (encontros), os meshes roxos e a coloração corrompida das
+// árvores. Usado pela cama do quarto inicial.
+export function resetZonasBatalha() {
+    let restored = 0;
+    while (_clearedZones.length) {
+        const { zoneObj, treeSnapshots } = _clearedZones.pop();
+        for (const m of zoneObj.meshes) zoneObj.scene.add(m);
+        for (let k = 0; k < zoneObj.trees.length; k++) {
+            const snap = treeSnapshots[k] || [];
+            for (const s of snap) {
+                s.mat.color.copy(s.corruptColor);
+                s.mat.emissive.copy(s.corruptEmissive);
+                s.mat.emissiveIntensity = s.corruptIntensity;
+            }
+        }
+        grassZones.push(zoneObj.box);
+        battleZoneObjects.push(zoneObj);
+        restored++;
+    }
+    return restored;
+}
+
+// flag persistente: assim que o sul foi limpo pela primeira vez, a loja
+// fica aberta para sempre (mesmo após reset das zonas pela cama).
+let _shopDesbloqueada = false;
+export function isShopDesbloqueada() { return _shopDesbloqueada; }
+
 // zonas sul: z > 0 (áreas iniciais e loja)
 export function zonasSulLimpas() {
-    return !battleZoneObjects.some(zo => zo.box.min.z > 0);
+    const limpas = !battleZoneObjects.some(zo => zo.box.min.z > 0);
+    if (limpas) _shopDesbloqueada = true;
+    return limpas;
+}
+
+// todas as zonas: mapa inteiro limpo
+export function todasZonasLimpas() {
+    return battleZoneObjects.length === 0;
 }
 
 export function verificaColisao(futuroX, futuroZ) {
