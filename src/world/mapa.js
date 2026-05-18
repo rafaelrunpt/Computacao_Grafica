@@ -3,9 +3,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { makeTerrainShader, terraTex, matBattleGrass, matContRock, matCorruptHalo } from './shaders.js';
 import { criarRio, getBridgePassage } from './rio.js';
 import { Bau } from './bau.js';
+import { criarGuardiao as _criarGuardiao, removerGuardiao as _removerGuardiao } from '../entities/guardiao.js';
 
 export { matBattleGrass, matBattleSky, matWater, matContTrunk, matContLeaves, matContRock, matCorruptHalo } from './shaders.js';
 export { getBridgeHeight } from './rio.js';
+export { guardianInteractBox, isGuardiaoPassagemConcedida, updateGuardiao } from '../entities/guardiao.js';
 
 export const mapBounds = { minX: -100, maxX: 100, minZ: -100, maxZ: 100 };
 
@@ -54,95 +56,6 @@ export const fadeables = [];
 // é pesado: árvores, rochas, montanhas, GLBs grandes, ponte, guardião.
 export const cullables = [];
 export let shopDoorInteract = null;
-export let guardianInteractBox = null;
-let _guardianMesh = null;
-let _guardianColliderBox = null;
-let _guardianMoving = false;
-let _guardianWalkTime = 0;
-let _guardianPhase = 0; // 0: idle, 1: rotating to side, 2: walking, 3: rotating to front
-let _guardiaoPassou = false;
-export function isGuardiaoPassagemConcedida() { return _guardiaoPassou; }
-
-function _atualizarGuardianInteractBoxPos() {
-    if (!_guardianMesh) return;
-    const p = _guardianMesh.position;
-    guardianInteractBox = new THREE.Box3(
-        new THREE.Vector3(p.x - 1.4, 0, p.z - 1.4),
-        new THREE.Vector3(p.x + 1.4, 2.5, p.z + 1.4)
-    );
-}
-
-export function updateGuardiao(deltaTime) {
-    if (!_guardianMesh || !_guardianMoving) return;
-
-    if (_guardianPhase === 0) _guardianPhase = 1;
-
-    if (_guardianPhase === 1) {
-        const targetRot = Math.PI / 2; // Virado para a direita (X+) do ponto de vista do mundo
-        let diff = targetRot - _guardianMesh.rotation.y;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        while (diff >  Math.PI) diff -= Math.PI * 2;
-
-        const rotSpeed = 5 * deltaTime;
-        if (Math.abs(diff) < rotSpeed) {
-            _guardianMesh.rotation.y = targetRot;
-            _guardianPhase = 2;
-        } else {
-            _guardianMesh.rotation.y += Math.sign(diff) * rotSpeed;
-        }
-    }
-
-    if (_guardianPhase === 2) {
-        const targetX = 3.2; // Move para a direita (afasta-se da loja para dar vista)
-        const speed = 1.5;
-
-        if (_guardianMesh.position.x < targetX) {
-            _guardianMesh.position.x += speed * deltaTime;
-
-            // Animação simples de caminhar
-            _guardianWalkTime += deltaTime * 20;
-            const amp = 0.5;
-            if (_guardianMesh.userData.lLeg) _guardianMesh.userData.lLeg.rotation.x = Math.sin(_guardianWalkTime) * amp;
-            if (_guardianMesh.userData.rLeg) _guardianMesh.userData.rLeg.rotation.x = -Math.sin(_guardianWalkTime) * amp;
-            if (_guardianMesh.userData.lArm) _guardianMesh.userData.lArm.rotation.x = -Math.sin(_guardianWalkTime) * amp * 0.5;
-            if (_guardianMesh.userData.rArm) _guardianMesh.userData.rArm.rotation.x = Math.sin(_guardianWalkTime) * amp * 0.5;
-            
-            _guardianMesh.position.y = Math.abs(Math.sin(_guardianWalkTime)) * 0.05;
-        } else {
-            _guardianPhase = 3;
-            // Reset poses de pernas
-            if (_guardianMesh.userData.lLeg) _guardianMesh.userData.lLeg.rotation.x = 0;
-            if (_guardianMesh.userData.rLeg) _guardianMesh.userData.rLeg.rotation.x = 0;
-            if (_guardianMesh.userData.lArm) _guardianMesh.userData.lArm.rotation.x = 0;
-            if (_guardianMesh.userData.rArm) _guardianMesh.userData.rArm.rotation.x = 0;
-            _guardianMesh.position.y = 0;
-        }
-    }
-
-    if (_guardianPhase === 3) {
-        // Alvo: x=3, z=20.
-        const targetX = 3;
-        const targetZ = 20;
-        // Ângulo em relação à frente (Z+)
-        const dx = targetX - _guardianMesh.position.x;
-        const dz = targetZ - _guardianMesh.position.z;
-        const targetRot = Math.atan2(dx, dz); 
-
-        let diff = targetRot - _guardianMesh.rotation.y;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        while (diff >  Math.PI) diff -= Math.PI * 2;
-
-        const rotSpeed = 4 * deltaTime;
-        if (Math.abs(diff) < rotSpeed) {
-            _guardianMesh.rotation.y = targetRot;
-            _guardianMoving = false;
-            _guardianPhase = 0;
-            _atualizarGuardianInteractBoxPos();
-        } else {
-            _guardianMesh.rotation.y += Math.sign(diff) * rotSpeed;
-        }
-    }
-}
 
 const matTerrainN = makeTerrainShader(0x9ec87a, 0xd4b882);
 const matTerrainS = makeTerrainShader(0x9ec87a, 0xd4b882);
@@ -177,16 +90,10 @@ export function updateBauMascara(dt)       { _bauMascara?.update(dt); }
 function addCollider(box, isRiver = false) { colliders.push({ box, isRiver }); _gridDirty = true; }
 
 export function removerGuardiao() {
-    if (_guardiaoPassou) return;
-    if (_guardianColliderBox) {
-        const i = colliders.findIndex(c => c.box === _guardianColliderBox);
+    _removerGuardiao((box) => {
+        const i = colliders.findIndex(c => c.box === box);
         if (i !== -1) { colliders.splice(i, 1); _gridDirty = true; }
-        _guardianColliderBox = null;
-    }
-    _guardiaoPassou = true;
-    _guardianMoving = true; // Ativa o movimento para o lado
-    // mantém guardianInteractBox para permitir falar com ele depois;
-    // a caixa é actualizada para a nova posição quando ele acabar de se mover.
+    });
 }
 
 function makeBox(w, h, d, mat, x, y, z, scene, solid = true) {
@@ -239,7 +146,7 @@ let treeTemplate = null;       // THREE.Group clonável, preenchido após o load
 const treePendingQueue = [];   // { scene, x, z, contaminada, zoneRef } — aguardam o load
 
 const treeLoader = new GLTFLoader();
-treeLoader.load('../../assets/models/ambiente/tree.glb', (gltf) => {
+treeLoader.load('assets/models/ambiente/tree.glb', (gltf) => {
     treeTemplate = gltf.scene;
     for (const p of treePendingQueue) _spawnTree(p.scene, p.x, p.z, p.contaminada, p.zoneRef);
     treePendingQueue.length = 0;
@@ -457,7 +364,7 @@ function criarZonaCorrupta(scene, cx, cz, raio, seed) {
 function criarShop(scene, cx, cz) {
     const loader = new GLTFLoader();
     const posX = cx , posZ = cz;
-    loader.load('../../assets/models/constructions/shop.glb', (gltf) => {
+    loader.load('assets/models/constructions/shop.glb', (gltf) => {
         const m = gltf.scene;
         m.position.set(posX , 8.95, posZ);
         m.scale.setScalar(0.5);
@@ -480,7 +387,7 @@ function criarShop(scene, cx, cz) {
 function criarInn(scene, cx, cz, scale = 0.1, rotationY = 0, yOffset = 0) {
     const loader = new GLTFLoader();
     const posX = cx, posZ = cz;
-    loader.load('../../assets/models/constructions/gobble-inn.glb', (gltf) => {
+    loader.load('assets/models/constructions/gobble-inn.glb', (gltf) => {
         const m = gltf.scene;
         m.position.set(posX, 0, posZ);
         m.scale.setScalar(scale);
@@ -731,7 +638,7 @@ function criarCastelo(scene) {
     const W = 18, D = 16, H = 7;
 
     const loader = new GLTFLoader();
-    loader.load('../../assets/models/constructions/casttle.glb', (gltf) => {
+    loader.load('assets/models/constructions/casttle.glb', (gltf) => {
         const m = gltf.scene;
         m.position.set(CX, 0, CZ);
         m.scale.setScalar(SCALE);
@@ -766,91 +673,7 @@ function criarCastelo(scene) {
 
 // ---- guardião da ponte ----
 function criarGuardiao(scene) {
-    const GX = 0, GZ = 4.5; // saída norte da ponte, centro do caminho
-
-    const matArmor = new THREE.MeshStandardMaterial({ color: 0x8a7a60, roughness: 0.6, metalness: 0.4 });
-    const matHelm  = new THREE.MeshStandardMaterial({ color: 0x6a5a40, roughness: 0.5, metalness: 0.6 });
-    const matCloak = new THREE.MeshStandardMaterial({ color: 0x7a1a1a, roughness: 0.85 });
-    const matEye   = new THREE.MeshStandardMaterial({ color: 0xff6600, emissive: 0xff3300, emissiveIntensity: 0.8 });
-
-    const g = new THREE.Group();
-
-    // pernas
-    const legGeo = new THREE.CapsuleGeometry(0.11, 0.28, 8, 8);
-    legGeo.translate(0, -0.24, 0);
-    const lLeg = new THREE.Mesh(legGeo, matArmor); lLeg.position.set(-0.13, 0.52, 0);
-    const rLeg = new THREE.Mesh(legGeo, matArmor); rLeg.position.set( 0.13, 0.52, 0);
-    g.add(lLeg, rLeg);
-    g.userData.lLeg = lLeg; g.userData.rLeg = rLeg;
-
-    // tronco
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.24, 0.50, 16), matArmor);
-    torso.position.set(0, 0.77, 0);
-    g.add(torso);
-
-    // capa
-    const capeGeo = new THREE.CylinderGeometry(0.24, 0.35, 0.52, 12, 1, true, Math.PI * 0.1, Math.PI * 1.8);
-    const cape = new THREE.Mesh(capeGeo, matCloak);
-    cape.position.set(0, 0.77, 0); // Centralizada, mas com abertura frontal
-    g.add(cape);
-
-    // braços
-    const armGeo = new THREE.CapsuleGeometry(0.08, 0.22, 8, 8);
-    armGeo.translate(0, -0.19, 0);
-    const lArm = new THREE.Mesh(armGeo, matArmor); lArm.position.set(-0.32, 0.97, 0); lArm.rotation.z =  0.3;
-    const rArm = new THREE.Mesh(armGeo, matArmor); rArm.position.set( 0.32, 0.97, 0); rArm.rotation.z = -0.3;
-    g.add(lArm, rArm);
-    g.userData.lArm = lArm; g.userData.rArm = rArm;
-
-    // lança
-    const spear = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.2, 8), matArmor);
-    spear.position.set(0.45, 1.1, -0.1); // Recuada ligeiramente para não bater na capa
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.3, 6), matHelm);
-    tip.position.set(0.45, 2.25, -0.1);
-    g.add(spear, tip);
-
-    // cabeça
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.30, 16, 16), matArmor);
-    head.position.set(0, 1.40, 0);
-    g.add(head);
-
-    // elmo
-    const helm = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.31, 0.22, 16), matHelm);
-    helm.position.set(0, 1.56, 0);
-    const helmTop = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), matHelm);
-    helmTop.position.set(0, 1.56, 0);
-    const crest = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.55), matCloak);
-    crest.position.set(0, 1.82, 0);
-    g.add(helm, helmTop, crest);
-
-    // olhos brilhantes (Z positivo é a FRENTE)
-    const lEye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), matEye);
-    lEye.position.set(-0.10, 1.42, 0.27);
-    const rEye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), matEye);
-    rEye.position.set( 0.10, 1.42, 0.27);
-    g.add(lEye, rEye);
-
-    g.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
-    g.position.set(GX, 0, GZ);
-    g.rotation.y = 0; // Virado para SUL (frente)
-    scene.add(g);
-    fadeables.push(g);
-    cullables.push(g);
-    _guardianMesh = g; // Guarda referência para animação
-
-    // barreira invisível que cobre toda a largura da ponte (BW=5, parapeitos em ±2.3)
-    // fica mesmo na saída norte, z=3.2 — impede qualquer passagem
-    _guardianColliderBox = new THREE.Box3(
-        new THREE.Vector3(-2.2, -1, 3.0),
-        new THREE.Vector3( 2.2,  4, 3.6)
-    );
-    addCollider(_guardianColliderBox);
-
-    // interact box do lado sul (o jogador aproxima-se vindo de z positivo)
-    guardianInteractBox = new THREE.Box3(
-        new THREE.Vector3(GX - 1.5, 0, GZ),
-        new THREE.Vector3(GX + 1.5, 2.5, GZ + 3.0)
-    );
+    _criarGuardiao(scene, { addCollider, fadeables, cullables });
 }
 
 // ---- mapa principal ----

@@ -4,7 +4,7 @@ import { ganharCintilas } from './currency.js';
 import { entrarCombate, sairCombate, getMundoSnapshot, sairBossParaCastelo } from '../core/transicoes.js';
 import { notificarVitoria as notificarVitoriaQuest } from './merchant-quest.js';
 import { combateInimigo, setBossMode, isBossMode } from '../world/combate-scene.js';
-import { getBossRoot } from '../world/boss.js';
+import { getBossRoot } from '../entities/boss.js';
 import { iniciarFaseDesvio, pararFaseDesvio, atualizarFaseDesvio, isFaseDesvioActiva, setOnPlayerDerrotado, setBossHpFrac } from './boss-attacks.js';
 
 // quando o player morre durante a fase de desvio, encerrar o combate

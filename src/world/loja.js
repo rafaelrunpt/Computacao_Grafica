@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Bau } from './bau.js';
+import { criarMercador, getMercadorInteractBox, updateMercador } from '../entities/mercador.js';
 
 export const lojaScene = new THREE.Scene();
 lojaScene.background = new THREE.Color(0x1a120a);
@@ -34,7 +35,7 @@ const loader = new GLTFLoader();
 export let shopModel = null;
 export let lojaColliders = [];
 
-loader.load('../../assets/models/constructions/shop_interior.glb', (gltf) => {
+loader.load('assets/models/constructions/shop_interior.glb', (gltf) => {
     shopModel = gltf.scene;
     shopModel.position.set(0, 0, 0);
     shopModel.scale.setScalar(1.0); 
@@ -57,51 +58,11 @@ loader.load('../../assets/models/constructions/shop_interior.glb', (gltf) => {
     lojaScene.add(shopModel);
 }, undefined, e => console.error('Erro shop_interior GLB:', e));
 
-// ---- Mercador ----
+// ---- Mercador (entidade em src/entities/mercador.js) ----
 export const MERCHANT_POS = new THREE.Vector3(-2.21, 0.81, -0.76);
-export let merchantModel = null;
-let _merchantBox = null;
-
-loader.load('../../assets/models/npcs/merchant.glb', (gltf) => {
-    merchantModel = gltf.scene;
-    // X/Z um pouco maiores que Y para dar volume sem aumentar a altura
-    merchantModel.scale.set(0.055, 0.035, 0.055);
-    merchantModel.position.copy(MERCHANT_POS);
-    merchantModel.rotation.y = 0;
-    merchantModel.traverse(c => {
-        if (c.isMesh) {
-            c.castShadow = true;
-            c.receiveShadow = true;
-        }
-    });
-    lojaScene.add(merchantModel);
-
-    // caixa de interação à volta do mercador
-    _merchantBox = new THREE.Box3(
-        new THREE.Vector3(MERCHANT_POS.x - 2.0, MERCHANT_POS.y - 0.5, MERCHANT_POS.z - 2.2),
-        new THREE.Vector3(MERCHANT_POS.x + 2.0, MERCHANT_POS.y + 2.2, MERCHANT_POS.z + 2.2),
-    );
-}, undefined, e => console.error('Erro merchant GLB:', e));
-
-export function getMerchantInteractBox() { return _merchantBox; }
-
-export function updateMerchant(_dt, playerPos) {
-    if (!merchantModel) return;
-    // ligeira oscilação
-    merchantModel.position.y = MERCHANT_POS.y + Math.sin(performance.now() * 0.002) * 0.02;
-    // virar-se para o jogador quando perto
-    if (playerPos) {
-        const dx = playerPos.x - MERCHANT_POS.x;
-        const dz = playerPos.z - MERCHANT_POS.z;
-        if (dx * dx + dz * dz < 9) {
-            const target = Math.atan2(dx, dz);
-            let diff = target - merchantModel.rotation.y;
-            while (diff > Math.PI)  diff -= Math.PI * 2;
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            merchantModel.rotation.y += diff * 0.08;
-        }
-    }
-}
+criarMercador(lojaScene, MERCHANT_POS);
+export function getMerchantInteractBox() { return getMercadorInteractBox(); }
+export function updateMerchant(dt, playerPos) { updateMercador(dt, playerPos); }
 
 // ---- parâmetros de movimento ----
 export const LOJA_FLOOR_Y = 0.0;     

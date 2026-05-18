@@ -655,7 +655,7 @@ export function abrirDialogoGuardiao(level, callbackPassar, passouJa = false, th
     abrirDialogo({
         nome: 'Guardião da Ponte',
         subtitulo: 'Protetor da Passagem',
-        retratoUrl: '../../assets/textures/avatares/guardiao_avatar.png',
+        retratoUrl: 'assets/textures/avatares/guardiao_avatar.png',
         tema: themeKey,
         getAbertura: () => pick(passagemConcedida ? ABERTURA.posPassagem : ABERTURA.fraco),
         // null deixa o sistema antigo (ESCOLHAS por tier) tomar conta
@@ -673,7 +673,7 @@ export function abrirDialogoGuardiaoCedePassagem(callbackPassar, themeKey = 'tav
     abrirDialogo({
         nome: 'Guardião da Ponte',
         subtitulo: 'Protetor da Passagem',
-        retratoUrl: '../../assets/textures/avatares/guardiao_avatar.png',
+        retratoUrl: 'assets/textures/avatares/guardiao_avatar.png',
         tema: themeKey,
         getAbertura: () => pick(ABERTURA.cedePassagem),
         getEscolhas: () => [
@@ -730,7 +730,7 @@ export function abrirDialogoMercador(themeKey = 'tavern') {
     abrirDialogo({
         nome: 'Alice',
         subtitulo: 'Mercador',
-        retratoUrl: '../../assets/textures/avatares/merchant.png',
+        retratoUrl: 'assets/textures/avatares/merchant.png',
         tema: themeKey,
         getAbertura: () => {
             const c = getCintilas();

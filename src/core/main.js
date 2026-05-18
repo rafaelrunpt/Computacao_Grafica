@@ -239,22 +239,22 @@ registarCallbackInput(
 // ÁUDIO (gerido em systems/audio.js)
 // --------------------------------------------------------
 inicializarAudio(mainCamera, {
-    title:   '../../assets/music/main_tittle.mp3',
-    mundo:   '../../assets/music/tema_mundo.mp3',
-    dark:    '../../assets/music/darkwoods.mp3',
-    shop:    '../../assets/music/shop.mp3',
-    tavern:  '../../assets/music/taverna.mp3',
-    batalha: '../../assets/music/batalha.mp3',
-    castle:  '../../assets/music/castle.mp3',
-    boss:    '../../assets/music/boss.mp3',
+    title:   'assets/music/main_tittle.mp3',
+    mundo:   'assets/music/tema_mundo.mp3',
+    dark:    'assets/music/darkwoods.mp3',
+    shop:    'assets/music/shop.mp3',
+    tavern:  'assets/music/taverna.mp3',
+    batalha: 'assets/music/batalha.mp3',
+    castle:  'assets/music/castle.mp3',
+    boss:    'assets/music/boss.mp3',
 }, {
-    fechadura: '../../assets/sounds/fechadura.mp3',
-    abrir_bau: '../../assets/sounds/abrir_bau.mp3',
-    trovao:    '../../assets/sounds/trovao.mp3',
-    transicao_batalha: '../../assets/sounds/transicao_batalha.mp3',
-    step_grass: '../../assets/sounds/footsteps/relva.mp3',
-    step_wood:  '../../assets/sounds/footsteps/wood.mp3',
-    step_stone: '../../assets/sounds/footsteps/stone.mp3',
+    fechadura: 'assets/sounds/fechadura.mp3',
+    abrir_bau: 'assets/sounds/abrir_bau.mp3',
+    trovao:    'assets/sounds/trovao.mp3',
+    transicao_batalha: 'assets/sounds/transicao_batalha.mp3',
+    step_grass: 'assets/sounds/footsteps/relva.mp3',
+    step_wood:  'assets/sounds/footsteps/wood.mp3',
+    step_stone: 'assets/sounds/footsteps/stone.mp3',
 });
 
 // --------------------------------------------------------

@@ -14,20 +14,20 @@ function loadTex(path, rx, ry) {
 const TS = 6;
 const W_MAP = 200, H_MAP_HALF = 95;
 
-export const grassTex    = loadTex('../../assets/textures/relva.png',   W_MAP/TS, H_MAP_HALF/TS);
-export const terraTex    = loadTex('../../assets/textures/terra.png',   W_MAP/TS, H_MAP_HALF/TS);
-export const areiaTex    = loadTex('../../assets/textures/areia.png',   W_MAP/TS, H_MAP_HALF/TS);
+export const grassTex    = loadTex('assets/textures/relva.png',   W_MAP/TS, H_MAP_HALF/TS);
+export const terraTex    = loadTex('assets/textures/terra.png',   W_MAP/TS, H_MAP_HALF/TS);
+export const areiaTex    = loadTex('assets/textures/areia.png',   W_MAP/TS, H_MAP_HALF/TS);
 let _woodCount = 0;
 let _woodResolve;
 export const woodTexturesReady = new Promise(r => { _woodResolve = r; });
 const _onWoodLoad = () => { if (++_woodCount === 2) _woodResolve(); };
 
-export const madeiraTex  = _loader.load('../../assets/textures/madeira.png', t => {
+export const madeiraTex  = _loader.load('assets/textures/madeira.png', t => {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.anisotropy = 16;
     _onWoodLoad();
 });
-export const madeira2Tex = _loader.load('../../assets/textures/madeira2.png', t => {
+export const madeira2Tex = _loader.load('assets/textures/madeira2.png', t => {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.anisotropy = 16;
     _onWoodLoad();

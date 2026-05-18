@@ -11,7 +11,7 @@
 //   ou usa `aplicarTexturaBoss(slot, url)` para trocar a textura.
 // ======================================================================
 import * as THREE from 'three';
-import { criarAcessorio } from './acessorios.js';
+import { criarAcessorio } from '../world/acessorios.js';
 
 const _texLoader = new THREE.TextureLoader();
 

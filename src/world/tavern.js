@@ -2,6 +2,8 @@
 // Mínimo funcional: cena + GLB + iluminação + raycast de chão + Box3 de saída.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { criarBartender, updateBartender, bartenderIntroFeita as _bartenderIntroFeita, marcarBartenderIntroFeita as _marcarBartenderIntroFeita } from '../entities/bartender.js';
+import { criarEstalajadeiro, updateEstalajadeiro } from '../entities/estalajadeiro.js';
 
 export const tavernScene = new THREE.Scene();
 tavernScene.background = new THREE.Color(0x120e08);
@@ -46,7 +48,7 @@ tavernScene.add(torchLight3);
 const loader = new GLTFLoader();
 export let tavernModel = null;
 
-loader.load('../../assets/models/constructions/medieval_tavern_interior.glb', (gltf) => {
+loader.load('assets/models/constructions/medieval_tavern_interior.glb', (gltf) => {
     tavernModel = gltf.scene;
     tavernModel.position.set(0, 0, 0);
     tavernModel.scale.setScalar(1.0);
@@ -132,26 +134,15 @@ export const tavernBarmanPos = new THREE.Vector3(4.5, 0, 0);
 export const tavernSpawnPos = new THREE.Vector3(-5.0, 0, 8.0);
 
 // ----------------------------------------------------------------------
-// NPCs goblin — Estalajadeiro (atrás do balcão) + Bartender (intro/vendedor)
+// NPCs goblin (entidades em src/entities/) — Estalajadeiro + Bartender
 // ----------------------------------------------------------------------
-export let estalajadeiroModel = null;
-export let bartenderModel    = null;
-
-// posições do bartender — começa junto à porta do quarto e, depois da
-// intro, desloca-se para a zona central da taverna como vendedor.
 const BARTENDER_DOOR_POS   = new THREE.Vector3(5.27, 0, 5.8);
 const BARTENDER_VENDOR_POS = new THREE.Vector3(-6.38, 0, -7.46);
 
-// estado da intro (apenas para a história — não persiste entre sessões)
-let _bartenderIntroDone = false;
-let _bartenderMoving = false;   // a deslocar-se para a posição de vendedor
-export function bartenderIntroFeita() { return _bartenderIntroDone; }
-export function marcarBartenderIntroFeita() {
-    _bartenderIntroDone = true;
-    _bartenderMoving = true;
-}
+export function bartenderIntroFeita() { return _bartenderIntroFeita(); }
+export function marcarBartenderIntroFeita() { _marcarBartenderIntroFeita(); }
 
-// caixas de interacção
+// caixas de interacção (continuam ligadas ao layout da cena)
 export const bartenderIntroBox = new THREE.Box3(
     new THREE.Vector3(4.4, 0, 4.8),
     new THREE.Vector3(6.1, 3, 6.6),
@@ -161,37 +152,11 @@ export let bartenderVendorBox = new THREE.Box3(
     new THREE.Vector3(-5.77 + 1.0, 2.4, -4.54 + 1.0),
 );
 
-// ---- estalajadeiro (goblin_animations.glb) — atrás do balcão ----
-loader.load('../../assets/models/npcs/goblin_animations.glb', (gltf) => {
-    estalajadeiroModel = gltf.scene;
-    estalajadeiroModel.scale.setScalar(0.02);
-    estalajadeiroModel.position.copy(tavernBarmanPos);
-    estalajadeiroModel.position.y = 0;
-    estalajadeiroModel.rotation.y = -Math.PI / 2; // virado para o jogador
-    estalajadeiroModel.traverse(c => {
-        if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; }
-    });
-    tavernScene.add(estalajadeiroModel);
-}, undefined, e => console.error('Erro estalajadeiro GLB:', e));
+criarEstalajadeiro(tavernScene, tavernBarmanPos);
+criarBartender(tavernScene, BARTENDER_DOOR_POS, BARTENDER_VENDOR_POS);
 
-// ---- bartender (goblin_shop.glb) — intro junto à porta do quarto ----
-loader.load('../../assets/models/npcs/goblin_shop.glb', (gltf) => {
-    bartenderModel = gltf.scene;
-    bartenderModel.scale.setScalar(0.13);
-    bartenderModel.position.copy(BARTENDER_DOOR_POS);
-    bartenderModel.rotation.y = Math.PI; // virado para a porta do quarto (sul)
-    bartenderModel.traverse(c => {
-        if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; }
-    });
-    tavernScene.add(bartenderModel);
-}, undefined, e => console.error('Erro bartender GLB:', e));
-
-// animação simples — pequena oscilação + virar-se para o jogador.
-// Quando _bartenderMoving === true, anda lerp até à posição de vendedor.
 export function updateTavernNPCs(dt, playerPos) {
     const t = performance.now() * 0.002;
-
-    
 
     // Animação da segunda tocha na parede
     if (torchLight2 && torchFlame2) {
@@ -211,41 +176,8 @@ export function updateTavernNPCs(dt, playerPos) {
         torchFlame3.rotation.y += dt * 1.8;
     }
 
-    if (estalajadeiroModel) {
-        estalajadeiroModel.position.y = Math.sin(t) * 0.02;
-    }
-    if (bartenderModel) {
-        bartenderModel.position.y = Math.sin(t + 1.2) * 0.02;
-
-        // movimento da intro → posição de vendedor
-        if (_bartenderMoving) {
-            const target = BARTENDER_VENDOR_POS;
-            const dx = target.x - bartenderModel.position.x;
-            const dz = target.z - bartenderModel.position.z;
-            const dist = Math.hypot(dx, dz);
-            if (dist < 0.05) {
-                bartenderModel.position.x = target.x;
-                bartenderModel.position.z = target.z;
-                _bartenderMoving = false;
-            } else {
-                const step = Math.min(2.0 * 0.016, dist); // ~2 unid/s
-                bartenderModel.position.x += (dx / dist) * step;
-                bartenderModel.position.z += (dz / dist) * step;
-                bartenderModel.rotation.y = Math.atan2(dx, dz);
-            }
-        } else if (_bartenderIntroDone && playerPos) {
-            // depois da intro, virar-se para o jogador quando perto
-            const dx = playerPos.x - bartenderModel.position.x;
-            const dz = playerPos.z - bartenderModel.position.z;
-            if (dx * dx + dz * dz < 16) {
-                const tgt = Math.atan2(dx, dz);
-                let diff = tgt - bartenderModel.rotation.y;
-                while (diff >  Math.PI) diff -= Math.PI * 2;
-                while (diff < -Math.PI) diff += Math.PI * 2;
-                bartenderModel.rotation.y += diff * 0.08;
-            }
-        }
-    }
+    updateEstalajadeiro(dt);
+    updateBartender(dt, playerPos);
 }
 
 // ---- porta para o quarto (X:5.27, Z:4.42) ----
