@@ -27,7 +27,8 @@ import { player } from '../entities/jogador.js';
 import { combateScene, posPlayerCombate, isBossMode } from '../world/combate-scene.js';
 import { keys } from '../core/input.js';
 import { receberDano, playerStats } from './player-stats.js';
-import { setHpPlayer, setLog } from '../ui/combate-ui.js';
+import { setHpPlayer, setLog, mostrarDanoFlutuante } from '../ui/combate-ui.js';
+import { tocarSomAtaqueBoss, tocarRugidoBoss } from './audio.js';
 
 // ----------------------------------------------------------------------
 // CONFIGURAÇÃO
@@ -43,10 +44,44 @@ const SPAWN_MAX   = 2.6;
 // valor sempre que o boss leva dano. Usado para acelerar os projécteis e
 // activar o "rage mode" (cores trocadas) abaixo dos 25%.
 let _bossHpFrac = 1.0;
+let _rageAnunciado = false;
 const RAGE_THRESHOLD = 0.25;
 
 export function setBossHpFrac(frac) {
+    const antes = _bossHpFrac;
     _bossHpFrac = Math.max(0, Math.min(1, frac));
+    if (_bossHpFrac >= 0.95) {
+        _rageAnunciado = false;            // vida cheia → novo combate de boss
+    } else if (!_rageAnunciado && antes >= RAGE_THRESHOLD
+               && _bossHpFrac < RAGE_THRESHOLD && _bossHpFrac > 0) {
+        _rageAnunciado = true;
+        _entrarRageMode();
+    }
+}
+
+// Transição visível para o "rage mode" — dispara uma única vez, quando o
+// boss cai abaixo dos 25% de vida.
+function _entrarRageMode() {
+    setLog('⚠ O SOBERANO ENTRA EM FÚRIA! Os golpes aceleram e ardem em corrupção!');
+    tocarRugidoBoss();
+    _flashRage();
+}
+
+// Clarão roxo intenso a cobrir o ecrã.
+function _flashRage() {
+    let o = document.getElementById('boss-rage-flash');
+    if (!o) {
+        o = document.createElement('div');
+        o.id = 'boss-rage-flash';
+        o.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:96;background:rgba(170,30,255,0);';
+        document.body.appendChild(o);
+    }
+    o.style.transition = 'background 0.08s';
+    o.style.background = 'rgba(170,30,255,0.55)';
+    setTimeout(() => {
+        o.style.transition = 'background 0.6s ease-out';
+        o.style.background = 'rgba(170,30,255,0)';
+    }, 90);
 }
 
 // Velocidade aumenta linearmente com o dano sofrido pelo boss, mas
@@ -360,6 +395,10 @@ function updateProjectile(pr, deltaTime) {
     }
 
     // -------- IMPACT (projéctil visível + movimento) --------
+    if (!pr.launched) {
+        pr.launched = true;
+        tocarSomAtaqueBoss(pr.type);   // som do ataque, ao lançar o projéctil
+    }
     pr.proj.visible = true;
     const u = Math.min(1, (pr.t - pr.teleDur) / pr.impactDur);
     if (pr.light) pr.light.intensity = 4.0 * (1 - u);
@@ -391,6 +430,7 @@ function updateProjectile(pr, deltaTime) {
         if (pr.isHit(player.position.x, py, plane)) {
             // dano + flash
             receberDano(pr.dano);
+            mostrarDanoFlutuante(50, 66, `-${pr.dano}`, '#ff5060');
             setHpPlayer(playerStats.hp, playerStats.maxHp);
             setLog(`Fui atingido pelo ataque ${pr.type.toUpperCase()}! (-${pr.dano} HP)`);
             _flashRed();

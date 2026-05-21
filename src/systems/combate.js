@@ -1,11 +1,12 @@
 import { grassZones, limparZonaBatalha } from '../world/mapa.js';
-import { ganharXP, playerStats, receberDano, curar, recuperarTotal, getAtkEfetivo, getCuraPosCombate, getChanceEvasao } from './player-stats.js';
+import { ganharXP, playerStats, receberDano, curar, recuperarTotal, getAtkEfetivo, getCuraPosCombate, getChanceEvasao, getOculosVidente } from './player-stats.js';
 import { ganharCintilas } from './currency.js';
 import { entrarCombate, sairCombate, getMundoSnapshot, sairBossParaCastelo } from '../core/transicoes.js';
 import { notificarVitoria as notificarVitoriaQuest } from './merchant-quest.js';
 import { setBossMode, isBossMode, setTipoInimigo, getInimigoActivo } from '../world/combate-scene.js';
 import { getBossRoot } from '../entities/boss.js';
 import { iniciarFaseDesvio, pararFaseDesvio, atualizarFaseDesvio, isFaseDesvioActiva, setOnPlayerDerrotado, setBossHpFrac } from './boss-attacks.js';
+import { settings } from './settings.js';
 
 // quando o player morre durante a fase de desvio, encerrar o combate
 setOnPlayerDerrotado(() => {
@@ -14,13 +15,13 @@ setOnPlayerDerrotado(() => {
     setTimeout(() => sairDaArena(), 1200);
 });
 import { getItens, usarItem, adicionarItem, CATALOGO, quantidade as qtdItem } from './inventario.js';
-import { playSFX, switchMusic, stopMusic, tocarFanfarraVitoria } from './audio.js';
+import { playSFX, switchMusic, stopMusic, tocarFanfarraVitoria, tocarSomAtaquePlayer, tocarSomAtaqueInimigo } from './audio.js';
 import { mostrarRecompensa } from '../ui/popup-recompensa.js';
 import { player } from '../entities/jogador.js';
 import {
     mostrarCombateUI, esconderCombateUI, setCombateHandlers,
     setHpInimigo, setHpPlayer, setLog, setBotoesAtivos, preencherItens,
-    setAtaqueSlots
+    setAtaqueSlots, setPresagio, setStatusPlayer, mostrarDanoFlutuante
 } from '../ui/combate-ui.js';
 import {
     getSlotAtaque, getCooldownSlot, podeUsarSlot,
@@ -185,13 +186,11 @@ let _tipoEncontro = 'wraith';
 // ----------------------------------------------------------------------
 // DIFICULDADE ESCALÁVEL
 // ----------------------------------------------------------------------
-// Nível de dificuldade atual dos inimigos normais (não-boss). Começa em 1.
-// Pode ser alterado externamente via setNivelInimigo() — por exemplo
-// ao desbloquear novas regiões, ao subir o nível do jogador, ou para
-// uma curva pré-definida por zona/quest.
+// Nível de dificuldade do combate. É definido em novoInimigo() e
+// iniciarBossFight() a partir de nivelDificuldade(): acompanha o nível
+// do jogador e, no modo noite, sobe +2 (ver BONUS_NIVEL_NOITE).
 //
-// A escala aplica-se em novoInimigo() e iniciarBossFight() e afecta
-// HP, ATK, XP e Cintilas a partir dos valores `*Base` declarados acima.
+// A escala afecta HP, ATK, XP e Cintilas a partir dos valores `*Base`.
 // Mantém-se "puramente multiplicativo" para ser fácil de afinar.
 let _nivelInimigo = 1;
 const ESCALA = {
@@ -203,6 +202,63 @@ const ESCALA = {
 
 export function setNivelInimigo(n) { _nivelInimigo = Math.max(1, n | 0); }
 export function getNivelInimigo()  { return _nivelInimigo; }
+
+// Modo noite torna os encontros e o boss +2 níveis mais difíceis.
+const BONUS_NIVEL_NOITE = 2;
+
+// Nível de dificuldade do próximo combate: acompanha o nível do jogador
+// e, no modo noite, sobe BONUS_NIVEL_NOITE. Aplica-se a encontros e boss.
+function nivelDificuldade() {
+    return playerStats.level + (settings.nightMode ? BONUS_NIVEL_NOITE : 0);
+}
+
+// ----------------------------------------------------------------------
+// ATAQUES DOS INIMIGOS NORMAIS — cada tipo de inimigo tem o seu conjunto
+// ----------------------------------------------------------------------
+//   multATK — multiplicador do ATK    hits — nº de golpes
+//   efeito  — null | 'enfraquecer' | 'roubo'    som — chave em audio.js
+//   cor     — tinta (rgb) do flash    perigo — 1..3, mostrado pelos Óculos
+const ATAQUES_WRAITH = [
+    { nome: 'Toque do Vazio',     multATK: 1.00,          efeito: null,          som: 'toque',     cor: '130,70,200',  perigo: 1 },
+    { nome: 'Garra Dilacerante',  multATK: 1.65,          efeito: null,          som: 'garra',     cor: '255,60,90',   perigo: 3 },
+    { nome: 'Sopro Corrompido',   multATK: 0.85,          efeito: 'enfraquecer', som: 'sopro',     cor: '100,200,130', perigo: 2 },
+    { nome: 'Dreno Espectral',    multATK: 1.00,          efeito: 'roubo',       som: 'dreno',     cor: '200,90,255',  perigo: 2 },
+    { nome: 'Estilhaço do Vazio', multATK: 0.60, hits: 2, efeito: null,          som: 'estilhaco', cor: '90,140,255',  perigo: 2 },
+];
+const ATAQUES_SLUDDY = [
+    { nome: 'Cuspo Pegajoso', multATK: 1.00, efeito: null,          som: 'cuspo',  cor: '120,200,80', perigo: 1 },
+    { nome: 'Baba Corrosiva', multATK: 0.80, efeito: 'enfraquecer', som: 'baba',   cor: '160,220,60', perigo: 2 },
+    { nome: 'Embate Viscoso', multATK: 1.35, efeito: null,          som: 'embate', cor: '90,180,90',  perigo: 2 },
+];
+function pickAtaqueInimigo() {
+    const pool = _tipoEncontro === 'sluddy' ? ATAQUES_SLUDDY : ATAQUES_WRAITH;
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+// Golpe que o inimigo vai usar no próximo turno — telegrafado para os Óculos.
+let _proximoAtaqueInimigo = pickAtaqueInimigo();
+// Debuff activo: o próximo golpe do jogador sai enfraquecido (Sopro Corrompido).
+let _playerEnfraquecido = false;
+
+// Define o debuff de enfraquecer e actualiza o indicador de estado na placa.
+function _setEnfraquecido(on) {
+    _playerEnfraquecido = on;
+    setStatusPlayer(on ? '⚠ Enfraquecido' : null);
+}
+
+// Mostra/esconde o presságio (Óculos do Vidente) conforme o equipamento.
+function _atualizarPresagio() {
+    setPresagio((!isBossMode() && getOculosVidente() && _proximoAtaqueInimigo)
+        ? _proximoAtaqueInimigo : null);
+}
+
+// Âncora aproximada (% do ecrã) de cada combatente, para os números de
+// dano flutuantes. As câmaras de combate são estáticas.
+function _ancoraCombatente(alvo) {
+    if (isBossMode()) {
+        return alvo === 'inimigo' ? { x: 50, y: 15 } : { x: 50, y: 55 };
+    }
+    return alvo === 'inimigo' ? { x: 63, y: 25 } : { x: 38, y: 35 };
+}
 
 // Calcula stats finais a partir da base + nível. Encapsulado para
 // se poder trocar a fórmula sem mexer no resto do combate.
@@ -220,8 +276,12 @@ function escalarStats(base, lvl = _nivelInimigo) {
 }
 
 function novoInimigo() {
+    // dificuldade acompanha o nível do jogador (+2 no modo noite)
+    setNivelInimigo(nivelDificuldade());
     const base = _tipoEncontro === 'sluddy' ? sluddyBase : inimigoBase;
     inimigoAtual = escalarStats(base);
+    _setEnfraquecido(false);
+    _proximoAtaqueInimigo = pickAtaqueInimigo();
 }
 
 function refreshHpUI() {
@@ -262,6 +322,11 @@ function acaoAtacarSlot(idx) {
     // jogador executa o seu ataque (assim os projécteis não dão pausa).
 
     const resultado = resolverAtaque(idx, getAtkEfetivo());
+    // Sopro Corrompido: o próximo golpe do jogador sai enfraquecido (−30%).
+    if (_playerEnfraquecido && resultado && !resultado.falhou) {
+        resultado.totalDano = Math.max(1, Math.round(resultado.totalDano * 0.7));
+        _setEnfraquecido(false);
+    }
     aplicarCooldown(idx);
     atualizarSlotsUI();
 
@@ -277,9 +342,13 @@ function acaoAtacarSlot(idx) {
     const aplicarImpacto = (parcial) => {
         if (resultado.falhou) {
             setLog(`Falhaste — ${at.nome} não acertou.`);
+            const af = _ancoraCombatente('inimigo');
+            mostrarDanoFlutuante(af.x, af.y, 'FALHOU', '#ffffff');
             return;
         }
         inimigoAtual.hp = Math.max(0, inimigoAtual.hp - parcial);
+        const ai = _ancoraCombatente('inimigo');
+        mostrarDanoFlutuante(ai.x, ai.y, `-${parcial}`, '#ffe070');
         if (resultado.hitsTotais > 1) {
             setLog(`${at.nome}! ${resultado.hitsAcertos}/${resultado.hitsTotais} acertos — ${danoTotal} dano.`);
         } else {
@@ -293,6 +362,7 @@ function acaoAtacarSlot(idx) {
         }
     };
 
+    tocarSomAtaquePlayer(at.id);
     lancarAnimacaoAtaque(at, resultado.falhou, {
         onImpacto1: () => {
             if (resultado.hitsTotais > 1) {
@@ -339,6 +409,7 @@ function acaoFugir() {
 
 function _devolverTurnoAoPlayer() {
     setBotoesAtivos(true);
+    _atualizarPresagio();
     if (isBossMode() && !playerStats.derrotado && inimigoAtual.hp > 0) {
         iniciarFaseDesvio();
     }
@@ -358,25 +429,51 @@ function turnoInimigo() {
         return;
     }
 
+    // O inimigo usa o golpe que tinha telegrafado (visível com os Óculos).
+    const at = _proximoAtaqueInimigo || pickAtaqueInimigo();
+
     // Esquiva (Máscara do Eclipse)
     if (Math.random() < getChanceEvasao()) {
-        setLog(`${inimigoAtual.nome} ataca, mas esquivaste-te! Sem dano.`);
+        setLog(`${inimigoAtual.nome} conjura ${at.nome}, mas esquivaste-te! Sem dano.`);
+        _proximoAtaqueInimigo = pickAtaqueInimigo();
         tickCooldowns();
         atualizarSlotsUI();
         _devolverTurnoAoPlayer();
         return;
     }
 
-    const dano = inimigoAtual.atk + Math.floor(Math.random() * 3);
+    // dano do golpe escolhido (um ou mais hits)
+    let dano = 0;
+    const hits = at.hits || 1;
+    for (let h = 0; h < hits; h++) {
+        dano += Math.max(1, Math.round(inimigoAtual.atk * at.multATK) + Math.floor(Math.random() * 3));
+    }
     receberDano(dano);
-    setLog(`${inimigoAtual.nome} ataca! Sofreste ${dano} de dano.`);
-    pulsarPlayer();
+    tocarSomAtaqueInimigo(at.som);
+    pulsarPlayer(at.cor);
+    const ancP = _ancoraCombatente('player');
+    mostrarDanoFlutuante(ancP.x, ancP.y, `-${dano}`, '#ff5060');
+
+    // efeito do golpe
+    let extra = '';
+    if (at.efeito === 'enfraquecer') {
+        _setEnfraquecido(true);
+        extra = ' O teu próximo golpe sairá enfraquecido!';
+    } else if (at.efeito === 'roubo') {
+        const drenado = Math.max(1, Math.round(dano * 0.5));
+        inimigoAtual.hp = Math.min(inimigoAtual.maxHp, inimigoAtual.hp + drenado);
+        const ancI = _ancoraCombatente('inimigo');
+        mostrarDanoFlutuante(ancI.x, ancI.y, `+${drenado}`, '#88ff99');
+        extra = ` Drenou ${drenado} HP para si.`;
+    }
+    setLog(`${inimigoAtual.nome} usa ${at.nome}! Sofreste ${dano} de dano.${extra}`);
     refreshHpUI();
 
     if (playerStats.hp <= 0) {
         bloquearTurno(900, finalizarDerrota);
         return;
     }
+    _proximoAtaqueInimigo = pickAtaqueInimigo();   // telegrafa o golpe seguinte
     tickCooldowns();
     atualizarSlotsUI();
     _devolverTurnoAoPlayer();
@@ -389,16 +486,16 @@ function pulsarInimigo() {
     m.emissiveIntensity = 2.5;
     setTimeout(() => { m.emissiveIntensity = original; }, 180);
 }
-function pulsarPlayer() {
+function pulsarPlayer(rgb = '255,40,80') {
     const overlay = document.getElementById('combate-flash') || (() => {
         const o = document.createElement('div');
         o.id = 'combate-flash';
-        o.style.cssText = 'position:fixed;inset:0;background:rgba(255,40,80,0.0);pointer-events:none;z-index:79;transition:background 0.18s;';
+        o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0);pointer-events:none;z-index:79;transition:background 0.18s;';
         document.body.appendChild(o);
         return o;
     })();
-    overlay.style.background = 'rgba(255,40,80,0.35)';
-    setTimeout(() => { overlay.style.background = 'rgba(255,40,80,0.0)'; }, 180);
+    overlay.style.background = `rgba(${rgb},0.35)`;
+    setTimeout(() => { overlay.style.background = `rgba(${rgb},0)`; }, 180);
 }
 
 // ----------------------------------------------------------------------
@@ -532,6 +629,7 @@ function iniciarCombate() {
             mostrarCombateUI(inimigoAtual.nome);
             refreshHpUI();
             setLog(`Um ${inimigoAtual.nome} manifestou-se! Que fareis?`);
+            _atualizarPresagio();
             setCombateHandlers({
                 onAtacarSlot: acaoAtacarSlot,
                 onItem:       acaoItem,
@@ -578,10 +676,11 @@ export function iniciarBossFight() {
     _bossFightTriggered = true;
 
     estadoJogo.emCombate = true;
-    // O boss escala com o mesmo `_nivelInimigo`; podes futuramente
-    // forçar um nível mínimo aqui (ex: Math.max(_nivelInimigo, 3))
-    // se quiseres que o boss seja sempre acima de uma certa fasquia.
+    // O boss escala como os restantes inimigos: nível do jogador,
+    // +2 no modo noite (ver nivelDificuldade / BONUS_NIVEL_NOITE).
+    setNivelInimigo(nivelDificuldade());
     inimigoAtual = escalarStats(BOSS_DEFS);
+    _setEnfraquecido(false);
     // cura o jogador para dar uma luta justa
     recuperarTotal();
     // reset à velocidade/rage da fase de desvio

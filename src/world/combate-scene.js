@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { criarBoss, updateBoss, getBossRoot } from '../entities/boss.js';
 import { criarInimigoWraith, updateInimigoWraith, resetInimigoWraith } from '../entities/inimigo-wraith.js';
 import { criarInimigoSluddy, updateInimigoSluddy, resetInimigoSluddy } from '../entities/inimigo-sluddy.js';
+import { skyboxCombate, starMat } from './sky.js';
+import { settings } from '../systems/settings.js';
 
 // ----------------------------------------------------------------------
 // CENA DE COMBATE
@@ -13,7 +15,19 @@ import { criarInimigoSluddy, updateInimigoSluddy, resetInimigoSluddy } from '../
 
 export const combateScene = new THREE.Scene();
 combateScene.background = new THREE.Color(0x05000a);
-combateScene.fog = new THREE.FogExp2(0x100020, 0.045);
+// Nevoeiro ajustado para deixar ver o céu estrelado ao fundo
+combateScene.fog = new THREE.FogExp2(0x05000a, 0.02);
+
+// Skybox do céu nocturno — instância própria da cena de combate. Só fica
+// visível em batalhas normais com o modo noite activo (ver updateCombateScene).
+combateScene.add(skyboxCombate);
+skyboxCombate.visible = false;
+// A geometria do céu tem raio 450 (dimensionada para o mundo aberto), mas a
+// câmara de combate só alcança far=60 — a esse tamanho a esfera fica toda
+// fora do frustum e não se vê uma única estrela. Encolhemo-la para ~raio 40,
+// que continua bem atrás da arena. O shader desenha as estrelas a partir das
+// normais, por isso a escala não altera o aspecto do céu.
+skyboxCombate.scale.setScalar(0.09);
 
 // Posições fixas — são mutadas em runtime conforme entramos/saímos de
 // boss mode. Os módulos que importam estes Vector3 lêem sempre o valor
@@ -268,6 +282,10 @@ let _t = 0;
 export function updateCombateScene(deltaTime) {
     _t += deltaTime;
     matCombateChao.uniforms.uTime.value = _t;
+    if (starMat) starMat.uniforms.uTime.value = _t;
+
+    // Céu estrelado só nas batalhas normais e com o modo noite activo.
+    skyboxCombate.visible = !!settings.nightMode && !_bossMode;
 
     // pulsar a luz da arena
     arenaPulse.intensity = 1.2 + Math.sin(_t * 2.4) * 0.5;

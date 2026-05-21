@@ -18,6 +18,11 @@ const defaults = {
     fullscreen: false,
     showFps: false,
 
+    // Benchmark de iluminação — modo nocturno do mundo exterior.
+    // Quando activo, transmuta o céu, escurece a luz solar, acrescenta lua,
+    // pirilampos e magias luminosas espalhadas pelo mapa.
+    nightMode: false,
+
     seenTutorial: false,
 };
 

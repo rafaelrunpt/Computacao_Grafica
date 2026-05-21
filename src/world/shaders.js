@@ -108,7 +108,9 @@ export function makeTerrainShader(grassCol, pathColor) {
                 float n = _fbm(vec2(vWorldPos.x*0.12, wz*0.14+1.3)) * 2.5;
                 return 1.0 - smoothstep(2.8, 6.5+n, d);
             }
-            void main() {`
+            void main() {
+                if (vWorldPos.y < -0.3) discard;
+            `
         ).replace(
             '#include <map_fragment>',
             `vec2 tuv = vWorldPos.xz / 6.0;
@@ -180,6 +182,7 @@ export const matBattleGrass = new THREE.ShaderMaterial({
         }
 
         void main() {
+            if (vWorldPos.y < -0.3) discard;
             vec2  centered = vUv - 0.5;
             float angle    = atan(centered.y, centered.x);
             float dist     = length(centered);
@@ -239,6 +242,17 @@ export const matBattleGrass = new THREE.ShaderMaterial({
             // halo no centro
             float centerGlow = smoothstep(0.20, 0.0, dist);
             col += vec3(0.35, 0.10, 0.55) * centerGlow * (0.35 + 0.4 * slowPulse);
+
+            // Adicionar estrelas (reflexo/magia sutil no chão)
+            float star = 0.0;
+            vec2 starUV = vUv * 40.0;
+            vec2 ipos = floor(starUV);
+            vec2 fpos = fract(starUV);
+            if (hash(ipos) > 0.98) {
+                float twinkle = sin(uTime * 3.0 + hash(ipos) * 10.0) * 0.5 + 0.5;
+                star = smoothstep(0.15, 0.0, length(fpos - 0.5)) * twinkle;
+            }
+            col += vec3(0.8, 0.9, 1.0) * star * 0.4;
 
             // anel brilhante na borda
             float borderGlow = smoothstep(0.36 + warp, 0.50 + warp, dist) * mask;
@@ -300,9 +314,27 @@ export const matBattleSky = new THREE.ShaderMaterial({
         }
 
         void main() {
+            if (vWorldPos.y < -0.3) discard;
             float T = uTime * uTimeBoost;
-            // Coordenadas em world-space (com uScale, para padrões mais
-            // densos em objectos pequenos como runas).
+            
+            // --- CÉU ESTRELADO PROCEDURAL ---
+            // Usamos as coordenadas UV normais para as estrelas
+            vec2 starUV = vUv * 120.0; // densidade das estrelas
+            vec2 ipos = floor(starUV);
+            vec2 fpos = fract(starUV);
+            
+            // Hash para cada "célula" de estrela
+            float h = hash(ipos);
+            float star = 0.0;
+            if (h > 0.96) { // 4% de probabilidade de ter estrela na célula
+                float size = hash(ipos + 1.23) * 0.5 + 0.2;
+                float dist = length(fpos - 0.5);
+                // Cintilação (twinkle) individual
+                float twinkle = sin(uTime * (2.0 + h * 3.0) + h * 10.0) * 0.5 + 0.5;
+                star = smoothstep(size, 0.0, dist) * twinkle;
+            }
+            
+            // --- Resto do shader de corrupção ---
             vec2 wuv = vWorldPos.xz * 0.18 * uScale;
 
             // textura de relva tingida de roxo
@@ -341,6 +373,9 @@ export const matBattleSky = new THREE.ShaderMaterial({
             col      = mix(col, sparkCol, spark * (0.55 + 0.45 * pulse));
             col      = mix(col, ember,    spark * 0.10);
 
+            // Adicionar estrelas (mais visíveis onde o céu é escuro)
+            col += vec3(0.9, 0.95, 1.0) * star * (1.0 - swirlN * 0.7);
+
             // pulse global suave
             col *= 0.85 + 0.25 * slowPulse;
 
@@ -369,10 +404,14 @@ matBattleDark.uniforms = {
 // ---- shader de água ----
 export const matWater = new THREE.ShaderMaterial({
     transparent: true,
-    uniforms: { uTime: { value: 0 } },
+    uniforms: {
+        uTime:  { value: 0 },
+        uNight: { value: 0 },   // 0 = dia, 1 = noite — escurece/arrefece a água
+    },
     vertexShader: `
         varying vec2 vUv;
         varying float vWave;
+        varying vec3 vWorldPos;
         uniform float uTime;
         void main() {
             vUv = uv;
@@ -383,13 +422,17 @@ export const matWater = new THREE.ShaderMaterial({
             float wave = a + b + c;
             pos.z += wave;
             vWave = wave;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+            vec4 wp = modelMatrix * vec4(pos, 1.0);
+            vWorldPos = wp.xyz;
+            gl_Position = projectionMatrix * viewMatrix * wp;
         }
     `,
     fragmentShader: `
         uniform float uTime;
+        uniform float uNight;
         varying vec2 vUv;
         varying float vWave;
+        varying vec3 vWorldPos;
 
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float sn(vec2 p) {
@@ -402,8 +445,8 @@ export const matWater = new THREE.ShaderMaterial({
             for (int i = 0; i < 3; i++) { v += a * sn(p); p = p * 2.05 + vec2(1.7, 9.2); a *= 0.5; }
             return v;
         }
-
         void main() {
+            if (vWorldPos.y < -0.3) discard;
             vec2 p = vec2(vUv.x * 14.0, vUv.y * 3.0);
             float n1 = fbm(p + vec2(-uTime * 0.45, sin(uTime * 0.3) * 0.4));
             float n2 = fbm(p * 1.7 + vec2(-uTime * 0.65 + 4.7, uTime * 0.18));
@@ -424,6 +467,8 @@ export const matWater = new THREE.ShaderMaterial({
             float foamBreak = sn(vec2(vUv.x * 30.0 + uTime * 1.8, vUv.y * 8.0 + uTime * 0.4));
             float foam = clamp(foamMask * (0.5 + foamBreak * 0.6), 0.0, 1.0);
             col = mix(col, vec3(0.94, 0.98, 1.0), foam * 0.55);
+            // modo nocturno — escurece e arrefece a água (azul-marinho)
+            col *= mix(vec3(1.0), vec3(0.34, 0.42, 0.58), uNight);
             gl_FragColor = vec4(col, 0.93);
         }
     `,
@@ -466,12 +511,15 @@ export const matCorruptHalo = new THREE.ShaderMaterial({
             if (mask < 0.005) discard;
             float n = fbm(vUv * 8.0 + vec2(uTime * 0.02, 0.0));
             float pulse = 0.5 + 0.5 * sin(uTime * 1.4);
+            // Roxo do halo de corrupção atenuado — o utilizador queixou-se
+            // que a área do castelo ficava demasiado arroxeada no chão.
+            // Mantém-se a forma e a pulsação, baixa-se saturação e alpha.
             vec3 black  = vec3(0.02, 0.00, 0.04);
-            vec3 purple = vec3(0.22, 0.04, 0.32);
+            vec3 purple = vec3(0.12, 0.03, 0.18);
             vec3 col = mix(black, purple, n * 0.5 + 0.15 * pulse);
             float borderGlow = smoothstep(innerEdge + 0.04, outerEdge, dist) * mask;
-            col = mix(col, vec3(0.50, 0.10, 0.65), borderGlow * 0.4 * (0.6 + 0.4 * pulse));
-            gl_FragColor = vec4(col, mask * 0.82);
+            col = mix(col, vec3(0.30, 0.08, 0.40), borderGlow * 0.22 * (0.6 + 0.4 * pulse));
+            gl_FragColor = vec4(col, mask * 0.50);
         }
     `,
     transparent: true,

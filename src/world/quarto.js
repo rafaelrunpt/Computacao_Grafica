@@ -98,12 +98,14 @@ function stoneCourse(orient, length, height, baseX, baseZ, faceNormal, gapY = 0)
     const blockH = 0.42;
     const rows = Math.ceil(height / blockH);
     const halfL = length / 2;
-    // Largura uniforme dos blocos. Ajustada para que length seja um múltiplo
-    // exacto, evitando blocos de bordas com tamanhos diferentes.
-    const targetW = 0.70;
-    const nFull = Math.max(1, Math.round(length / targetW));
-    const blockW = length / nFull;          // largura "inteira"
-    const halfW  = blockW / 2;              // meio-bloco usado nas filas ímpares
+    
+    // Número INTEIRO de blocos por fila: derivamos a largura do bloco a
+    // partir do comprimento real da parede. Assim o padrão "running bond"
+    // fecha sempre exactamente nas extremidades — sem fatias finas nem
+    // blocos a "sair" da parede como acontecia com um blockW fixo.
+    const nFull  = Math.max(1, Math.round(length / 0.70));
+    const blockW = length / nFull;
+    const halfW  = blockW / 2;
 
     for (let r = 0; r < rows; r++) {
         const y = r * blockH + blockH / 2 + gapY;
@@ -114,10 +116,16 @@ function stoneCourse(orient, length, height, baseX, baseZ, faceNormal, gapY = 0)
         let i = 0;
         while (used < length - 0.001) {
             // largura deste bloco: meio nas extremidades das filas ímpares
-            const isEdge = startsWithHalf && (used < 0.001 || used + blockW > length - 0.001);
-            const bw = isEdge ? halfW : blockW;
+            let bw = blockW;
+            if (startsWithHalf && (used < 0.001 || used + blockW > length - 0.001)) {
+                bw = halfW;
+            }
+            // Garante que o bloco não ultrapassa a extremidade da parede
+            if (used + bw > length + 0.001) {
+                bw = length - used;
+            }
+
             const x = -halfL + used + bw / 2;
-            // só a profundidade varia ligeiramente para dar relevo
             const bMat = ((i + r) % 4 === 0) ? matStoneDark : matStone;
             const depth = 0.20;
             const blockH2 = blockH - 0.02;
@@ -161,36 +169,6 @@ quartoColliders.push(
     new THREE.Box3(new THREE.Vector3(-W/2 - 0.3, 0, -D/2 - 0.3), new THREE.Vector3(-W/2 + 0.05, H,  D/2 + 0.3)), // oeste
     new THREE.Box3(new THREE.Vector3( W/2 - 0.05, 0, -D/2 - 0.3), new THREE.Vector3(W/2 + 0.3, H,  D/2 + 0.3)), // este
 );
-
-// ---------------------------------------------------------------
-// JANELA — recortada na parede oeste (apenas visual + luz)
-// ---------------------------------------------------------------
-const winY = 1.9, winW = 1.1, winH = 1.2;
-// "buraco" preto atrás do vidro
-const winHole = new THREE.Mesh(new THREE.BoxGeometry(0.05, winH, winW), new THREE.MeshBasicMaterial({ color: 0x070b14 }));
-winHole.position.set(-W / 2 + 0.02, winY, 0);
-quartoScene.add(winHole);
-// vidro
-const winGlass = new THREE.Mesh(new THREE.BoxGeometry(0.04, winH - 0.05, winW - 0.05), matGlass);
-winGlass.position.set(-W / 2 + 0.05, winY, 0);
-quartoScene.add(winGlass);
-// moldura
-const frameMat = matWoodDark;
-box(0.1, 0.08, winW + 0.2, frameMat, -W / 2 + 0.05, winY - winH / 2 - 0.04, 0); // base
-box(0.1, 0.08, winW + 0.2, frameMat, -W / 2 + 0.05, winY + winH / 2 + 0.04, 0); // topo
-box(0.1, winH + 0.16, 0.08, frameMat, -W / 2 + 0.05, winY,  winW / 2 + 0.04);   // lado +
-box(0.1, winH + 0.16, 0.08, frameMat, -W / 2 + 0.05, winY, -winW / 2 - 0.04);   // lado -
-// barras em cruz
-box(0.06, winH - 0.05, 0.04, frameMat, -W / 2 + 0.06, winY, 0);
-box(0.06, 0.04, winW - 0.05, frameMat, -W / 2 + 0.06, winY, 0);
-
-// peitoril de pedra
-box(0.45, 0.12, winW + 0.4, matStone, -W / 2 + 0.18, winY - winH / 2 - 0.12, 0);
-
-// ---------------------------------------------------------------
-// TECTO — vigas + ripado
-// ---------------------------------------------------------------
-// (sem tecto — o quarto fica aberto por cima para a câmara cinematográfica)
 
 // ---------------------------------------------------------------
 // CAMA — encostada à parede norte, viragem para sul
@@ -460,7 +438,7 @@ wardG.updateMatrixWorld(true);
 quartoColliders.push(new THREE.Box3().setFromObject(wardG));
 
 // ---------------------------------------------------------------
-// MESA + CADEIRA junto à janela
+// MESA + CADEIRA
 // ---------------------------------------------------------------
 const tableG = new THREE.Group();
 const tabTop = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.7), matWood);
@@ -533,23 +511,8 @@ quartoScene.add(lantLight);
 // ---------------------------------------------------------------
 // ILUMINAÇÃO GLOBAL
 // ---------------------------------------------------------------
-// ambiente muito baixo, quente
-quartoScene.add(new THREE.AmbientLight(0xffc89a, 0.18));
-
-// luz fria pela janela (lua) — também projecta sombras suaves no chão
-const moon = new THREE.SpotLight(0x88aacc, 14, 14, Math.PI * 0.32, 0.55, 1.6);
-moon.position.set(-W / 2 - 2.5, winY + 0.5, 0);
-moon.target.position.set(0, 0.2, 1.5);
-moon.castShadow = true;
-moon.shadow.mapSize.set(1024, 1024);
-moon.shadow.bias = -0.001;
-moon.shadow.camera.near = 0.5;
-moon.shadow.camera.far = 18;
-quartoScene.add(moon, moon.target);
-
-// "preencher" leve a azul para o lado da janela não morrer no escuro
-const fill = new THREE.HemisphereLight(0x4060a0, 0x101015, 0.12);
-quartoScene.add(fill);
+// ambiente um pouco mais elevado para compensar a falta da luz da lua
+quartoScene.add(new THREE.AmbientLight(0xffc89a, 0.35));
 
 // ---------------------------------------------------------------
 // ANIMAÇÃO — flicker da vela/lanterna

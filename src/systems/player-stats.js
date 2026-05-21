@@ -60,6 +60,11 @@ export function getChanceEvasao() {
     return Math.min(1, c);
 }
 
+// Óculos do Vidente equipados? — permitem prever o próximo golpe inimigo.
+export function getOculosVidente() {
+    return playerStats.equipped.acessorio === 'oculos_carga';
+}
+
 // Multiplicador de dano em função do nível do jogador.
 // Nível 1 → ×1.00, nível 2 → ×1.15, nível 5 → ×1.60, etc.
 // Usado por resolverAtaque para todos os ataques escalarem suavemente.

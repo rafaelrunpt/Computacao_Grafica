@@ -47,6 +47,35 @@ const _pbMax = new THREE.Vector3();
 const _bridgePt = new THREE.Vector3();
 export const grassZones = [];       // Box3[] — zonas onde há encontros
 export const battleZoneObjects = []; // [{box, meshes[], scene}] — para limpar após vitória
+export const worldParticles = [];    // THREE.Points[] para animar no loop
+
+// ---- Partículas Corrompidas (Estilo Combate) ----
+function criarParticulasZona(scene, cx, cz, raio) {
+    const partCount = 40;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(partCount * 3);
+    for (let i = 0; i < partCount; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const rd = Math.random() * raio;
+        pos[i * 3 + 0] = Math.cos(a) * rd;
+        pos[i * 3 + 1] = Math.random() * 4.0;
+        pos[i * 3 + 2] = Math.sin(a) * rd;
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({
+        color: 0xc090ff,
+        size: 0.08,
+        transparent: true,
+        opacity: 0.7,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+    });
+    const pts = new THREE.Points(geo, mat);
+    pts.position.set(cx, 0, cz);
+    scene.add(pts);
+    worldParticles.push(pts);
+    return pts;
+}
 // objectos candidatos a fade-out quando tapam o jogador (assets sólidos — não
 // árvores, que podem ficar opacas). Mantido aqui para evitar raycast recursivo
 // contra toda a cena no loop principal.
@@ -61,8 +90,6 @@ const matTerrainN = makeTerrainShader(0x9ec87a, 0xd4b882);
 const matTerrainS = makeTerrainShader(0x9ec87a, 0xd4b882);
 
 const matRock     = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9 });
-const matMountain  = new THREE.MeshStandardMaterial({ color: 0x6a6a72, roughness: 1.0, flatShading: true });
-const matSnow      = new THREE.MeshStandardMaterial({ color: 0xdde8f0, roughness: 0.8, flatShading: true });
 
 export let castleEnterBox = null;
 export let tavernEnterBox = null;
@@ -268,7 +295,8 @@ function criarZonaBatalha(scene, cx, cz, raio, seed, tipo = 'wraith') {
     mesh.position.set(cx, 0.04, cz);
     scene.add(mesh);
 
-    const zoneMeshes = [mesh];
+    const part = criarParticulasZona(scene, cx, cz, raio);
+    const zoneMeshes = [mesh, part];
 
     // tufos roxos espalhados dentro da zona
     const nTufos = Math.floor(raio * raio * 0.8);
@@ -341,6 +369,8 @@ function criarZonaCorrupta(scene, cx, cz, raio, seed) {
     const mesh = new THREE.Mesh(geo, matBattleGrass);
     mesh.position.set(cx, 0.05, cz);
     scene.add(mesh);
+
+    criarParticulasZona(scene, cx, cz, raio);
 
     // tufos roxos densos
     const nTufos = Math.floor(raio * raio * 1.2);
@@ -523,6 +553,10 @@ function criarTerrenoSul(scene) {
 }
 
 // ---- montanhas de perímetro ----
+// Anel de cones-montanha à volta do mapa (versão original restaurada).
+const matMountain = new THREE.MeshStandardMaterial({ color: 0x6a6a72, roughness: 1.0, flatShading: true });
+const matSnow     = new THREE.MeshStandardMaterial({ color: 0xdde8f0, roughness: 0.8, flatShading: true });
+
 function criarPico(scene, x, z, h, r, rand) {
     // corpo principal — cone facetado
     const cone = new THREE.Mesh(
@@ -547,7 +581,6 @@ function criarPico(scene, x, z, h, r, rand) {
     snow.rotation.y = rand() * Math.PI;
     snow.castShadow = true;
     scene.add(snow);
-    fadeables.push(snow);
     cullables.push(snow);
 
     // colisor — caixa larga o suficiente para bloquear o jogador
@@ -562,6 +595,7 @@ function criarMontanhas(scene) {
     const BORDA = 98;   // onde começam as montanhas
     const PASSO = 9;    // espaçamento base entre picos
     const JITTER = 3.5; // variação aleatória de posição
+    const RIO_GAP = 6;  // não coloca picos em |z| < RIO_GAP nos lados E/W (passagem do rio)
 
     const pontos = [];
 
@@ -573,13 +607,17 @@ function criarMontanhas(scene) {
     for (let x = -BORDA; x <= BORDA; x += PASSO)
         pontos.push([x + (rand() - 0.5) * JITTER, -BORDA - rand() * 4]);
 
-    // lado este (x = +BORDA)
-    for (let z = -BORDA + PASSO; z < BORDA; z += PASSO)
+    // lado este (x = +BORDA) — salta os picos que tapariam o rio
+    for (let z = -BORDA + PASSO; z < BORDA; z += PASSO) {
+        if (Math.abs(z) < RIO_GAP) continue;
         pontos.push([BORDA + rand() * 4, z + (rand() - 0.5) * JITTER]);
+    }
 
-    // lado oeste (x = -BORDA)
-    for (let z = -BORDA + PASSO; z < BORDA; z += PASSO)
+    // lado oeste (x = -BORDA) — salta os picos que tapariam o rio
+    for (let z = -BORDA + PASSO; z < BORDA; z += PASSO) {
+        if (Math.abs(z) < RIO_GAP) continue;
         pontos.push([-BORDA - rand() * 4, z + (rand() - 0.5) * JITTER]);
+    }
 
     for (const [px, pz] of pontos) {
         const h = 10 + rand() * 16;   // altura entre 10 e 26

@@ -42,6 +42,7 @@ enemyPlate.innerHTML = `
         <div id="combate-hp-inimigo" style="height:100%;width:100%;background:linear-gradient(90deg,#ff3070,#ff80aa);box-shadow:0 0 6px #ff3070;transition:width 0.4s;"></div>
     </div>
     <div id="combate-hp-inimigo-label" style="font-size:10px;margin-top:2px;color:#ffaadd;">HP 30 / 30</div>
+    <div id="combate-presagio" style="display:none;font-size:10px;margin-top:3px;color:#a8d8ff;text-shadow:0 0 6px #4080dd;letter-spacing:0.5px;"></div>
 `;
 document.body.appendChild(enemyPlate);
 
@@ -67,6 +68,7 @@ playerPlate.innerHTML = `
         <div id="combate-hp-player" style="height:100%;width:100%;background:linear-gradient(90deg,#22cc44,#88ff99);box-shadow:0 0 6px #22cc44;transition:width 0.4s;"></div>
     </div>
     <div id="combate-hp-player-label" style="font-size:10px;margin-top:2px;color:#aaffbb;">HP 30 / 30</div>
+    <div id="combate-status-player" style="display:none;font-size:10px;margin-top:3px;color:#ffcc66;text-shadow:0 0 6px #cc8822;letter-spacing:0.5px;"></div>
 `;
 document.body.appendChild(playerPlate);
 
@@ -404,6 +406,9 @@ export function setAtaqueSlots(...slots) {
 
 export function mostrarCombateUI(nomeInimigo = 'INIMIGO CORROMPIDO') {
     enemyPlate.querySelector('div').textContent = nomeInimigo;
+    setPresagio(null);     // arranca escondido — combate.js mostra-o se houver Óculos
+    setStatusPlayer(null);
+    _logHist.length = 0;   // log limpo a cada combate
     root.style.display = 'block';
     enemyPlate.style.display = 'block';
     playerPlate.style.display = 'block';
@@ -423,7 +428,67 @@ export function esconderCombateUI() {
     ataquesPanel.style.display = 'none';
 }
 
-export function setLog(texto) { logBox.textContent = texto; }
+// Log de combate com histórico — mantém as últimas 3 linhas, a mais
+// recente destacada e as anteriores esmaecidas.
+const _logHist = [];
+export function setLog(texto) {
+    _logHist.push(texto);
+    if (_logHist.length > 3) _logHist.shift();
+    logBox.innerHTML = _logHist.map((t, i) => {
+        const desdeFim = _logHist.length - 1 - i;   // 0 = mais recente
+        const op = desdeFim === 0 ? 1 : (desdeFim === 1 ? 0.5 : 0.3);
+        const fw = desdeFim === 0 ? 'bold' : 'normal';
+        const fs = desdeFim === 0 ? '12px' : '10.5px';
+        return `<div style="opacity:${op};font-weight:${fw};font-size:${fs};">${t}</div>`;
+    }).join('');
+}
+
+// Óculos do Vidente — revela o próximo ataque inimigo (ou esconde, com at=null).
+// Recebe o objecto do ataque para mostrar também o nível de perigo (⚔).
+export function setPresagio(at) {
+    const el = document.getElementById('combate-presagio');
+    if (!el) return;
+    if (at) {
+        const n = Math.max(1, Math.min(3, at.perigo || 1));
+        const cor = n >= 3 ? '#ff7088' : (n === 2 ? '#ffcc66' : '#a8d8ff');
+        el.innerHTML = `🕶 ${at.nome} <span style="color:${cor}">${'⚔'.repeat(n)}</span>`;
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+// Indicador de estado (debuff) na placa do jogador.
+export function setStatusPlayer(texto) {
+    const el = document.getElementById('combate-status-player');
+    if (!el) return;
+    if (texto) { el.textContent = texto; el.style.display = 'block'; }
+    else { el.style.display = 'none'; }
+}
+
+// Número de dano/cura a flutuar e desvanecer sobre um combatente.
+// x,y em percentagem do ecrã; cor em CSS.
+export function mostrarDanoFlutuante(x, y, texto, cor) {
+    const el = document.createElement('div');
+    el.textContent = texto;
+    const jx = x + (Math.random() - 0.5) * 7;
+    const jy = y + (Math.random() - 0.5) * 5;
+    el.style.cssText = `
+        position: fixed; left: ${jx}%; top: ${jy}%;
+        transform: translate(-50%,-50%);
+        font-family: 'Courier New', monospace; font-weight: bold;
+        font-size: 42px; color: ${cor};
+        text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 0 12px ${cor};
+        pointer-events: none; z-index: 90;
+        transition: transform 0.85s ease-out, opacity 0.85s ease-out;
+    `;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => {
+        el.style.transform = 'translate(-50%,-185%)';
+        el.style.opacity = '0';
+    });
+    setTimeout(() => el.remove(), 900);
+}
 
 export function setHpInimigo(atual, max) {
     document.getElementById('combate-hp-inimigo').style.width = Math.max(0, (atual / max) * 100) + '%';
