@@ -704,29 +704,29 @@ const MERCADOR_PRECOS = { pocao: 15, mega: 35, oculos_carga: 20, relampago_arcan
 
 const MERCADOR_FALAS_OFERTA = {
     pocao: [
-        'Toma — {p} ✦. Cuida-te lá fora.',
-        '{p} ✦ bem investidos. Que te seja útil.',
-        'Aqui tens — não dês a mais ninguém.',
+        'Toma — {p} ✦. Um pouco de vitalidade líquida para as vossas andanças.',
+        '{p} ✦ bem investidos. Sinto que o vosso fôlego vos agradecerá mais tarde.',
+        'Aqui tens — destilada sob o luar, cura o corpo e acalma a alma. {p} ✦.',
     ],
     mega: [
-        'Esta é mais forte — {p} ✦. Usa-a com cabeça.',
-        '{p} ✦ por isto. Não desperdices num arranhão.',
-        'Guarda-a para quando contar mesmo. {p} ✦.',
+        'Esta é uma essência concentrada — {p} ✦. Senti o calor a percorrer-vos as veias.',
+        '{p} ✦ por este elixir. Quando o abismo vos olhar de volta, bebei disto.',
+        'Guardai-a para o momento em que a vossa luz parecer fraquejar. {p} ✦.',
     ],
     oculos_carga: [
-        'Olha bem para eles — {p} ✦. Vês os ataques antes deles acontecerem.',
-        '{p} ✦. Quem os usa nunca espera demais por uma carga.',
-        'Raros, estes. {p} ✦ é uma pechincha.',
+        'Olhai através destas lentes — {p} ✦. O tempo parece curvar-se, revelando o que está por vir.',
+        '{p} ✦. Com estes óculos, o fluxo da magia torna-se visível ao vosso olhar atento.',
+        'Uma relíquia de tempos em que víamos mais longe. {p} ✦ e o mundo será diferente.',
     ],
     relampago_arcano: [
-        'Energia arcana destilada — {p} ✦. Aponta, e arde.',
-        '{p} ✦. Não há armadura que aguente este raio.',
-        'Aprendi-o há anos com um vidente cego. {p} ✦ e é teu.',
+        'Puro furor celeste capturado num frasco — {p} ✦. Libertai-o e vede a terra tremer.',
+        '{p} ✦. Não é mera magia; é a fúria das tempestades que assolam o vazio entre as estrelas.',
+        'Dizem que este raio foi roubado de um deus esquecido. {p} ✦ e o poder será vosso.',
     ],
     semCintilas: [
-        'Não tens Cintilas suficientes, viajante.',
-        'Volta quando os bolsos estiverem mais cheios.',
-        'Sem Cintilas não há negócio.',
+        'As estrelas não brilham para quem tem os bolsos vazios, viajante.',
+        'Voltai quando a vossa fortuna for condizente com as minhas raridades.',
+        'Cintilas... precisais de mais delas para selarmos este pacto.',
     ],
 };
 
@@ -740,14 +740,14 @@ export function abrirDialogoMercador(themeKey = 'tavern') {
 
     abrirDialogo({
         nome: 'Alice',
-        subtitulo: 'Mercador',
+        subtitulo: 'Astrónoma e Mercadora',
         retratoUrl: 'assets/textures/avatares/merchant.png',
         tema: themeKey,
         getAbertura: () => {
             const c = getCintilas();
             return c > 0
-                ? `Bem-vindo, viajante. Tens ${c} ✦ contigo — vê se algo te agrada.`
-                : 'Bem-vindo, viajante. Tenho ervas, talismãs e poções — mas tudo tem o seu preço.';
+                ? `Ah, o vosso rasto brilha com ${c} ✦. Que curiosidades procurais no meu humilde entreposto?`
+                : 'Seja bem-vindo sob o teto da minha loja. Tenho ervas que curam e talismãs que sussurram... mas tudo requer o devido tributo.';
         },
         getEscolhas: () => {
             const c = getCintilas();
@@ -760,7 +760,7 @@ export function abrirDialogoMercador(themeKey = 'tavern') {
                     ? falasOk.map(f => _falaCom(f, preco))
                     : MERCADOR_FALAS_OFERTA.semCintilas,
                 acaoImediata: () => {
-                    if (c < preco) return; // resposta cobre o caso "sem cintilas"
+                    if (c < preco) return; 
                     gastarCintilas(preco);
                     adicionarItem(itemId, 1);
                 },
@@ -774,7 +774,7 @@ export function abrirDialogoMercador(themeKey = 'tavern') {
                 compraEscolha('comprar_pocao', 'pocao', MERCADOR_PRECOS.pocao, MERCADOR_FALAS_OFERTA.pocao),
                 compraEscolha('comprar_mega',  'mega',  MERCADOR_PRECOS.mega,  MERCADOR_FALAS_OFERTA.mega),
             ];
-            // Óculos: peça única, desaparece da loja depois de comprados
+
             if (!oculosJaComprados) {
                 escolhasCompra.push(compraEscolha(
                     'comprar_oculos', 'oculos_carga',
@@ -782,7 +782,6 @@ export function abrirDialogoMercador(themeKey = 'tavern') {
                 ));
             }
 
-            // ATAQUE MÁGICO — Relâmpago Arcano (compra única).
             const arcanoAprendido = ataqueState.desbloqueados.has('relampago_arcano');
             if (!arcanoAprendido) {
                 const at = ATAQUES['relampago_arcano'];
@@ -798,7 +797,6 @@ export function abrirDialogoMercador(themeKey = 'tavern') {
                         if (c < preco) return;
                         gastarCintilas(preco);
                         desbloquearAtaque('relampago_arcano');
-                        // equipar automaticamente num slot livre
                         const slotLivre = ataqueState.slots.indexOf(null);
                         if (slotLivre !== -1) equiparAtaque(slotLivre, 'relampago_arcano');
                     },
@@ -810,13 +808,13 @@ export function abrirDialogoMercador(themeKey = 'tavern') {
                 escolhaQuest,
                 {
                     id: 'adeus_mercador',
-                    label: 'Ficai em paz, mercadora.',
+                    label: 'Que as estrelas vos guiem, Alice.',
                     acao: 'fechar',
                     repetivel: true,
                     respostas: [
-                        'Que a fortuna vos acompanhe, caminhante.',
-                        'Regressai sempre — guardo aqui boas mercadorias.',
-                        'Bom proveito do que vos resta de vida.',
+                        'E que o vosso caminho seja iluminado pelo fulgor eterno.',
+                        'Regressai quando o cansaço vos pesar ou a curiosidade vos espicaçar.',
+                        'Ficai em paz. As estrelas estão a observar, não o esqueçais.',
                     ],
                 },
             ];
@@ -830,14 +828,14 @@ function construirEscolhaFetchQuest(fase) {
     if (fase === 'none') {
         return {
             id: 'fetch_oferta',
-            label: '⚔  Tendes algum trabalho para mim?',
+            label: '✨  Pareceis preocupada com o firmamento...',
             repetivel: true,
             respostas: [
-                'Ontem... fui colhida por uma emboscada na estrada. Despojaram-me de tudo o que trazia. Quatro artefactos de grande valia — extraviados pelas sendas. Trazei-mos de volta e sereis bem recompensado.',
-                'Uns malfeitores cruzaram-se no meu caminho ontem. Dispersaram os meus haveres pelo mapa. Se recuperardes os quatro artefactos que perdi — saco, pergaminho, anel e pendente — recompensar-vos-ei com Cintilas.',
+                'Os meus olhos... raramente se desviam do abismo lá em cima. Não sou uma simples mercadora de ervas; sou uma buscadora de verdades celestes. Creio, com cada fibra do meu ser, que a magia que flui nestas terras não nasceu do solo, mas sim do coração das estrelas moribundas.',
+                'Esta noite, o céu está inquieto. Sinto-o. Fragmentos do cosmos — Amostras Estelares — estão prestes a romper o véu e cair sobre o nosso mundo. Quando sairdes daqui, olhai para o horizonte; vereis a chuva de luz.',
+                'Peço-vos, viajante: recolhei esses fragmentos para a minha investigação. Quatro amostras deverão ser suficientes para provar a minha tese. O mundo pode ser vasto, mas o brilho delas guiar-vos-á.',
             ],
             acaoApos: () => {
-                // Aceita automaticamente ao receber a explicação
                 aceitarFetchQuest();
             },
         };
@@ -846,46 +844,45 @@ function construirEscolhaFetchQuest(fase) {
         const { coletados, meta } = getFetchProgresso();
         return {
             id: 'fetch_progresso',
-            label: `⚔  Sobre a vossa tarefa  (${coletados}/${meta})`,
+            label: `✨  Sobre o rasto das estrelas  (${coletados}/${meta})`,
             repetivel: true,
             respostas: () => {
                 const { coletados: c, meta: m } = getFetchProgresso();
                 if (c === 0) return [
-                    'Ainda nada me trouxestes. Procurai nos carreiros onde as emboscadas costumam ocorrer.',
-                    'Continuam por aí, caminhante. Procurai com afinco.',
+                    'Ainda nada? O cosmos não entrega os seus segredos facilmente. Procurai nos confins do mundo, onde a luz é mais pura.',
+                    'As quatro amostras esperam por vós. Não deixeis que o seu brilho se apague na vossa ausência.',
                 ];
                 if (c < m) return [
-                    `Ide bem — ${c} de ${m}. Faltam ainda alguns. Prossegui.`,
-                    `${c}/${m}. Não esmoreçais — os restantes jazem algures no mapa.`,
+                    `Sim... sinto a energia de ${c} fragmentos convosco. Já é um começo promissor, mas o padrão ainda está incompleto. Trazei-me os ${m} totais.`,
+                    `${c} de ${m}. O desenho das constelações começa a formar-se no meu mapa. Continuai a vossa busca, caminhante.`,
                 ];
-                return ['Já os tendes todos! Vinde entregar-mos.'];
+                return ['Sinto o calor do firmamento em vossas mãos! Trazei-mas, depressa, antes que a essência se dissipe!'];
             },
         };
     }
     if (fase === 'completa') {
         return {
             id: 'fetch_entregar',
-            label: '✅  Trago tudo o que perdestes.',
+            label: '✅  Trago os fragmentos do céu que pedistes.',
             repetivel: true,
             respostas: [
-                `Os meus tesouros! Não sei como vos agradecer... Tomai — ${FETCH_RECOMPENSA_CINTILAS} ✦ e um Elixir de Maior Vigor. Merecestes cada um deles.`,
+                `Incrível... vedes como vibram ao toque? Centelhas, névoas, cristais... a prova é irrefutável! A magia é, de facto, poeira estelar aprisionada na matéria. Vós prestastes um serviço imenso à ciência e ao mistério. Tomai isto — ${FETCH_RECOMPENSA_CINTILAS} ✦ e um Elixir do Abismo. Que a vossa própria luz nunca se apague.`,
             ],
             acaoApos: () => {
                 if (entregarFetchQuest()) {
                     ganharCintilas(FETCH_RECOMPENSA_CINTILAS);
-                    adicionarItem('mega', 1);
+                    adicionarItem('elixir', 1);
                 }
             },
         };
     }
-    // 'entregue' — quest já feita
     return {
         id: 'fetch_concluida',
-        label: '⚜  Sobre aquela emboscada...',
+        label: '⚜  O que revelaram as estrelas?',
         repetivel: true,
         respostas: [
-            'Já recuperei tudo mercê da vossa ajuda. Que os caminhos vos tratem melhor do que me trataram a mim.',
-            'Sempre que precisardes de algo, sabeis onde me encontrar.',
+            'As amostras que trouxestes confirmam os meus cálculos mais ousados. Estamos todos ligados ao infinito, viajante. A magia é apenas a linguagem que o universo usa para falar connosco.',
+            'Graças a vós, o meu observatório improvisado floresce. Se o céu voltar a chorar luz, estarei aqui para a decifrar.',
         ],
     };
 }

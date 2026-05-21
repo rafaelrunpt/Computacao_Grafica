@@ -1,7 +1,12 @@
 import * as THREE from 'three';
-import { matWater, madeiraTex, madeira2Tex, woodTexturesReady } from './shaders.js';
+import { matWater, madeiraTex, madeira2Tex } from './shaders.js';
 
-const _pendingTexUpdate = [];
+// As texturas de madeira carregam-se assincronamente. Antes clonávamos a
+// textura por peça (76 clones) para variar o `repeat` — isso disparava 76×
+// o warning "Texture marked for update but no image data found" no arranque
+// e desperdiçava memória GPU + texture binds.
+// Agora partilhamos uma única textura por tipo de madeira; o `repeat` é
+// uniforme em toda a ponte (visualmente imperceptível em peças pequenas).
 
 const BRIDGE_WIDTH     = 5.2;
 const BRIDGE_ARC_WIDTH = 7.4;
@@ -58,13 +63,7 @@ export function criarRio(scene, colliders, fadeables, cullables) {
         const hCenter = arcHeight * (1 - Math.pow((2 * zCenter) / arcWidth, 2)) - 0.05;
         const segLen  = (arcWidth / arcSegments) + 0.05;
 
-        const mWoodSeg = matWood.clone();
-        mWoodSeg.map = madeiraTex.clone();
-        mWoodSeg.map.wrapS = mWoodSeg.map.wrapT = THREE.RepeatWrapping;
-        mWoodSeg.map.repeat.set(BW / 2, segLen / 2);
-        _pendingTexUpdate.push(mWoodSeg.map);
-
-        const seg = new THREE.Mesh(new THREE.BoxGeometry(BW, 0.25, segLen), mWoodSeg);
+        const seg = new THREE.Mesh(new THREE.BoxGeometry(BW, 0.25, segLen), matWood);
         seg.position.set(0, hCenter, zCenter);
         const angle = -Math.atan2(arcHeight * -8 * zCenter / (arcWidth * arcWidth), 1);
         seg.rotation.x = angle;
@@ -72,13 +71,7 @@ export function criarRio(scene, colliders, fadeables, cullables) {
         bridgeGroup.add(seg);
 
         for (const side of [-1, 1]) {
-            const mBeam = matWoodDark.clone();
-            mBeam.map = madeira2Tex.clone();
-            mBeam.map.wrapS = mBeam.map.wrapT = THREE.RepeatWrapping;
-            mBeam.map.repeat.set(0.5, segLen / 2);
-            _pendingTexUpdate.push(mBeam.map);
-
-            const beam = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, segLen), mBeam);
+            const beam = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, segLen), matWoodDark);
             beam.position.set(side * (BW / 2 - 0.2), hCenter - 0.3, zCenter);
             beam.rotation.x = angle;
             bridgeGroup.add(beam);
@@ -87,13 +80,7 @@ export function criarRio(scene, colliders, fadeables, cullables) {
         for (let j = 0; j < 2; j++) {
             const pz = z0 + (j + 0.5) * (segLen / 2);
             const ph = arcHeight * (1 - Math.pow((2 * pz) / arcWidth, 2)) + 0.08;
-            const mPlank = matWood.clone();
-            mPlank.map = madeiraTex.clone();
-            mPlank.map.wrapS = mPlank.map.wrapT = THREE.RepeatWrapping;
-            mPlank.map.repeat.set(BW / 2, 0.2);
-            _pendingTexUpdate.push(mPlank.map);
-
-            const plank = new THREE.Mesh(new THREE.BoxGeometry(BW + 0.2, 0.08, 0.25), mPlank);
+            const plank = new THREE.Mesh(new THREE.BoxGeometry(BW + 0.2, 0.08, 0.25), matWood);
             plank.position.set((Math.random() - 0.5) * 0.1, ph, pz);
             plank.rotation.x = angle;
             plank.rotation.y = (Math.random() - 0.5) * 0.05;
@@ -114,13 +101,7 @@ export function criarRio(scene, colliders, fadeables, cullables) {
             const pz = (t - 0.5) * arcWidth;
             const ph = arcHeight * (1 - Math.pow((2 * pz) / arcWidth, 2)) + 0.4;
 
-            const mPost = matWoodDark.clone();
-            mPost.map = madeira2Tex.clone();
-            mPost.map.wrapS = mPost.map.wrapT = THREE.RepeatWrapping;
-            mPost.map.repeat.set(0.2, 1);
-            _pendingTexUpdate.push(mPost.map);
-
-            const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.5, 0.22), mPost);
+            const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.5, 0.22), matWoodDark);
             post.position.set(sx, ph, pz);
             post.rotation.y = Math.random() * 0.2;
             post.castShadow = true; post.receiveShadow = true;
@@ -140,13 +121,7 @@ export function criarRio(scene, colliders, fadeables, cullables) {
             const p2 = posts[i + 1].position;
             const dist = p1.distanceTo(p2);
 
-            const mRail = matWood.clone();
-            mRail.map = madeiraTex.clone();
-            mRail.map.wrapS = mRail.map.wrapT = THREE.RepeatWrapping;
-            mRail.map.repeat.set(dist / 2, 0.2);
-            _pendingTexUpdate.push(mRail.map);
-
-            const rail = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, dist + 0.1), mRail);
+            const rail = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, dist + 0.1), matWood);
             rail.position.set(sx, (p1.y + p2.y) / 2 + 0.35, (p1.z + p2.z) / 2);
             rail.lookAt(sx, (p1.y + p2.y) / 2 + 0.35, p2.z);
             rail.castShadow = true; rail.receiveShadow = true;
@@ -154,13 +129,7 @@ export function criarRio(scene, colliders, fadeables, cullables) {
             fadeables.push(rail);
             cullables.push(rail);
 
-            const mRailMid = matWoodDark.clone();
-            mRailMid.map = madeira2Tex.clone();
-            mRailMid.map.wrapS = mRailMid.map.wrapT = THREE.RepeatWrapping;
-            mRailMid.map.repeat.set(dist / 2, 0.1);
-            _pendingTexUpdate.push(mRailMid.map);
-
-            const railMid = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, dist + 0.1), mRailMid);
+            const railMid = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, dist + 0.1), matWoodDark);
             railMid.position.set(sx, (p1.y + p2.y) / 2 - 0.1, (p1.z + p2.z) / 2);
             railMid.lookAt(sx, (p1.y + p2.y) / 2 - 0.1, p2.z);
             railMid.castShadow = true; railMid.receiveShadow = true;
@@ -179,11 +148,6 @@ export function criarRio(scene, colliders, fadeables, cullables) {
         new THREE.Vector3(BX - BW / 2 + 0.4, -2, RZ - arcWidth / 2 - 0.8),
         new THREE.Vector3(BX + BW / 2 - 0.4,  4, RZ + arcWidth / 2 + 0.8)
     );
-
-    woodTexturesReady.then(() => {
-        _pendingTexUpdate.forEach(t => { t.needsUpdate = true; });
-        _pendingTexUpdate.length = 0;
-    });
 
     _criarBocaDoRio(scene, colliders, fadeables, cullables,  93, RZ, RW);
     _criarBocaDoRio(scene, colliders, fadeables, cullables, -93, RZ, RW);

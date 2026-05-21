@@ -11,8 +11,8 @@ import {
 export const QUESTS = {
     fetch_mercador: {
         id: 'fetch_mercador',
-        title: 'Os Haveres da Mercadora',
-        summary: 'A mercadora foi emboscada nas sendas e extraviou quatro artefactos de valia — saco, pergaminho, anel e pendente. Recuperai-os por estas terras e devolvei-lhos.',
+        title: 'O Sussurro das Estrelas',
+        summary: 'Alice, a astrónoma que habita a loja, procura provar que a magia provém do cosmos. Quatro Amostras Estelares tombaram do firmamento e aguardam nos recantos mais distantes do mapa. Recolhei-as para que o mistério da origem da magia seja finalmente revelado.',
         getProgresso: () => getFetchProgresso(),
     },
     coroa_magica: {

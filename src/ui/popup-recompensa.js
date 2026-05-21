@@ -1,8 +1,8 @@
 // --------------------------------------------------------
-// POPUP DE RECOMPENSA + CONFETTI
+// POPUP DE RECOMPENSA + FOGOS DE ARTIFÍCIO
 // --------------------------------------------------------
 // Mostra um cartão dourado central com o item desbloqueado
-// e dispara uma chuva de confettis no canvas overlay.
+// e dispara fogos de artifício no canvas overlay.
 // --------------------------------------------------------
 
 const overlay = document.createElement('div');
@@ -17,7 +17,7 @@ overlay.style.cssText = `
 `;
 document.body.appendChild(overlay);
 
-// canvas dos confettis
+// canvas dos fogos de artifício
 const canvas = document.createElement('canvas');
 canvas.style.cssText = `position:absolute;inset:0;width:100%;height:100%;`;
 overlay.appendChild(canvas);
@@ -122,49 +122,97 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// --- confetti ---
-const cores = ['#d4a830', '#ffe0a0', '#88aaff', '#ff90b0', '#aaffbb', '#c060ff', '#ff8040'];
-let particulas = [];
+// --- fogos de artifício ---
+// Assim que a recompensa aparece, várias explosões grandes surgem de
+// imediato — já na sua posição final, sem foguetes a subir antes.
+// Cada explosão lança um leque de faíscas que se espalham e caem.
+const cores = ['#ffd24a', '#ffe7a0', '#7fb0ff', '#ff84b4', '#9dff9d', '#c878ff', '#ff9050', '#ffffff'];
+let faiscas  = [];   // faíscas lançadas pelas explosões
+let claroes  = [];   // clarão breve no instante da explosão
 let animando = false;
 
-function spawnConfetti(qtd = 140) {
-    for (let i = 0; i < qtd; i++) {
-        particulas.push({
-            x: Math.random() * canvas.width,
-            y: -20 - Math.random() * 200,
-            vx: (Math.random() - 0.5) * 4,
-            vy: 2 + Math.random() * 4,
-            w: 6 + Math.random() * 6,
-            h: 8 + Math.random() * 8,
-            rot: Math.random() * Math.PI * 2,
-            vrot: (Math.random() - 0.5) * 0.3,
-            cor: cores[Math.floor(Math.random() * cores.length)],
+function explodir(x, y, cor) {
+    const n = 70 + Math.floor(Math.random() * 60);     // explosão grande
+    const anel = Math.random() < 0.30;                 // por vezes um anel limpo
+    const vel = 5.5 + Math.random() * 4.0;             // espalha-se bem longe
+    const cor2 = cores[Math.floor(Math.random() * cores.length)];
+    for (let i = 0; i < n; i++) {
+        const ang = (i / n) * Math.PI * 2 + Math.random() * 0.14;
+        const spd = anel ? vel * (0.85 + Math.random() * 0.30)
+                         : vel * (0.30 + Math.random() * 0.90);
+        faiscas.push({
+            x, y,
+            vx: Math.cos(ang) * spd,
+            vy: Math.sin(ang) * spd,
+            cor: Math.random() < 0.72 ? cor : cor2,
             vida: 1,
+            decai: 0.011 + Math.random() * 0.020,
+            tam: 1.8 + Math.random() * 3.2,
         });
+    }
+    claroes.push({ x, y, vida: 1 });
+}
+
+function tickFireworks() {
+    if (!animando) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = 'lighter';   // mistura aditiva → dá brilho
+    ctx.lineCap = 'round';
+
+    // clarão das explosões
+    for (let i = claroes.length - 1; i >= 0; i--) {
+        const c = claroes[i];
+        c.vida -= 0.085;
+        if (c.vida <= 0) { claroes.splice(i, 1); continue; }
+        ctx.globalAlpha = c.vida * 0.55;
+        ctx.fillStyle = '#fff3d0';
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 16 + (1 - c.vida) * 82, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // faíscas das explosões (riscos tipo cometa)
+    for (let i = faiscas.length - 1; i >= 0; i--) {
+        const s = faiscas[i];
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vy += 0.05;                            // gravidade
+        s.vx *= 0.985;                           // resistência do ar
+        s.vy *= 0.985;
+        s.vida -= s.decai;
+        if (s.vida <= 0) { faiscas.splice(i, 1); continue; }
+        ctx.globalAlpha = s.vida * s.vida;
+        ctx.strokeStyle = s.cor;
+        ctx.lineWidth = s.tam * (0.4 + s.vida * 0.6);
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(s.x - s.vx * 2.6, s.y - s.vy * 2.6);
+        ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+
+    if (faiscas.length || claroes.length) {
+        requestAnimationFrame(tickFireworks);
+    } else {
+        animando = false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 }
 
-function tickConfetti() {
-    if (!animando) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (let i = particulas.length - 1; i >= 0; i--) {
-        const p = particulas[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.12;
-        p.vx *= 0.995;
-        p.rot += p.vrot;
-        if (p.y > canvas.height + 30) { particulas.splice(i, 1); continue; }
-
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.rot);
-        ctx.fillStyle = p.cor;
-        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
-        ctx.restore();
-    }
-    if (particulas.length > 0) requestAnimationFrame(tickConfetti);
-    else { animando = false; ctx.clearRect(0, 0, canvas.width, canvas.height); }
+// dispara as explosões — todas logo, já na posição final
+function dispararFogos() {
+    if (!animando) { animando = true; requestAnimationFrame(tickFireworks); }
+    const explosao = () => {
+        const x = canvas.width  * (0.10 + Math.random() * 0.80);
+        const y = canvas.height * (0.13 + Math.random() * 0.40);
+        explodir(x, y, cores[Math.floor(Math.random() * cores.length)]);
+    };
+    // salva principal — imediata, espalhada pelo ecrã
+    for (let i = 0; i < 6; i++) explosao();
+    // pequena segunda salva logo a seguir, para encher o ecrã
+    setTimeout(() => { for (let i = 0; i < 3; i++) explosao(); }, 320);
 }
 
 // --- API pública ---
@@ -191,11 +239,7 @@ export function mostrarRecompensa({ icone: ic, nome: nm, descricao: desc, cintil
         card.style.opacity = '1';
     });
 
-    spawnConfetti(160);
-    if (!animando) { animando = true; requestAnimationFrame(tickConfetti); }
-    // segunda leva, mais leve, para prolongar o efeito
-    setTimeout(() => spawnConfetti(80), 400);
-    setTimeout(() => spawnConfetti(60), 900);
+    dispararFogos();
 
     // fechar
     setTimeout(() => {

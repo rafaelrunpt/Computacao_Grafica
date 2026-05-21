@@ -209,6 +209,72 @@ function renderVideo() {
     conteudo.appendChild(r4);
 }
 
+function renderIluminacao() {
+    conteudo.innerHTML = '';
+
+    const ativo = !!settings.nightMode;
+
+    const intro = document.createElement('div');
+    intro.style.cssText = `
+        font-size:12px;color:#c8a96e;line-height:1.5;margin-bottom:14px;
+        padding:8px 10px;background:rgba(0,0,0,0.35);
+        border:1px solid #6a5020;border-radius:5px;font-style:italic;
+    `;
+    intro.innerHTML = `
+        O modo nocturno acrescenta dezenas de fontes de luz dinâmicas
+        ao mundo exterior — pirilampos, lanternas, wisps mágicos e runas.
+        Por ter peso considerável sobre a placa gráfica, é escolhido no
+        portão inicial e fica vigente durante toda a jornada.
+    `;
+    conteudo.appendChild(intro);
+
+    const estadoBox = document.createElement('div');
+    estadoBox.style.cssText = `
+        display:flex;align-items:center;justify-content:space-between;
+        padding:12px 14px;
+        background:rgba(0,0,0,0.4);
+        border:1px solid ${ativo ? '#d4a830' : '#6a5020'};
+        border-radius:6px;margin-bottom:12px;
+    `;
+    estadoBox.innerHTML = `
+        <span style="font-size:13px;letter-spacing:1px;">Estado actual</span>
+        <span style="font-size:14px;font-weight:bold;letter-spacing:2px;
+            color:${ativo ? '#ffe0a0' : '#8a7a4a'};
+            text-shadow:${ativo ? '0 0 10px rgba(255,210,80,0.5)' : 'none'};">
+            ${ativo ? '🌙 NOITE — Benchmark Activo' : '☀ DIA — Modo Rápido'}
+        </span>
+    `;
+    conteudo.appendChild(estadoBox);
+
+    const btnRow = row();
+    btnRow.style.cssText = `display:flex;gap:8px;margin-top:6px;`;
+
+    const btnAlternar = btn(ativo ? '☀ Voltar ao Dia' : '🌙 Despertar a Noite', '#c8a96e');
+    btnAlternar.style.flex = '1';
+    btnAlternar.onclick = () => {
+        if (confirm(ativo
+            ? 'Voltar ao dia exige reiniciar a jornada. Prosseguir?'
+            : 'Despertar a noite acrescenta luzes ao mundo e exige reiniciar a jornada. Prosseguir?')) {
+            setSetting('nightMode', !ativo);
+            location.reload();
+        }
+    };
+    btnRow.appendChild(btnAlternar);
+    conteudo.appendChild(btnRow);
+
+    const dicaPerformance = document.createElement('div');
+    dicaPerformance.style.cssText = `
+        font-size:11px;color:#a08050;line-height:1.4;margin-top:18px;
+        padding:6px 10px;border-left:2px solid #8a6a30;font-style:italic;
+    `;
+    dicaPerformance.innerHTML = `
+        ✦ Alternar o modo durante a jornada obriga a recompilar todos os
+        shaders das luzes — por isso só é possível ao reiniciar. Podeis
+        escolher também no portão inicial.
+    `;
+    conteudo.appendChild(dicaPerformance);
+}
+
 function renderControlos() {
     conteudo.innerHTML = `
         <div style="font-size:14px;line-height:1.8;">
@@ -305,6 +371,7 @@ const tabs = [
     { id: 'audio',     label: 'Sopros',         render: renderAudio },
     { id: 'jog',       label: 'Manejo',         render: renderJogabilidade },
     { id: 'video',     label: 'Visões',         render: renderVideo },
+    { id: 'lights',    label: '🌙 Lume',         render: renderIluminacao },
     { id: 'ctrl',      label: 'Acções',         render: renderControlos },
     { id: 'stats',     label: 'Feitos',         render: renderEstatisticas },
     { id: 'tut',       label: 'Ensino',         render: renderTutorial },

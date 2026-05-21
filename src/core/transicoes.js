@@ -73,7 +73,7 @@ export function entrarLoja() {
     });
 }
 
-export function sairLoja() {
+export function sairLoja(onComplete) {
     if (estado.ePressBloqueado) return;
     estado.ePressBloqueado = true;
     hidePrompt();
@@ -83,7 +83,10 @@ export function sairLoja() {
         player.position.set(-25, 0, 25);
         player.rotation.y = -Math.PI / 2;
         estado.cena = 'mundo';
-        fade(0, () => { estado.ePressBloqueado = false; });
+        fade(0, () => {
+            estado.ePressBloqueado = false;
+            if (onComplete) onComplete();
+        });
     });
 }
 

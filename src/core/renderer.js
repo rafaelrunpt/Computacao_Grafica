@@ -8,8 +8,19 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
 renderer.shadowMap.enabled = true;
 // PCFSoftShadowMap: kernel 3×3 suaviza os edges — elimina shimmer em sombras grandes.
 // A 1024² é 4× mais barato que PCFSoft a 2048² (original), mesmo com o filtro maior.
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// Em qualidade baixa usamos o filtro mais simples (PCF) para poupar GPU.
+renderer.shadowMap.type = settings.quality === 'baixa'
+    ? THREE.PCFShadowMap
+    : THREE.PCFSoftShadowMap;
+// Sol não se move e o castelo/árvores são estáticos — desligamos a
+// reactualização contínua da shadow map. Os sistemas que mexem em luzes
+// ou cenas marcam needsUpdate = true por sua conta (ver transições e o
+// toggle dia/noite no night-mode.js).
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true; // bake inicial
 renderer.autoClear = false;
+renderer.localClippingEnabled = true;
+renderer.clippingPlanes = [ new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.3) ];
 
 // ---- configurações de cor para GLB ----
 renderer.outputColorSpace = THREE.SRGBColorSpace;

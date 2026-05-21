@@ -11,31 +11,40 @@ export const caseloScene = new THREE.Scene();
 caseloScene.background = new THREE.Color(0x0d0818);
 
 // ---- iluminação ----
-// ambient suficiente para ver tudo, com tinge roxo/azul
-const ambient = new THREE.AmbientLight(0x8866cc, 1.4);
-caseloScene.add(ambient);
+// A sala é iluminada UNICAMENTE pelas 4 tochas das paredes (PointLights,
+// criadas abaixo). Foram retiradas a luz ambiente, a direccional do tecto
+// e o holofote do prisma — os cantos longe das tochas ficam de propósito
+// na penumbra, para um ambiente de masmorra só à luz do fogo. As 2 tochas
+// das diagonais (NW/SE) continuam a projectar as sombras dinâmicas da sala.
 
-// luz direcional suave de cima para iluminar o chão e paredes
-const topLight = new THREE.DirectionalLight(0xaaaaff, 0.8);
-topLight.position.set(0, 20, 0);
-caseloScene.add(topLight);
-
-// luz central avermelhada — o boss
-const bossLight = new THREE.PointLight(0xff2200, 5, 40);
-bossLight.position.set(0, H - 1, -D / 4);
-bossLight.castShadow = true;
-caseloScene.add(bossLight);
-
-// tochas nas paredes laterais
+// tochas nas paredes laterais (4 PointLights, TODAS com castShadow —
+// cube-shadow em sala apertada com poucos objectos é viável).
 const tochaPositions = [
-    [-W / 2 + 0.8,  H * 0.45,  -D / 4],
-    [ W / 2 - 0.8,  H * 0.45,  -D / 4],
-    [-W / 2 + 0.8,  H * 0.45,   D / 4],
-    [ W / 2 - 0.8,  H * 0.45,   D / 4],
+    [-W / 2 + 0.8,  H * 0.45,  -D / 4],   // NW (com sombra)
+    [ W / 2 - 0.8,  H * 0.45,  -D / 4],   // NE
+    [-W / 2 + 0.8,  H * 0.45,   D / 4],   // SW
+    [ W / 2 - 0.8,  H * 0.45,   D / 4],   // SE (com sombra)
 ];
-for (const [tx, ty, tz] of tochaPositions) {
-    const flame = new THREE.PointLight(0xff6600, 1.8, 10);
+const _torches = [];
+const _fireMat = new THREE.MeshStandardMaterial({
+    color: 0xff4400, emissive: 0xff2200, emissiveIntensity: 2,
+});
+for (let ti = 0; ti < tochaPositions.length; ti++) {
+    const [tx, ty, tz] = tochaPositions[ti];
+    // Intensidade alta + alcance largo: estas tochas são a ÚNICA fonte de
+    // luz da sala, têm de a iluminar por inteiro. (Eram fracas — 1.8/11 —
+    // quando a ambiente e a direccional ainda faziam o grosso do trabalho.)
+    const flame = new THREE.PointLight(0xff6600, 75, 22, 1.4);
     flame.position.set(tx, ty, tz);
+    // TODAS as 4 tochas projectam sombra. Com só 2 (as diagonais), os
+    // pilares lançavam sombras assimétricas — umas para um lado, outras
+    // para o outro — e parecia um bug. Com as 4 fontes ficam simétricas
+    // e intencionais. Custo: 4 cube-shadows, mas a sala é pequena.
+    flame.castShadow = true;
+    flame.shadow.mapSize.set(256, 256);
+    flame.shadow.camera.near = 0.2;
+    flame.shadow.camera.far  = 15;
+    flame.shadow.bias = -0.001;
     caseloScene.add(flame);
 
     const torchBody = new THREE.Mesh(
@@ -43,14 +52,21 @@ for (const [tx, ty, tz] of tochaPositions) {
         new THREE.MeshStandardMaterial({ color: 0x5c3d1e })
     );
     torchBody.position.set(tx, ty - 0.3, tz);
+    torchBody.castShadow = false;   // não auto-sombrear: a luz da tocha está mesmo por cima dele
     caseloScene.add(torchBody);
 
-    const fire = new THREE.Mesh(
-        new THREE.ConeGeometry(0.12, 0.3, 6),
-        new THREE.MeshStandardMaterial({ color: 0xff4400, emissive: 0xff2200, emissiveIntensity: 2 })
-    );
+    // Cada chama tem o seu próprio material clonado para o flicker animar
+    // emissiveIntensity de forma independente.
+    const fireMat = _fireMat.clone();
+    const fire = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 6), fireMat);
     fire.position.set(tx, ty + 0.05, tz);
     caseloScene.add(fire);
+
+    _torches.push({
+        light: flame, fire, fireMat,
+        baseIntensity: 75,   // tem de acompanhar a intensidade da PointLight acima
+        phase: Math.random() * Math.PI * 2,
+    });
 }
 
 // ---- materiais ----
@@ -59,7 +75,6 @@ const matStoneDark= new THREE.MeshStandardMaterial({ color: 0x3a3550, roughness:
 const matFloor    = new THREE.MeshStandardMaterial({ color: 0x3a3448, roughness: 0.95 });
 const matCarpet   = new THREE.MeshStandardMaterial({ color: 0x7a1515, roughness: 1.0 });
 const matPillar   = new THREE.MeshStandardMaterial({ color: 0x4a4560, roughness: 0.85, flatShading: true });
-const matChain    = new THREE.MeshStandardMaterial({ color: 0x888090, metalness: 0.8, roughness: 0.4 });
 const matAltar    = new THREE.MeshStandardMaterial({ color: 0x2a1245, roughness: 0.8 });
 const matRune     = new THREE.MeshStandardMaterial({ color: 0xaa44ff, emissive: 0x8800cc, emissiveIntensity: 1.8 });
 
@@ -137,6 +152,7 @@ for (let i = 0; i < PEDESTAIS.length; i++) {
     );
     coluna.position.set(rx, -colunaH / 2 - 0.01, rz);  // começa enterrada
     coluna.visible = false;
+    coluna.castShadow = true;
     caseloScene.add(coluna);
     p._coluna = coluna;
     p._colunaTargetY = colunaH / 2 + 0.12;             // y final quando subido
@@ -150,6 +166,7 @@ for (let i = 0; i < PEDESTAIS.length; i++) {
         })
     );
     topo.position.y = colunaH / 2 + 0.025;
+    topo.castShadow = true;
     coluna.add(topo);
 
     // suporte para o troféu (rotativo) — fica como filho da coluna
@@ -180,6 +197,8 @@ export function colocarItemPedestal(idx) {
     if (!p || p.placed || !p.itemId) return false;
     const trofeu = criarAcessorio(p.itemId);
     if (!trofeu) return false;
+    // troféu lança sombra como os restantes objectos dos pedestais
+    trofeu.traverse(o => { if (o.isMesh) o.castShadow = true; });
     p.placed = true;
     p._coluna.visible = true;
     p._trofeuPivot.add(trofeu);
@@ -256,7 +275,7 @@ for (const px of pillarX) {
             matPillar
         );
         pillar.position.set(px, H / 2, pz);
-        pillar.castShadow = true;
+        pillar.castShadow = true;    // sombras simétricas — as 4 tochas projectam
         caseloScene.add(pillar);
         // capitel
         box(1.3, 0.4, 1.3, matStoneDark, px, H - 0.2, pz);
@@ -271,37 +290,27 @@ box(6, 0.5, 4, matAltar,  0, 0.25, -D / 2 + 3.5);
 box(4.5, 0.5, 3, matAltar, 0, 0.75, -D / 2 + 3.2);
 box(3, 0.5, 2.2, matAltar, 0, 1.25, -D / 2 + 3.0);
 
-// ---- totem/cristal do boss ----
-// Anteriormente ficava em cima do altar (z = -D/2 + 3.0). Foi mudado para
-// o meio da sala (z = -3.5) — a posição que a coroa ocupava antes — para
-// que o jogador o veja e interaja sem ficar entalado contra o altar
-// quando regressa da derrota.
+// ---- prisma do boss — agora em cima da pirâmide do altar ----
+// A própria pirâmide escalonada (3 patamares, topo em y=1.5) substitui a
+// coluna/base antiga. O prisma roda no ponto mais alto. O jogador interage
+// por baixo, em frente ao altar (não pode subir — o colisor do altar
+// bloqueia).
 const TOTEM_X = 0;
-const TOTEM_Z = -3.5;
+const TOTEM_Z = -D / 2 + 3.5;   // = centro da pirâmide (~-6.5 em D=20)
+const TOTEM_TOP_Y = 1.5;        // topo da pirâmide (altar mais alto = y 1.0..1.5)
 
-// runa no chão por baixo do totem
+// runa de glifo a brilhar no topo da pirâmide, debaixo do prisma
 const totemRune = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.7, 0.7, 0.04, 24),
+    new THREE.CylinderGeometry(0.55, 0.55, 0.04, 24),
     new THREE.MeshStandardMaterial({
-        color: 0x2a0a3a, emissive: 0x6a20cc, emissiveIntensity: 1.1,
-        roughness: 0.6, metalness: 0.4,
+        color: 0x2a0a3a, emissive: 0xaa30ff, emissiveIntensity: 1.8,
+        roughness: 0.5, metalness: 0.3,
     })
 );
-totemRune.position.set(TOTEM_X, 0.10, TOTEM_Z);
+totemRune.position.set(TOTEM_X, TOTEM_TOP_Y + 0.04, TOTEM_Z);
 caseloScene.add(totemRune);
 
-// base — coluna baixa para o cristal pousar
-const totemBase = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.45, 0.55, 1.1, 16),
-    new THREE.MeshStandardMaterial({
-        color: 0x1a1024, emissive: 0x4020aa, emissiveIntensity: 0.55,
-        roughness: 0.5, metalness: 0.6,
-    })
-);
-totemBase.position.set(TOTEM_X, 0.55, TOTEM_Z);
-caseloScene.add(totemBase);
-
-// cristal maligno por cima da base
+// cristal maligno a flutuar acima da pirâmide
 const crystalGeo = new THREE.OctahedronGeometry(0.7, 0);
 const crystalMat = new THREE.MeshStandardMaterial({
     color: 0x6600aa,
@@ -312,29 +321,27 @@ const crystalMat = new THREE.MeshStandardMaterial({
     flatShading: true,
 });
 const crystal = new THREE.Mesh(crystalGeo, crystalMat);
-crystal.position.set(TOTEM_X, 1.95, TOTEM_Z);
+crystal.position.set(TOTEM_X, TOTEM_TOP_Y + 0.95, TOTEM_Z);
 crystal.rotation.y = Math.PI / 4;
+// IMPORTANTE: NÃO activar castShadow no cristal. O material é transparente
+// (`opacity: 0.85`) e three.js renderiza shadow maps a partir da silhueta
+// opaca da geometria — daria um "diamante fantasma" no chão em sítios
+// onde a sombra escapasse aos limites do altar.
+crystal.castShadow = false;
 caseloScene.add(crystal);
-export const bossCrystal = crystal; // animado no main.js
+export const bossCrystal = crystal;
+// Altura "base" da animação de bobbing — exportada para o main.js usar.
+export const bossCrystalRestY = TOTEM_TOP_Y + 0.95;
 
-// caixa de interacção à volta do totem — só fica activa visualmente
-// quando todos os pedestais estão preenchidos (verificação em main.js).
+// Caixa de interacção: o jogador não pode subir à pirâmide (collider do
+// altar bloqueia z<=-4.5). A interacção fica em frente à pirâmide, na
+// faixa entre o degrau da frente e ~1.5m a sul, centrada em x.
 export const bossCrystalInteractBox = new THREE.Box3(
-    new THREE.Vector3(TOTEM_X - 1.4, 0, TOTEM_Z - 1.2),
-    new THREE.Vector3(TOTEM_X + 1.4, 4, TOTEM_Z + 1.2),
+    new THREE.Vector3(TOTEM_X - 1.8, 0, -4.5),
+    new THREE.Vector3(TOTEM_X + 1.8, 4, -2.5),
 );
-// posição segura — a SUL do totem (em direcção à entrada), para o jogador
-// reaparecer com espaço livre depois de uma derrota e não ficar preso.
-// 1.5 unidades a sul deixa folga suficiente do colisor do totem e
-// mantém-no virado para o cristal.
-export const bossCrystalSafePos = new THREE.Vector3(TOTEM_X, 0, TOTEM_Z + 1.5);
-
-// correntes decorativas nas paredes
-for (const cx of [-W / 2 + 1.5, W / 2 - 1.5]) {
-    for (let ci = 0; ci < 3; ci++) {
-        box(0.08, 0.5, 0.08, matChain, cx, 1.5 + ci * 0.6, -D / 4);
-    }
-}
+// posição segura — bem em frente à pirâmide, fora de qualquer colisor.
+export const bossCrystalSafePos = new THREE.Vector3(TOTEM_X, 0, -3.0);
 
 // ---- zona de saída (perto da entrada) ----
 export const caseloSaidaBox = new THREE.Box3(
@@ -350,13 +357,8 @@ export const caseloColliders = [
     new THREE.Box3(new THREE.Vector3(-W/2, 0, -D/2-0.1),     new THREE.Vector3( W/2, H, -D/2+0.3)),
     // parede sul: fechada para movimento — saída só via interação E (caseloSaidaBox)
     new THREE.Box3(new THREE.Vector3(-W/2, 0, D/2-0.5),      new THREE.Vector3( W/2, H, D/2+0.5)),
-    // altar
+    // altar (pirâmide escalonada — agora também serve de pedestal do cristal)
     new THREE.Box3(new THREE.Vector3(-3.1, 0, -D/2+1.5),     new THREE.Vector3( 3.1, 2, -D/2+5.5)),
-    // totem/cristal do boss
-    new THREE.Box3(
-        new THREE.Vector3(TOTEM_X - 0.55, 0, TOTEM_Z - 0.55),
-        new THREE.Vector3(TOTEM_X + 0.55, 2.5, TOTEM_Z + 0.55),
-    ),
     // pilares
     new THREE.Box3(new THREE.Vector3(-W/2+0.8, 0, -D/2+0.8), new THREE.Vector3(-W/2+2.2, H, -D/2+2.2)),
     new THREE.Box3(new THREE.Vector3( W/2-2.2, 0, -D/2+0.8), new THREE.Vector3( W/2-0.8, H, -D/2+2.2)),
@@ -375,3 +377,272 @@ export const caseloMiniCam = new THREE.OrthographicCamera(
 );
 caseloMiniCam.position.set(0, 25, 0);
 caseloMiniCam.lookAt(0, 0, 0);
+
+// ============================================================
+// ATMOSFERA — partículas, feixes e flicker para benchmark visual
+// ============================================================
+// Nenhum dos elementos abaixo toca em colliders, pedestais ou no totem.
+// Tudo é decorativo + animado por shader; o custo CPU em update é trivial.
+
+const _atmosTime = { t: 0 };
+
+// ---- 1) Brasas a subir das 4 tochas (THREE.Points + vertex shader) ----
+function _criarEmbers() {
+    const PER = 14;
+    const N   = _torches.length * PER;
+    const positions = new Float32Array(N * 3);
+    const origins   = new Float32Array(N * 3);
+    const phases    = new Float32Array(N);
+
+    let idx = 0;
+    for (const t of _torches) {
+        for (let i = 0; i < PER; i++) {
+            origins[idx*3]   = t.light.position.x;
+            origins[idx*3+1] = t.light.position.y + 0.05;
+            origins[idx*3+2] = t.light.position.z;
+            positions[idx*3]   = t.light.position.x;
+            positions[idx*3+1] = t.light.position.y;
+            positions[idx*3+2] = t.light.position.z;
+            phases[idx] = Math.random() * Math.PI * 2;
+            idx++;
+        }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('aOrigin',  new THREE.BufferAttribute(origins, 3));
+    geo.setAttribute('aPhase',   new THREE.BufferAttribute(phases, 1));
+
+    const mat = new THREE.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0 },
+            uPixelRatio: { value: window.devicePixelRatio || 1 },
+        },
+        vertexShader: `
+            attribute vec3 aOrigin;
+            attribute float aPhase;
+            varying float vLife;
+            uniform float uTime;
+            uniform float uPixelRatio;
+            void main() {
+                float life = mod(uTime * 0.6 + aPhase, 1.0);
+                float y = aOrigin.y + life * 2.2;
+                float x = aOrigin.x + sin(uTime * 2.5 + aPhase * 5.0) * 0.10 * life;
+                float z = aOrigin.z + cos(uTime * 1.9 + aPhase * 3.0) * 0.10 * life;
+                vec4 mv = modelViewMatrix * vec4(x, y, z, 1.0);
+                gl_Position = projectionMatrix * mv;
+                float d = -mv.z;
+                gl_PointSize = uPixelRatio * (3.0 + 5.0 * (1.0 - life)) * (35.0 / max(d, 1.0));
+                vLife = life;
+            }
+        `,
+        fragmentShader: `
+            varying float vLife;
+            void main() {
+                vec2 c = gl_PointCoord - 0.5;
+                float d = length(c);
+                if (d > 0.5) discard;
+                float core = smoothstep(0.5, 0.0, d);
+                vec3 col = mix(vec3(1.0, 0.65, 0.15), vec3(0.6, 0.15, 0.05), vLife);
+                float a = smoothstep(0.0, 0.08, vLife) * smoothstep(1.0, 0.55, vLife);
+                gl_FragColor = vec4(col * (0.5 + 1.6 * core), core * a * 0.9);
+            }
+        `,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+    });
+    const pts = new THREE.Points(geo, mat);
+    pts.frustumCulled = false;
+    caseloScene.add(pts);
+    return mat;
+}
+const _embersMat = _criarEmbers();
+
+// ---- 2) Motes de pó/luz a flutuar pela sala (lilás suave) ----
+function _criarMotes() {
+    const N = 90;
+    const positions = new Float32Array(N * 3);
+    const phases    = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+        positions[i*3]   = (Math.random() - 0.5) * (W - 3);
+        positions[i*3+1] = 0.6 + Math.random() * (H - 1.6);
+        positions[i*3+2] = (Math.random() - 0.5) * (D - 3);
+        phases[i] = Math.random() * Math.PI * 2;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('aPhase',   new THREE.BufferAttribute(phases, 1));
+
+    const mat = new THREE.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0 },
+            uPixelRatio: { value: window.devicePixelRatio || 1 },
+        },
+        vertexShader: `
+            attribute float aPhase;
+            uniform float uTime;
+            uniform float uPixelRatio;
+            varying float vGlow;
+            void main() {
+                vec3 p = position;
+                p.x += sin(uTime * 0.30 + aPhase) * 0.45;
+                p.y += sin(uTime * 0.50 + aPhase * 1.3) * 0.22;
+                p.z += cos(uTime * 0.42 + aPhase * 0.7) * 0.45;
+                vec4 mv = modelViewMatrix * vec4(p, 1.0);
+                gl_Position = projectionMatrix * mv;
+                float d = -mv.z;
+                gl_PointSize = uPixelRatio * 2.8 * (35.0 / max(d, 1.0));
+                vGlow = 0.4 + 0.6 * sin(uTime * 1.4 + aPhase * 2.0);
+            }
+        `,
+        fragmentShader: `
+            varying float vGlow;
+            void main() {
+                vec2 c = gl_PointCoord - 0.5;
+                float d = length(c);
+                if (d > 0.5) discard;
+                float core = smoothstep(0.5, 0.0, d);
+                vec3 col = vec3(0.65, 0.45, 0.95);
+                gl_FragColor = vec4(col, core * (0.10 + 0.28 * vGlow));
+            }
+        `,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+    });
+    const pts = new THREE.Points(geo, mat);
+    pts.frustumCulled = false;
+    caseloScene.add(pts);
+    return mat;
+}
+const _motesMat = _criarMotes();
+
+// ---- 3) Espirais de corrupção à volta do cristal central ----
+function _criarMistCristal() {
+    const N = 50;
+    const positions = new Float32Array(N * 3);
+    const phases    = new Float32Array(N);
+    const radii     = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+        positions[i*3]   = TOTEM_X;
+        positions[i*3+1] = TOTEM_TOP_Y + 0.1 + Math.random() * 2.4;
+        positions[i*3+2] = TOTEM_Z;
+        phases[i] = Math.random() * Math.PI * 2;
+        radii[i]  = 0.55 + Math.random() * 1.3;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('aPhase',   new THREE.BufferAttribute(phases, 1));
+    geo.setAttribute('aRadius',  new THREE.BufferAttribute(radii, 1));
+
+    const mat = new THREE.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0 },
+            uPixelRatio: { value: window.devicePixelRatio || 1 },
+        },
+        vertexShader: `
+            attribute float aPhase;
+            attribute float aRadius;
+            uniform float uTime;
+            uniform float uPixelRatio;
+            varying float vPulse;
+            void main() {
+                float ang = uTime * (0.45 + aRadius * 0.18) + aPhase;
+                vec3 p = position;
+                p.x += cos(ang) * aRadius;
+                p.z += sin(ang) * aRadius;
+                p.y += sin(uTime * 0.6 + aPhase) * 0.35;
+                vec4 mv = modelViewMatrix * vec4(p, 1.0);
+                gl_Position = projectionMatrix * mv;
+                float d = -mv.z;
+                gl_PointSize = uPixelRatio * (4.5 + 1.5 * aRadius) * (35.0 / max(d, 1.0));
+                vPulse = 0.5 + 0.5 * sin(uTime * 1.3 + aPhase);
+            }
+        `,
+        fragmentShader: `
+            varying float vPulse;
+            void main() {
+                vec2 c = gl_PointCoord - 0.5;
+                float d = length(c);
+                if (d > 0.5) discard;
+                float core = smoothstep(0.5, 0.0, d);
+                vec3 col = vec3(0.55, 0.10, 0.85);
+                gl_FragColor = vec4(col, core * (0.25 + 0.35 * vPulse));
+            }
+        `,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+    });
+    const pts = new THREE.Points(geo, mat);
+    pts.frustumCulled = false;
+    caseloScene.add(pts);
+    return mat;
+}
+const _mistMat = _criarMistCristal();
+
+// ---- 4) Feixe volumétrico a descer da abóbada sobre o cristal ----
+function _criarFeixeCristal() {
+    // Apex (ponto estreito) no tecto; base (aberta) sobre o topo da pirâmide.
+    const bottomY = TOTEM_TOP_Y + 0.05;   // logo acima do topo do altar
+    const topY    = H - 0.15;
+    const beamH   = topY - bottomY;
+    const baseR   = 1.4;
+
+    const geo = new THREE.ConeGeometry(baseR, beamH, 28, 1, true);
+    const mat = new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 } },
+        vertexShader: `
+            varying float vNorm;
+            void main() {
+                // position.y em object-space vai de -h/2 (base, abaixo)
+                // a +h/2 (apex, no topo). vNorm em 0..1 (0 = base, 1 = apex)
+                vNorm = position.y / ` + (beamH / 2).toFixed(4) + ` * 0.5 + 0.5;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform float uTime;
+            varying float vNorm;
+            void main() {
+                // mais brilho perto do topo (fonte)
+                float fade = pow(vNorm, 1.6);
+                fade *= 0.55 + 0.25 * sin(uTime * 1.5);
+                vec3 col = vec3(0.50, 0.15, 0.85);
+                gl_FragColor = vec4(col * fade, fade * 0.45);
+            }
+        `,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+    });
+    const cone = new THREE.Mesh(geo, mat);
+    cone.position.set(TOTEM_X, (bottomY + topY) / 2, TOTEM_Z);
+    caseloScene.add(cone);
+    return mat;
+}
+const _feixeMat = _criarFeixeCristal();
+
+// ---- 5) Atmosfera/animação — chamado pelo main.js a cada frame ----
+export function atualizarAtmosferaCastelo(deltaTime) {
+    _atmosTime.t += deltaTime;
+    const t = _atmosTime.t;
+
+    // flicker independente por tocha (intensidade da luz + emissive da chama)
+    for (const tch of _torches) {
+        const f = 0.80
+                + 0.30 * Math.sin(t * 12 + tch.phase)
+                + 0.15 * Math.sin(t * 23 + tch.phase * 1.7);
+        tch.light.intensity = tch.baseIntensity * f;
+        tch.fireMat.emissiveIntensity = 1.6 + 1.0 * f * 0.5;
+        tch.fire.scale.y = 0.9 + 0.20 * Math.cos(t * 11 + tch.phase);
+        tch.fire.scale.x = 0.95 + 0.10 * Math.sin(t * 15 + tch.phase);
+    }
+
+    // uniforms dos shaders de partículas / feixe
+    _embersMat.uniforms.uTime.value = t;
+    _motesMat .uniforms.uTime.value = t;
+    _mistMat  .uniforms.uTime.value = t;
+    _feixeMat .uniforms.uTime.value = t;
+}

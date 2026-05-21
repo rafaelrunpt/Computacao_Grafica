@@ -265,6 +265,111 @@ menu.appendChild(btnNovoJogo);
 menu.appendChild(btnConfig);
 menu.appendChild(btnCreditos);
 
+// --------------------------------------------------------
+// SELECTOR DE MODO — escolha de iluminação antes de partir
+// (a noite acrescenta dezenas de fontes de luz dinâmicas — tem
+// custo de performance e por isso é escolhida aqui, fora do mundo).
+// --------------------------------------------------------
+const modoBox = document.createElement('div');
+modoBox.style.cssText = `
+    margin-top: 18px;
+    width: clamp(280px, 32vw, 420px);
+    display: flex; flex-direction: column; gap: 6px;
+    pointer-events: auto;
+    opacity: 0;
+    animation: anidiaBtnIn 0.9s ease-out 1.5s forwards;
+`;
+menu.appendChild(modoBox);
+
+const modoTitulo = document.createElement('div');
+modoTitulo.style.cssText = `
+    font-size: 11px; letter-spacing: 4px; color: #a08050;
+    text-align: center; font-family: 'Courier New', monospace;
+`;
+modoTitulo.textContent = '☀  HORA DO MUNDO  🌙';
+modoBox.appendChild(modoTitulo);
+
+const modoRow = document.createElement('div');
+modoRow.style.cssText = `
+    display: flex; gap: 6px;
+`;
+modoBox.appendChild(modoRow);
+
+function _modoPill(label, hint, ativo) {
+    const p = document.createElement('div');
+    p.style.cssText = `
+        flex: 1; padding: 10px 8px; cursor: pointer;
+        text-align: center;
+        font-family: 'Georgia', serif; font-size: 13px; letter-spacing: 2px;
+        border: 1px solid ${ativo ? '#ffe0a0' : '#6a5020'};
+        background: ${ativo
+            ? 'linear-gradient(180deg, rgba(80,50,20,0.85), rgba(40,25,10,0.95))'
+            : 'rgba(15,8,4,0.75)'};
+        color: ${ativo ? '#ffe0a0' : '#8a7a4a'};
+        text-shadow: ${ativo ? '0 0 8px rgba(255,210,80,0.4)' : 'none'};
+        box-shadow: ${ativo ? 'inset 0 0 12px rgba(212,168,48,0.25)' : 'none'};
+        border-radius: 4px;
+        transition: all 0.2s ease;
+        user-select: none;
+    `;
+    p.innerHTML = `<div>${label}</div>
+        <div style="font-size:9px;letter-spacing:1px;color:${ativo ? '#c8a96e' : '#5a4a30'};
+            margin-top:2px;font-family:'Courier New',monospace;">${hint}</div>`;
+    return p;
+}
+
+let _modoNocturno = !!settings.nightMode;
+
+const pillDia   = _modoPill('☀ DIA',   'Rápido',   !_modoNocturno);
+const pillNoite = _modoPill('🌙 NOITE', 'Benchmark', _modoNocturno);
+modoRow.appendChild(pillDia);
+modoRow.appendChild(pillNoite);
+
+function _refrescarPills() {
+    const cssAtivo = (ativo) => {
+        return `
+            flex: 1; padding: 10px 8px; cursor: pointer;
+            text-align: center;
+            font-family: 'Georgia', serif; font-size: 13px; letter-spacing: 2px;
+            border: 1px solid ${ativo ? '#ffe0a0' : '#6a5020'};
+            background: ${ativo
+                ? 'linear-gradient(180deg, rgba(80,50,20,0.85), rgba(40,25,10,0.95))'
+                : 'rgba(15,8,4,0.75)'};
+            color: ${ativo ? '#ffe0a0' : '#8a7a4a'};
+            text-shadow: ${ativo ? '0 0 8px rgba(255,210,80,0.4)' : 'none'};
+            box-shadow: ${ativo ? 'inset 0 0 12px rgba(212,168,48,0.25)' : 'none'};
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            user-select: none;
+        `;
+    };
+    pillDia.style.cssText = cssAtivo(!_modoNocturno);
+    pillDia.innerHTML = `<div>☀ DIA</div>
+        <div style="font-size:9px;letter-spacing:1px;color:${!_modoNocturno ? '#c8a96e' : '#5a4a30'};
+            margin-top:2px;font-family:'Courier New',monospace;">Rápido</div>`;
+    pillNoite.style.cssText = cssAtivo(_modoNocturno);
+    pillNoite.innerHTML = `<div>🌙 NOITE</div>
+        <div style="font-size:9px;letter-spacing:1px;color:${_modoNocturno ? '#c8a96e' : '#5a4a30'};
+            margin-top:2px;font-family:'Courier New',monospace;">Benchmark</div>`;
+}
+
+pillDia.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (_modoNocturno) {
+        _modoNocturno = false;
+        setSetting('nightMode', false);
+        _refrescarPills();
+    }
+});
+pillNoite.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!_modoNocturno) {
+        _modoNocturno = true;
+        setSetting('nightMode', true);
+        _refrescarPills();
+    }
+});
+
 btnNovoJogo.addEventListener('click', (e) => { e.stopPropagation(); iniciar(); });
 btnConfig  .addEventListener('click', (e) => { e.stopPropagation(); abrirConfig(); });
 btnCreditos.addEventListener('click', (e) => { e.stopPropagation(); abrirCreditos(); });
