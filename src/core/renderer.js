@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { settings, onSettingChange } from '../systems/settings.js';
 
-export const renderer = new THREE.WebGLRenderer({ antialias: settings.quality !== 'baixa' });
+export const renderer = new THREE.WebGLRenderer({ 
+    antialias: settings.quality !== 'baixa',
+    powerPreference: 'high-performance'
+});
 renderer.setSize(window.innerWidth, window.innerHeight);
 // Cap agressivo: HiDPI dá pouquíssima diferença visual mas custa 2-4× mais pixels.
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
@@ -9,9 +12,9 @@ renderer.shadowMap.enabled = true;
 // PCFSoftShadowMap: kernel 3×3 suaviza os edges — elimina shimmer em sombras grandes.
 // A 1024² é 4× mais barato que PCFSoft a 2048² (original), mesmo com o filtro maior.
 // Em qualidade baixa usamos o filtro mais simples (PCF) para poupar GPU.
-renderer.shadowMap.type = settings.quality === 'baixa'
-    ? THREE.PCFShadowMap
-    : THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = settings.quality === 'alta'
+    ? THREE.PCFSoftShadowMap
+    : THREE.PCFShadowMap;
 // Sol não se move e o castelo/árvores são estáticos — desligamos a
 // reactualização contínua da shadow map. Os sistemas que mexem em luzes
 // ou cenas marcam needsUpdate = true por sua conta (ver transições e o

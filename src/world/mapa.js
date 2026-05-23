@@ -225,20 +225,15 @@ function _hash2(x, z) {
     return s - Math.floor(s);
 }
 
+const _treeMatCache = new Map(); // key: originalMat.uuid + "_" + t_rounded
+
 function _spawnTree(scene, x, z, contaminada, zoneRef = null) {
     const tree = treeTemplate.clone(true);
     tree.position.set(x, 0, z);
-    // rotação e escala determinísticas (hash da posição) — as árvores
-    // ficam SEMPRE iguais em cada arranque do jogo.
     tree.rotation.y = _hash2(x, z) * Math.PI * 2;
-    // Escala visual base (0.006) com +20% — árvores 20% maiores.
     tree.scale.setScalar((0.006 + _hash2(z, x) * 0.0015) * 1.2);
-    // assenta a base do modelo no chão: a origem do GLB não está na base,
-    // por isso sem este ajuste a árvore afunda — e a parte abaixo de
-    // y=-0.3 é cortada pelo clipping plane global ("metade invisível").
     tree.updateMatrixWorld(true);
     tree.position.y -= new THREE.Box3().setFromObject(tree).min.y;
-    // Pequeno offset extra para garantir que a base fica acima da corrupção/chão
     tree.position.y += 0.03;
 
     const castleT = _corruptionStrength(x, z);
@@ -249,30 +244,34 @@ function _spawnTree(scene, x, z, contaminada, zoneRef = null) {
         if (!c.isMesh) return;
         c.castShadow = true;
         c.receiveShadow = true;
-        c.renderOrder = 10;
+        // Removido renderOrder = 10 para permitir otimizações de sorting do Three.js
         if (t > 0.01) {
-            // guardar cor original antes de clonar/modificar
-            const origColor = c.material.color.clone();
-            c.material = c.material.clone();
-            c.material.userData.cleanColor = origColor;
-            // escurece bem menos para não saturar no nightmode
-            const darken = 1 - t * 0.20;
-            c.material.color.multiplyScalar(darken);
-            c.material.color.r += t * 0.05;
-            c.material.color.b += t * 0.10;
-            if (c.material.emissive) {
-                c.material.emissive.setRGB(t * 0.08, 0, t * 0.15);
+            const t_round = Math.round(t * 10) / 10;
+            const key = c.material.uuid + "_" + t_round;
+            if (_treeMatCache.has(key)) {
+                c.material = _treeMatCache.get(key);
             } else {
-                c.material.emissive = new THREE.Color(t * 0.08, 0, t * 0.15);
+                const origColor = c.material.color.clone();
+                const newMat = c.material.clone();
+                newMat.userData.cleanColor = origColor;
+                const darken = 1 - t_round * 0.20;
+                newMat.color.multiplyScalar(darken);
+                newMat.color.r += t_round * 0.05;
+                newMat.color.b += t_round * 0.10;
+                if (newMat.emissive) {
+                    newMat.emissive.setRGB(t_round * 0.08, 0, t_round * 0.15);
+                } else {
+                    newMat.emissive = new THREE.Color(t_round * 0.08, 0, t_round * 0.15);
+                }
+                newMat.emissiveIntensity = 0.2 + t_round * 0.30;
+                _treeMatCache.set(key, newMat);
+                c.material = newMat;
             }
-            c.material.emissiveIntensity = 0.2 + t * 0.30;
         }
     });
     scene.add(tree);
     cullables.push(tree);
-    // colisor calculado da malha real, já posicionada e escalada na cena
     addCollider(_treeColliderBox(tree));
-    // registar árvore na zona de batalha para poder restaurar depois
     if (zoneRef && contaminada) zoneRef.trees.push(tree);
     return tree;
 }
