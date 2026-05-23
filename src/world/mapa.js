@@ -270,6 +270,24 @@ function _buildInstancedForest() {
     });
     if (submeshes.length === 0) return;
 
+    // Foliage fix: com árvores instanciadas, o Three.js já não pode ordenar
+    // árvore-a-árvore por distância — todas as instâncias desenham num só
+    // draw-call. Materiais transparentes (folhas com alpha) deixam de ter
+    // sort entre instâncias e folhas de uma árvore "comem" as folhas da
+    // árvore atrás. Convertemos transparency → alphaTest (cutout binário),
+    // que escreve no z-buffer e dispensa ordenação. Os clones criados depois
+    // em _getCorruptedMaterial herdam estas flags.
+    for (const sm of submeshes) {
+        const m = sm.baseMaterial;
+        if (m.transparent || (m.alphaTest && m.alphaTest > 0) || m.alphaMap || (m.map && m.map.format === THREE.RGBAFormat)) {
+            m.transparent = false;
+            m.alphaTest = m.alphaTest > 0 ? Math.max(m.alphaTest, 0.5) : 0.5;
+            m.depthWrite = true;
+            m.side = THREE.DoubleSide; // folhas vistas de ambos os lados
+            m.needsUpdate = true;
+        }
+    }
+
     const templateMinY = _treeBboxLocal ? _treeBboxLocal.min.y : 0;
     const _yAxis = new THREE.Vector3(0, 1, 0);
 
