@@ -15,6 +15,16 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = settings.quality === 'alta'
     ? THREE.PCFSoftShadowMap
     : THREE.PCFShadowMap;
+
+// LOG DE DIAGNÓSTICO: Verificar qual GPU está a ser usada
+const gl = renderer.getContext();
+const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+if (debugInfo) {
+    const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+    const renderer_name = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+    console.log(`[GPU] Vendor: ${vendor}, Renderer: ${renderer_name}`);
+}
+
 // Sol não se move e o castelo/árvores são estáticos — desligamos a
 // reactualização contínua da shadow map. Os sistemas que mexem em luzes
 // ou cenas marcam needsUpdate = true por sua conta (ver transições e o
