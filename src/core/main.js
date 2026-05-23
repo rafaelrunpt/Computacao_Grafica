@@ -143,24 +143,41 @@ function _restoreAllCullables() {
 // mesh → { originalMaterial, clonedMaterials: Material[], originalOpacities: number[] }
 const _fadedMeshes = new Map();
 const _activeFadeMeshes = new Set();
+// Cache permanente de materiais transparentes para evitar recompilação de shaders
+const _transparentMaterialCache = new Map(); // originalMaterial.uuid -> clonedMaterial(s)
+
+function _getTransparentMaterial(original) {
+    if (_transparentMaterialCache.has(original.uuid)) return _transparentMaterialCache.get(original.uuid);
+    
+    const origMats = Array.isArray(original) ? original : [original];
+    const cloned = origMats.map(m => {
+        const c = m.clone();
+        c.transparent = true;
+        return c;
+    });
+    const result = Array.isArray(original) ? cloned : cloned[0];
+    _transparentMaterialCache.set(original.uuid, result);
+    return result;
+}
+
 function _isPartOfPlayer(obj) {
     while (obj) { if (obj === player) return true; obj = obj.parent; }
     return false;
 }
+
 function _fadeMesh(mesh, deltaTime) {
     let entry = _fadedMeshes.get(mesh);
     if (!entry) {
         const original = mesh.material;
+        const transparent = _getTransparentMaterial(original);
+        mesh.material = transparent;
+        
         const origMats = Array.isArray(original) ? original : [original];
-        const cloned = origMats.map(m => {
-            const c = m.clone();
-            c.transparent = true;
-            return c;
-        });
-        mesh.material = Array.isArray(original) ? cloned : cloned[0];
+        const transMats = Array.isArray(transparent) ? transparent : [transparent];
+        
         entry = {
             originalMaterial: original,
-            clonedMaterials: cloned,
+            clonedMaterials: transMats,
             originalOpacities: origMats.map(m => m.opacity),
         };
         _fadedMeshes.set(mesh, entry);
@@ -170,6 +187,7 @@ function _fadeMesh(mesh, deltaTime) {
         m.opacity += (FADE_TARGET_OPACITY - m.opacity) * lerp;
     }
 }
+
 function _restoreMesh(mesh, deltaTime) {
     const entry = _fadedMeshes.get(mesh);
     if (!entry) return;
@@ -179,12 +197,16 @@ function _restoreMesh(mesh, deltaTime) {
         const target = entry.originalOpacities[i];
         const m = entry.clonedMaterials[i];
         m.opacity += (target - m.opacity) * lerp;
-        if (Math.abs(m.opacity - target) > 0.01) done = false;
+        if (Math.abs(m.opacity - target) > 0.005) done = false;
     }
     if (done) {
+        // Restauramos a opacidade exacta para evitar drift
+        for (let i = 0; i < entry.clonedMaterials.length; i++) {
+            entry.clonedMaterials[i].opacity = entry.originalOpacities[i];
+        }
         mesh.material = entry.originalMaterial;
-        for (const m of entry.clonedMaterials) m.dispose();
         _fadedMeshes.delete(mesh);
+        // NOTA: Não fazemos dispose() do material clonado pois ele está na _transparentMaterialCache
     }
 }
 

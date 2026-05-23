@@ -144,7 +144,6 @@ function makePath(w, d, x, z, scene) {
     const t = terraTex.clone();
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.repeat.set(w / tileSize, d / tileSize);
-    t.needsUpdate = true;
     const mat = new THREE.MeshStandardMaterial({ map: t, color: 0xd4b882, roughness: 0.95 });
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.03, d), mat);
     mesh.position.set(x, 0.01, z);

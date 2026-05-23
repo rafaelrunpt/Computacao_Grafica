@@ -27,12 +27,12 @@ const _onWoodLoad = () => { if (++_woodCount === 2) _woodResolve(); };
 
 export const madeiraTex  = _loader.load('assets/textures/madeira.png', t => {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 16;
+    t.anisotropy = 4;
     _onWoodLoad();
 });
 export const madeira2Tex = _loader.load('assets/textures/madeira2.png', t => {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 16;
+    t.anisotropy = 4;
     _onWoodLoad();
 });
 
