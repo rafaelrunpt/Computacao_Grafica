@@ -421,7 +421,7 @@ function animateMundo(deltaTime) {
             let diff = targetAngle - player.rotation.y;
             while (diff < -Math.PI) diff += Math.PI * 2;
             while (diff >  Math.PI) diff -= Math.PI * 2;
-            player.rotation.y += diff * rotationSpeed;
+            player.rotation.y += diff * rotationSpeed * speedMultiplier;
 
             const len = Math.sqrt(dirX*dirX + dirZ*dirZ);
             const speedMultiplier = 60 * deltaTime;
@@ -662,7 +662,7 @@ function animateLoja(deltaTime) {
         let diff = targetAngle - lojaPlayer.rotY;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff >  Math.PI) diff -= Math.PI * 2;
-        lojaPlayer.rotY += diff * rotationSpeed;
+        lojaPlayer.rotY += diff * rotationSpeed * speedMultiplier;
         
         const speedMultiplier = 60 * deltaTime;
         const mx = _moveDir.x * moveSpeed * speedMultiplier;
@@ -810,7 +810,7 @@ function animateCaselo(deltaTime) {
         let diff = targetAngle - caseloPlayer.rotY;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff >  Math.PI) diff -= Math.PI * 2;
-        caseloPlayer.rotY += diff * rotationSpeed;
+        caseloPlayer.rotY += diff * rotationSpeed * speedMultiplier;
         
         const speedMultiplier = 60 * deltaTime;
         const mx = _moveDir.x * moveSpeed * speedMultiplier;
@@ -980,7 +980,7 @@ function animateTavern(deltaTime) {
         let diff = targetAngle - tavernPlayer.rotY;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff >  Math.PI) diff -= Math.PI * 2;
-        tavernPlayer.rotY += diff * rotationSpeed;
+        tavernPlayer.rotY += diff * rotationSpeed * speedMultiplier;
         
         const speedMultiplier = 60 * deltaTime;
         const mx = _moveDir.x * moveSpeed * speedMultiplier;
@@ -1142,7 +1142,7 @@ function animateQuarto(deltaTime) {
         let diff = targetAngle - quartoPlayer.rotY;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff >  Math.PI) diff -= Math.PI * 2;
-        quartoPlayer.rotY += diff * rotationSpeed;
+        quartoPlayer.rotY += diff * rotationSpeed * speedMultiplier;
 
         const speedMultiplier = 60 * deltaTime;
         const mx = _moveDir.x * moveSpeed * speedMultiplier;
