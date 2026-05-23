@@ -7,8 +7,9 @@ export const playerStats = {
     maxHp: 30,               // HP máximo efectivo = base + bónus de equipamento
     atk: 6,
     derrotado: false,        // true → bloqueia novos encontros até recuperar
-    // slots de equipamento (id de item ou null) — um único slot "acessorio"
-    equipped: { acessorio: null },
+    // slots de equipamento (id de item ou null): "acessorio" (artefactos) e
+    // "mao" (item empunhado — a tocha). São independentes entre si.
+    equipped: { acessorio: null, mao: null },
 };
 
 // modificadores por item equipado

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { criarBoss, updateBoss, getBossRoot } from '../entities/boss.js';
 import { criarInimigoWraith, updateInimigoWraith, resetInimigoWraith } from '../entities/inimigo-wraith.js';
-import { criarInimigoSluddy, updateInimigoSluddy, resetInimigoSluddy } from '../entities/inimigo-sluddy.js';
+import { criarInimigoNucleo, updateInimigoNucleo, resetInimigoNucleo } from '../entities/inimigo-nucleo.js';
 import { skyboxCombate, starMat } from './sky.js';
 import { settings } from '../systems/settings.js';
 
@@ -64,9 +64,16 @@ const arenaPulse = new THREE.PointLight(0xaa55ff, 1.5, 14, 1.4);
 arenaPulse.position.set(0, 2.2, 0);
 combateScene.add(arenaPulse);
 
-// ---- Chão da arena: shader roxo corrompido (estilo matBattleGrass) ----
+// ---- Chão da arena: obsidiana (Rock035) + shader de corrupção roxa ----
+// textura reaproveitada (sem assets novos): a obsidiana dá o detalhe de
+// superfície e a corrupção roxa irrompe/brilha pelas fendas.
+const _arenaTexLoader = new THREE.TextureLoader();
+const arenaRochaTex = _arenaTexLoader.load('assets/textures/boss/skin/Rock035_1K-PNG_Color.png');
+const arenaRochaNrm = _arenaTexLoader.load('assets/textures/boss/skin/Rock035_1K-PNG_NormalGL.png');
+for (const t of [arenaRochaTex, arenaRochaNrm]) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+
 export const matCombateChao = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 } },
+    uniforms: { uTime: { value: 0 }, uTex: { value: arenaRochaTex }, uNormal: { value: arenaRochaNrm } },
     vertexShader: `
         varying vec2 vUv;
         void main() {
@@ -76,6 +83,8 @@ export const matCombateChao = new THREE.ShaderMaterial({
     `,
     fragmentShader: `
         uniform float uTime;
+        uniform sampler2D uTex;
+        uniform sampler2D uNormal;
         varying vec2 vUv;
 
         float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
@@ -99,19 +108,27 @@ export const matCombateChao = new THREE.ShaderMaterial({
             float mask = smoothstep(0.50 + warp, 0.42 + warp, dist);
             if (mask < 0.01) discard;
 
+            // --- superfície: obsidiana (Rock035) com RELEVO ---
+            // luminância (com contraste reforçado) dá o padrão da pedra...
+            vec2 ruv = vUv * 3.5;
+            float rocha = dot(texture2D(uTex, ruv).rgb, vec3(0.333));
+            rocha = clamp((rocha - 0.5) * 1.9 + 0.5, 0.0, 1.0);
+            float fendas = 1.0 - smoothstep(0.12, 0.62, rocha);
+            // ...e o normal map com luz rasante faz fendas/facetas saltar
+            // à vista — é isto que torna a pedra realmente visível.
+            vec3 nrm = normalize(texture2D(uNormal, ruv).rgb * 2.0 - 1.0);
+            float relevo = clamp(0.5 + 0.95 * dot(nrm, normalize(vec3(0.55, 0.45, 0.7))), 0.22, 1.55);
+            vec3 col = mix(vec3(0.06, 0.02, 0.12), vec3(0.44, 0.25, 0.62), rocha) * relevo;
+
             float n  = fbm(vUv * 14.0 + vec2(uTime * 0.05, 0.0));
             float n2 = fbm(vUv *  6.0 - vec2(0.0, uTime * 0.03) + 5.3);
+            float energia = pow(n * 0.6 + n2 * 0.4, 1.7);
             float sparkle = pow(sn(vUv * 40.0 + uTime * 0.6), 7.0);
             float pulse   = 0.5 + 0.5 * sin(uTime * 2.0);
 
-            vec3 dark   = vec3(0.10, 0.02, 0.18);
-            vec3 mid    = vec3(0.32, 0.08, 0.48);
-            vec3 bright = vec3(0.62, 0.18, 0.92);
-            vec3 spark  = vec3(0.90, 0.55, 1.00);
-
-            vec3 col = mix(dark, mid, n * 0.6 + n2 * 0.4);
-            col      = mix(col, bright, sparkle * pulse * 0.7);
-            col      = mix(col, spark,  sparkle * 0.4);
+            // corrupção ADITIVA — brilha por cima sem apagar a pedra
+            col += vec3(0.32, 0.09, 0.55) * energia * (0.55 + 0.45 * pulse) * (0.4 + 0.6 * fendas);
+            col += vec3(0.60, 0.35, 0.70) * sparkle * (0.5 + 0.5 * pulse);
 
             // anel de borda mais brilhante a delimitar a arena
             float borderGlow = smoothstep(0.40 + warp, 0.50 + warp, dist) * mask;
@@ -125,13 +142,21 @@ export const matCombateChao = new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
 });
 
+// A "arena" (chão, decoração, pilares, partículas) vive num grupo próprio
+// para poder ser rodada sem mexer nas entidades (player / inimigo / boss),
+// que continuam a ser adicionadas directamente à combateScene. A rotação
+// alinha o "palco" com a câmara 3/4 (ver combateCamera em renderer.js).
+const arenaGrupo = new THREE.Group();
+arenaGrupo.rotation.y = -0.52;   // ≈ -30°, vira a arena para a câmara
+combateScene.add(arenaGrupo);
+
 const arenaR = 7;
 const arenaGeo = new THREE.PlaneGeometry(arenaR * 2, arenaR * 2, 1, 1);
 const arenaMesh = new THREE.Mesh(arenaGeo, matCombateChao);
 arenaMesh.rotation.x = -Math.PI / 2;
 arenaMesh.position.y = 0.02;
 arenaMesh.receiveShadow = true;
-combateScene.add(arenaMesh);
+arenaGrupo.add(arenaMesh);
 
 // chão preto por baixo (recebe as sombras nítidas dos lutadores)
 const floorShadow = new THREE.Mesh(
@@ -141,7 +166,7 @@ const floorShadow = new THREE.Mesh(
 floorShadow.rotation.x = -Math.PI / 2;
 floorShadow.position.y = 0;
 floorShadow.receiveShadow = true;
-combateScene.add(floorShadow);
+arenaGrupo.add(floorShadow);
 
 // tufos roxos espalhados (decorativo, igual ao mapa)
 const matTufo = new THREE.MeshStandardMaterial({
@@ -160,7 +185,7 @@ for (let i = 0; i < 60; i++) {
     tufo.position.set(Math.cos(ang) * rad, h / 2, Math.sin(ang) * rad);
     tufo.rotation.y = r() * Math.PI * 2;
     tufo.castShadow = true;
-    combateScene.add(tufo);
+    arenaGrupo.add(tufo);
 }
 
 // pilares quebrados (atmosfera de ruína corrompida)
@@ -175,7 +200,7 @@ function pilar(x, z, h) {
     m.position.set(x, h / 2, z);
     m.castShadow = true;
     m.receiveShadow = true;
-    combateScene.add(m);
+    arenaGrupo.add(m);
 }
 pilar(-5.5, -3.5, 2.2);
 pilar( 5.8, -3.2, 1.8);
@@ -203,31 +228,31 @@ const partMat = new THREE.PointsMaterial({
     blending: THREE.AdditiveBlending,
 });
 const particulas = new THREE.Points(partGeo, partMat);
-combateScene.add(particulas);
+arenaGrupo.add(particulas);
 
 // ---- Wraith inimigo (entidade em src/entities/inimigo-wraith.js) ----
 export const combateInimigo = criarInimigoWraith();
 combateInimigo.position.copy(posInimigoCombate);
 combateScene.add(combateInimigo);
 
-// ---- Sluddy inimigo (entidade em src/entities/inimigo-sluddy.js) ----
-export const combateSluddy = criarInimigoSluddy();
-combateSluddy.position.copy(posInimigoCombate);
-combateSluddy.visible = false;
-combateScene.add(combateSluddy);
+// ---- Núcleo Corrompido inimigo (entidade em src/entities/inimigo-nucleo.js) ----
+export const combateNucleo = criarInimigoNucleo();
+combateNucleo.position.copy(posInimigoCombate);
+combateNucleo.visible = false;
+combateScene.add(combateNucleo);
 
-// Tipo de inimigo activo em combate normal (não-boss): 'wraith' | 'sluddy'
+// Tipo de inimigo activo em combate normal (não-boss): 'wraith' | 'nucleo'
 let _tipoInimigo = 'wraith';
 export function setTipoInimigo(tipo) {
-    _tipoInimigo = (tipo === 'sluddy') ? 'sluddy' : 'wraith';
+    _tipoInimigo = (tipo === 'nucleo') ? 'nucleo' : 'wraith';
     if (_bossMode) return; // boss mode controla visibilidade independentemente
     combateInimigo.visible = (_tipoInimigo === 'wraith');
-    combateSluddy.visible  = (_tipoInimigo === 'sluddy');
+    combateNucleo.visible  = (_tipoInimigo === 'nucleo');
 }
 export function getTipoInimigo() { return _tipoInimigo; }
 // Devolve o mesh activo (para o systems/combate fazer fade no fim de vitória)
 export function getInimigoActivo() {
-    return _tipoInimigo === 'sluddy' ? combateSluddy : combateInimigo;
+    return _tipoInimigo === 'nucleo' ? combateNucleo : combateInimigo;
 }
 
 // ----------------------------------------------------------------------
@@ -240,7 +265,7 @@ export function getInimigoActivo() {
 const bossPos = posInimigoCombate.clone();
 bossPos.y = 0;
 criarBoss(combateScene, bossPos, {
-    acessorios: ['coroa_magica', 'mascara_eclipse', 'oculos_carga'],
+    acessorios: ['coroa_magica'],
 });
 const _bossRoot = getBossRoot();
 if (_bossRoot) {
@@ -254,12 +279,15 @@ export function isBossMode() { return _bossMode; }
 export function setBossMode(on) {
     _bossMode = !!on;
     if (_bossRoot) _bossRoot.visible = _bossMode;
+    // O boss é um singleton partilhado — pode ter sido movido para a cena
+    // de debug. Ao activar o modo boss, garantir que está nesta cena.
+    if (_bossMode && _bossRoot) combateScene.add(_bossRoot);
     if (_bossMode) {
         combateInimigo.visible = false;
-        combateSluddy.visible  = false;
+        combateNucleo.visible  = false;
     } else {
         combateInimigo.visible = (_tipoInimigo === 'wraith');
-        combateSluddy.visible  = (_tipoInimigo === 'sluddy');
+        combateNucleo.visible  = (_tipoInimigo === 'nucleo');
     }
     // muta as posições que outros módulos importaram por referência
     if (_bossMode) {
@@ -306,8 +334,8 @@ export function updateCombateScene(deltaTime) {
     if (combateInimigo.visible) {
         updateInimigoWraith(combateInimigo, deltaTime, _t, posInimigoCombate);
     }
-    if (combateSluddy.visible) {
-        updateInimigoSluddy(combateSluddy, deltaTime, _t, posInimigoCombate);
+    if (combateNucleo.visible) {
+        updateInimigoNucleo(combateNucleo, deltaTime, _t, posInimigoCombate);
     }
 
     // partículas a subir lentamente
@@ -324,16 +352,16 @@ export function resetCombateScene() {
     // os inimigos partilham a mesma marca; só aparece o seleccionado pelo
     // tipo. Em boss mode ambos ficam ocultos.
     combateInimigo.position.copy(_posInimigoNormal);
-    combateSluddy.position.copy(_posInimigoNormal);
+    combateNucleo.position.copy(_posInimigoNormal);
     if (_bossMode) {
         combateInimigo.visible = false;
-        combateSluddy.visible  = false;
+        combateNucleo.visible  = false;
     } else {
         combateInimigo.visible = (_tipoInimigo === 'wraith');
-        combateSluddy.visible  = (_tipoInimigo === 'sluddy');
+        combateNucleo.visible  = (_tipoInimigo === 'nucleo');
     }
     resetInimigoWraith(combateInimigo);
-    resetInimigoSluddy(combateSluddy);
+    resetInimigoNucleo(combateNucleo);
     // garantir que o boss está visível e na marca correcta se boss mode
     if (_bossMode && _bossRoot) {
         _bossRoot.visible = true;

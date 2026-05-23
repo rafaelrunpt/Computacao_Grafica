@@ -14,9 +14,12 @@ function loadTex(path, rx, ry) {
 const TS = 6;
 const W_MAP = 200, H_MAP_HALF = 95;
 
-export const grassTex    = loadTex('assets/textures/relva.png',   W_MAP/TS, H_MAP_HALF/TS);
-export const terraTex    = loadTex('assets/textures/terra.png',   W_MAP/TS, H_MAP_HALF/TS);
+export const grassTex    = loadTex('assets/textures/Grass007_1K-PNG/Grass007_1K-PNG_Color.png',   W_MAP/TS, H_MAP_HALF/TS);
+export const terraTex    = loadTex('assets/textures/PavingStones142_1K-PNG/PavingStones142_1K-PNG_Color.png', W_MAP/TS, H_MAP_HALF/TS);
 export const areiaTex    = loadTex('assets/textures/areia.png',   W_MAP/TS, H_MAP_HALF/TS);
+export const rockTex     = loadTex('assets/textures/castelo/pilares/Travertine013_1K-PNG/Travertine013_1K-PNG_Color.png', 1, 1);
+export const rockNormal  = loadTex('assets/textures/castelo/pilares/Travertine013_1K-PNG/Travertine013_1K-PNG_NormalGL.png', 1, 1);
+export const rockRough   = loadTex('assets/textures/castelo/pilares/Travertine013_1K-PNG/Travertine013_1K-PNG_Roughness.png', 1, 1);
 let _woodCount = 0;
 let _woodResolve;
 export const woodTexturesReady = new Promise(r => { _woodResolve = r; });
@@ -114,7 +117,18 @@ export function makeTerrainShader(grassCol, pathColor) {
         ).replace(
             '#include <map_fragment>',
             `vec2 tuv = vWorldPos.xz / 6.0;
+            // relevo da relva: gradiente de luminância da textura → normal
+            // falsa → sombreado direccional. Dá volume à relva e fá-la
+            // notar-se bem (mesmo princípio do chão de obsidiana da arena).
+            float ge = 1.0 / 300.0;
+            float gh0 = dot(texture2D(uGrass, tuv + vec2(-ge, 0.0)).rgb, vec3(0.333));
+            float gh1 = dot(texture2D(uGrass, tuv + vec2( ge, 0.0)).rgb, vec3(0.333));
+            float gh2 = dot(texture2D(uGrass, tuv + vec2(0.0, -ge)).rgb, vec3(0.333));
+            float gh3 = dot(texture2D(uGrass, tuv + vec2(0.0,  ge)).rgb, vec3(0.333));
+            vec3 gN = normalize(vec3((gh0 - gh1) * 6.0, 1.0, (gh2 - gh3) * 6.0));
+            float gRelevo = clamp(0.5 + 0.62 * dot(gN, normalize(vec3(0.4, 0.8, 0.5))), 0.72, 1.3);
             vec4 cGrass = texture2D(uGrass, tuv) * vec4(uGrassCol, 1.0);
+            cGrass.rgb *= gRelevo;
             vec4 cDirt  = texture2D(uDirt,  tuv) * vec4(uDirtCol,  1.0);
             vec4 cSand  = texture2D(uSand,  tuv) * vec4(1.00, 0.87, 0.62, 1.0);
 
@@ -146,8 +160,9 @@ export function makeTerrainShader(grassCol, pathColor) {
 // brilhantes + sparkles + crackling eléctrico nas bordas + halo interior.
 export const matBattleGrass = new THREE.ShaderMaterial({
     uniforms: {
-        uTime:  { value: 0 },
-        uGrass: { value: grassTex },
+        uTime:   { value: 0 },
+        uGrass:  { value: grassTex },
+        uCenter: { value: new THREE.Vector2(0.5, 0.5) },
     },
     vertexShader: `
         varying vec2 vUv;
@@ -162,6 +177,7 @@ export const matBattleGrass = new THREE.ShaderMaterial({
     fragmentShader: `
         uniform float uTime;
         uniform sampler2D uGrass;
+        uniform vec2 uCenter;
         varying vec2 vUv;
         varying vec3 vWorldPos;
 
@@ -183,7 +199,7 @@ export const matBattleGrass = new THREE.ShaderMaterial({
 
         void main() {
             if (vWorldPos.y < -0.3) discard;
-            vec2  centered = vUv - 0.5;
+            vec2  centered = vUv - uCenter;
             float angle    = atan(centered.y, centered.x);
             float dist     = length(centered);
 
@@ -201,6 +217,10 @@ export const matBattleGrass = new THREE.ShaderMaterial({
                 vec3(0.45, 0.12, 0.65),
                 grassL
             );
+
+            // Fator de centro: menos relva no meio, mais magia
+            float grassFade = smoothstep(0.0, 0.45, dist);
+            float magicIntensity = smoothstep(0.5, 0.1, dist);
 
             // vórtice — coordenadas rotam mais depressa quanto mais perto do centro
             vec2 swirl = rot(centered, uTime * 0.12 + (0.45 - dist) * 3.5);
@@ -232,16 +252,19 @@ export const matBattleGrass = new THREE.ShaderMaterial({
             vec3 ember    = vec3(1.00, 0.70, 0.40);
 
             // compor
-            vec3 col = mix(deepDark, corrupted, 0.85);
-            col      = mix(col, mid,    swirlN * 0.55);
-            col      = mix(col, bright, veins * (0.65 + 0.35 * pulse));
-            col      = mix(col, sparkCol, spark * (0.55 + 0.45 * pulse));
+            // Quanto mais no centro, menos se vê a relva (deepDark ganha)
+            vec3 col = mix(deepDark, corrupted, 0.85 * grassFade);
+            
+            // Efeitos mágicos ganham força no centro
+            col      = mix(col, mid,    swirlN * (0.4 + 0.6 * magicIntensity));
+            col      = mix(col, bright, veins * (0.65 + 0.35 * pulse) * (0.5 + 0.5 * magicIntensity));
+            col      = mix(col, sparkCol, spark * (0.55 + 0.45 * pulse) * (0.3 + 0.7 * magicIntensity));
             col      = mix(col, ember,    spark * 0.10);
             col      = mix(col, sparkCol, edgeRing * crackle * 0.85);
 
             // halo no centro
             float centerGlow = smoothstep(0.20, 0.0, dist);
-            col += vec3(0.35, 0.10, 0.55) * centerGlow * (0.35 + 0.4 * slowPulse);
+            col += vec3(0.45, 0.15, 0.75) * centerGlow * (0.5 + 0.5 * slowPulse) * magicIntensity;
 
             // Adicionar estrelas (reflexo/magia sutil no chão)
             float star = 0.0;
@@ -442,18 +465,19 @@ export const matWater = new THREE.ShaderMaterial({
         }
         float fbm(vec2 p) {
             float v = 0.0, a = 0.5;
-            for (int i = 0; i < 3; i++) { v += a * sn(p); p = p * 2.05 + vec2(1.7, 9.2); a *= 0.5; }
+            // Reduzido de 3 para 2 iterações: poupa 33% do custo matemático por pixel
+            for (int i = 0; i < 2; i++) { v += a * sn(p); p = p * 2.05 + vec2(1.7, 9.2); a *= 0.5; }
             return v;
         }
         void main() {
             if (vWorldPos.y < -0.3) discard;
-            vec2 p = vec2(vUv.x * 14.0, vUv.y * 3.0);
-            float n1 = fbm(p + vec2(-uTime * 0.45, sin(uTime * 0.3) * 0.4));
-            float n2 = fbm(p * 1.7 + vec2(-uTime * 0.65 + 4.7, uTime * 0.18));
-            float w = mix(n1, n2, 0.5);
-            float ripple = sin((vUv.x * 90.0 + n1 * 6.0) - uTime * 4.2) * 0.5 + 0.5;
-            ripple = pow(ripple, 16.0);
-            float glint = pow(sn(vec2(vUv.x * 5.0 - uTime * 0.4, vUv.y * 2.5)), 8.0);
+            vec2 p = vec2(vUv.x * 12.0, vUv.y * 2.5);
+            float w = fbm(p + vec2(-uTime * 0.4, sin(uTime * 0.25) * 0.3));
+            
+            float ripple = sin((vUv.x * 80.0 + w * 5.0) - uTime * 3.8) * 0.5 + 0.5;
+            ripple = pow(ripple, 12.0); // pow mais baixo é ligeiramente mais rápido
+            
+            float glint = pow(sn(vec2(vUv.x * 4.0 - uTime * 0.35, vUv.y * 2.0)), 6.0);
             vec3 deep    = vec3(0.02, 0.10, 0.30);
             vec3 mid     = vec3(0.08, 0.40, 0.72);
             vec3 surface = vec3(0.35, 0.78, 0.96);
@@ -477,7 +501,15 @@ export const matWater = new THREE.ShaderMaterial({
 // ---- materiais de corrupção ----
 export const matContTrunk  = new THREE.MeshStandardMaterial({ color: 0x3a2830, emissive: 0x220033, emissiveIntensity: 0.3,  roughness: 0.85 });
 export const matContLeaves = new THREE.MeshStandardMaterial({ color: 0x1e3020, emissive: 0x1a0028, emissiveIntensity: 0.35, roughness: 0.85 });
-export const matContRock   = new THREE.MeshStandardMaterial({ color: 0x5a5060, emissive: 0x1a0030, emissiveIntensity: 0.25, roughness: 0.95 });
+export const matContRock   = new THREE.MeshStandardMaterial({ 
+    map: rockTex,
+    normalMap: rockNormal,
+    roughnessMap: rockRough,
+    color: 0x9080a0, 
+    emissive: 0x1a0030, 
+    emissiveIntensity: 0.25, 
+    roughness: 0.95 
+});
 
 export const matCorruptHalo = new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 } },

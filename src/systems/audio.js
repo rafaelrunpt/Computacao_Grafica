@@ -49,6 +49,9 @@ export function inicializarAudio(camera, faixas, sfx) {
     onSettingChange('muted',        _aplicarVolumeMusica);
 }
 
+export function getAudioListener() { return _listener; }
+
+
 export function resumeAudio() {
     if (!_listener) return Promise.resolve();
     if (_listener.context.state !== 'suspended') return Promise.resolve();
@@ -90,6 +93,28 @@ export function switchMusic(nextTrackName, fadeTime = 1.5) {
     _pendingTrack = null;
 }
 
+/**
+ * Salta para a marca épica da música com um fade suave para não ser repentino.
+ */
+export function saltarParaClimaxMusical() {
+    if (!_currentTrack) return;
+    const a = _sounds[_currentTrack];
+    if (a && a.buffer && a.isPlaying) {
+        const targetVol = getMusicTargetVolume();
+        
+        // 1. Fade out rápido (0.5s)
+        _fadeOut(a, 0.5);
+        
+        // 2. Espera o fade acabar para saltar
+        setTimeout(() => {
+            a.stop();
+            a.offset = 59; // Começa 1 segundo antes do clímax
+            // 3. Fade in progressivo (1.5s)
+            _fadeIn(a, 1.5);
+        }, 550);
+    }
+}
+
 export function playSFX(name, delay = 0, forceRestart = true, loop = false) {
     const s = _sfx[name];
     if (!s || !s.buffer) return;
@@ -99,7 +124,7 @@ export function playSFX(name, delay = 0, forceRestart = true, loop = false) {
             if (!forceRestart) return;
             s.stop();
         }
-        
+
         s.setLoop(loop);
         s.setVolume(getSfxTargetVolume());
         s.play();
@@ -108,6 +133,7 @@ export function playSFX(name, delay = 0, forceRestart = true, loop = false) {
     if (delay > 0) setTimeout(action, delay);
     else action();
 }
+
 
 export function stopSFX(name) {
     const s = _sfx[name];
@@ -461,6 +487,43 @@ export function tocarRugidoBoss() {
     _tone(ctx, master, now + 0.04, { dur: 0.95, f0: 95,  f1: 42, type: 'square',   vol: 0.28 });
     _whoosh(ctx, master, now,      { dur: 0.90, f0: 600, f1: 90, q: 0.6, vol: 0.40 });
     _thud(ctx, master, now + 0.62, { dur: 0.42, f0: 120, f1: 38, vol: 0.55 });
+}
+
+// --- Som de ativação dos 5 pedestais no castelo ---
+export function tocarAtivacaoCristal() {
+    playSFX('cristal');
+}
+
+let _vorticeOsc = null;
+let _vorticeGain = null;
+
+// Referência ao áudio posicional do swoosh (criado no castelo.js)
+let _swooshAudio = null;
+
+export function setSwooshAudio(audio) { _swooshAudio = audio; }
+
+/**
+ * Atualiza o som do swoosh do cristal com base na intensidade.
+ * O volume é gerido pelo THREE.PositionalAudio (proximidade).
+ * @param {number} intensidade 0..1
+ */
+export function atualizarSomVorticeCristal(intensidade) {
+    if (!_swooshAudio || !_swooshAudio.buffer) return;
+
+    if (intensidade > 0.05) {
+        if (!_swooshAudio.isPlaying) {
+            _swooshAudio.setLoop(true);
+            _swooshAudio.play();
+        }
+        // Modula a velocidade de reprodução com a intensidade
+        const rate = 0.8 + intensidade * 1.7;
+        _swooshAudio.setPlaybackRate(rate);
+        
+        // Volume base do efeito (o PositionalAudio trata do resto via distância)
+        _swooshAudio.setVolume(intensidade * 0.8);
+    } else if (_swooshAudio.isPlaying) {
+        _swooshAudio.stop();
+    }
 }
 
 export function getCurrentTrack() { return _currentTrack; }

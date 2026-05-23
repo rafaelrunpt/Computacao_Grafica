@@ -103,7 +103,8 @@ function _ornamento() {
     `;
     return o;
 }
-center.appendChild(_ornamento());
+const ornaTop = _ornamento();
+center.appendChild(ornaTop);
 
 // pequena marca acima do título (símbolo mágico estilizado)
 const marca = document.createElement('div');
@@ -170,9 +171,9 @@ sub.style.cssText = `
 `;
 center.appendChild(sub);
 
-const orna2 = _ornamento();
-orna2.style.marginTop = '14px';
-center.appendChild(orna2);
+const ornaBot = _ornamento();
+ornaBot.style.marginTop = '14px';
+center.appendChild(ornaBot);
 
 // --------------------------------------------------------
 // MENU PRINCIPAL — caixas animadas (Nova Jornada, Ajustes, Crónicas)
@@ -351,6 +352,48 @@ function _refrescarPills() {
     pillNoite.innerHTML = `<div>🌙 NOITE</div>
         <div style="font-size:9px;letter-spacing:1px;color:${_modoNocturno ? '#c8a96e' : '#5a4a30'};
             margin-top:2px;font-family:'Courier New',monospace;">Benchmark</div>`;
+
+    // Atualizar os emojis do título do seletor
+    modoTitulo.textContent = _modoNocturno ? '🌙  HORA DO MUNDO  🌙' : '☀  HORA DO MUNDO  ☀';
+
+    // Atualizar símbolo no topo do título (Sol / Lua)
+    marca.textContent = _modoNocturno ? '🌙' : '☀';
+    marca.style.textShadow = _modoNocturno ? '0 0 12px #7a2fc0' : '0 0 12px #d4a830';
+
+    // Atualizar subtítulo e tema visual do topo
+    sub.textContent = _modoNocturno ? 'O Desvanecer da Magia' : 'O Despertar da Magia';
+    
+    if (_modoNocturno) {
+        sub.style.color = '#b8a8c8';
+        sub.style.webkitTextStroke = '1.5px #5a1f8c';
+        sub.style.textShadow = `
+            -1px -1px 0 #5a1f8c, 1px -1px 0 #5a1f8c,
+            -1px 1px 0 #5a1f8c, 1px 1px 0 #5a1f8c,
+            0 0 8px #7a2fc0, 0 0 18px rgba(120,40,200,0.75)`;
+        titulo.style.filter = 'drop-shadow(0 0 24px rgba(120,40,200,0.6))';
+        
+        // Ornatos roxos (combina com outline #5a1f8c)
+        const purp = '#5a1f8c';
+        ornaTop.style.background = `linear-gradient(90deg, transparent, ${purp} 40%, #c8a8ff 50%, ${purp} 60%, transparent)`;
+        ornaTop.style.boxShadow = `0 0 8px rgba(90,31,140,0.7)`;
+        ornaBot.style.background = `linear-gradient(90deg, transparent, ${purp} 40%, #c8a8ff 50%, ${purp} 60%, transparent)`;
+        ornaBot.style.boxShadow = `0 0 8px rgba(90,31,140,0.7)`;
+    } else {
+        sub.style.color = '#ffe0a0';
+        sub.style.webkitTextStroke = '1.2px #a06020';
+        sub.style.textShadow = `
+            -1px -1px 0 #a06020, 1px -1px 0 #a06020,
+            -1px 1px 0 #a06020, 1px 1px 0 #a06020,
+            0 0 12px rgba(255,210,80,0.5)`;
+        titulo.style.filter = 'drop-shadow(0 0 24px rgba(255,200,80,0.75))';
+
+        // Ornatos dourados/bronze (combina com outline #a06020)
+        const gold = '#a06020';
+        ornaTop.style.background = `linear-gradient(90deg, transparent, ${gold} 40%, #ffe0a0 50%, ${gold} 60%, transparent)`;
+        ornaTop.style.boxShadow = `0 0 8px rgba(160,96,32,0.7)`;
+        ornaBot.style.background = `linear-gradient(90deg, transparent, ${gold} 40%, #ffe0a0 50%, ${gold} 60%, transparent)`;
+        ornaBot.style.boxShadow = `0 0 8px rgba(160,96,32,0.7)`;
+    }
 }
 
 pillDia.addEventListener('click', (e) => {
@@ -882,5 +925,7 @@ window.addEventListener('keydown', (e) => {
         iniciar();
     }
 }, true);
+
+_refrescarPills(); // Garantir que o estado inicial (dia/noite) é aplicado ao texto do topo
 
 overlay.style.cursor = 'default';

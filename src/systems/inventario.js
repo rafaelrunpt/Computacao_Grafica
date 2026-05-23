@@ -47,6 +47,14 @@ export const CATALOGO = {
         icone: '🌑',
         equipMsg: 'Envergastes a Máscara. Moveis-vos agora como uma sombra, com 25% de esquiva.',
     },
+    tocha: {
+        id: 'tocha',
+        nome: 'Tocha do Viajante',
+        descricao: 'Empunhai-a para iluminar o caminho na escuridão da noite.',
+        efeito: { tipo: 'equipar', slot: 'mao' },
+        icone: '🔥',
+        equipMsg: 'Empunhastes a Tocha. A sua chama afasta as trevas da noite.',
+    },
 };
 
 // ouvintes para mudanças de equipamento (herói 3D, HUD, etc.)
@@ -57,8 +65,9 @@ function notificarEquip() { _equipListeners.forEach(fn => { try { fn(); } catch 
 // ----------------------------------------------------------------------
 // ESTADO DO INVENTÁRIO — { id → quantidade }
 // ----------------------------------------------------------------------
-// O herói parte sem haveres. As poções iniciais encontram-se no baú do aposento.
-const _stock = { pocao: 0, mega: 0, elixir: 0, coroa_magica: 0, brincos_vida: 0, oculos_carga: 0, aureola_caidos: 0, mascara_eclipse: 0 };
+// O herói parte sem haveres — excepto a Tocha do Viajante, que leva consigo.
+// As poções iniciais encontram-se no baú do aposento.
+const _stock = { pocao: 0, mega: 0, elixir: 0, coroa_magica: 0, brincos_vida: 0, oculos_carga: 0, aureola_caidos: 0, mascara_eclipse: 0, tocha: 1 };
 
 let _onChange = null;
 export function registarOnChange(cb) { _onChange = cb; }

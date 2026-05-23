@@ -1,12 +1,11 @@
 // ======================================================================
 // BOSS FINAL — modelo procedural em three.js.
 // ----------------------------------------------------------------------
-// • Constrói uma figura humanóide imponente (~3 unidades de altura).
+// • Constrói uma figura humanóide imponente e robusta (~4 unidades de altura).
 // • Usa o módulo `acessorios.js` para vestir os 5 acessórios que
 //   aparecem nos pedestais do castelo (coroa, brincos, auréola,
-//   óculos, máscara). Por defeito veste a coroa, a máscara e os
-//   óculos — os "3 acessórios" mais visíveis. Podes mudar com
-//   `vestirAcessoriosBoss([ids...])`.
+//   óculos, máscara). Por defeito veste só a coroa.
+//   Podes mudar com `vestirAcessoriosBoss([ids...])`.
 // • Cada material está marcado como "TEXTURE SLOT" — substitui o `.map`
 //   ou usa `aplicarTexturaBoss(slot, url)` para trocar a textura.
 // ======================================================================
@@ -17,11 +16,6 @@ const _texLoader = new THREE.TextureLoader();
 
 // ----------------------------------------------------------------------
 // TEXTURE SLOTS — materiais com placeholders.
-// Para aplicar uma textura, faz uma destas três coisas:
-//   1) `matBossArmor.map = loader.load('texturas/armor.png'); matBossArmor.needsUpdate = true;`
-//   2) `aplicarTexturaBoss('armor', 'texturas/armor.png')` (helper abaixo).
-//   3) Sobrepor as cores/emissões directamente para variantes "fáceis":
-//      `matBossArmor.color.setHex(0x8a1a1a);`
 // ----------------------------------------------------------------------
 
 // === TEXTURE SLOT: armor === (peitoral / placas / pernas)
@@ -58,9 +52,6 @@ export const matBossCapeLining = new THREE.MeshStandardMaterial({
 });
 
 // === TEXTURE SLOT: skin === (pele/rosto/pescoço — visível sob a máscara)
-// Tom levantado para acompanhar a chapa diamante do corpo (que com
-// metalness alta captura mais luz). Pequeno emissivo para a cabeça não
-// parecer um vazio escuro sob a sombra do colar/capa.
 export const matBossSkin = new THREE.MeshStandardMaterial({
     color: 0xc4a890,
     emissive: 0x3a2a1c,
@@ -140,10 +131,6 @@ const _SLOTS = {
 
 /**
  * Aplica uma textura a um slot do boss.
- * Aplica uma textura a um slot do boss.
- *   slot   — nome do slot (ver _SLOTS acima)
- *   url    — caminho do ficheiro de textura (png/jpg)
- *   opts   — { repeat:[u,v], color, emissive, normalUrl, roughnessUrl }
  */
 export function aplicarTexturaBoss(slot, url, opts = {}) {
     const mat = _SLOTS[slot];
@@ -182,54 +169,120 @@ export function aplicarTexturaBoss(slot, url, opts = {}) {
 }
 
 // ----------------------------------------------------------------------
-// Texturas do boss aplicadas no arranque
+// Texturas iniciais — uma textura DISTINTA por slot, com cor a branco e
+// emissivo a zero, para se ver claramente o limite de cada parte do corpo.
 // ----------------------------------------------------------------------
-const _ARMOR_TEX_BASE = 'assets/textures/boss/DiamondPlate-PNG/DiamondPlate007C_1K-PNG_';
-aplicarTexturaBoss('armor', _ARMOR_TEX_BASE + 'Color.png', {
-    repeat: [2, 2],
-    normalUrl:    _ARMOR_TEX_BASE + 'NormalGL.png',
-    roughnessUrl: _ARMOR_TEX_BASE + 'Roughness.png',
+const _T = 'assets/textures/';
+const _B = _T + 'boss/';
+
+// armadura principal (torso / coxas / braços) — Metal012 (placas hexagonais)
+aplicarTexturaBoss('armor', _B + 'Metal012_armor/Metal012_1K-PNG_Color.png', {
+    repeat: [2, 2], color: 0xffffff,
+    normalUrl:    _B + 'Metal012_armor/Metal012_1K-PNG_NormalGL.png',
+    roughnessUrl: _B + 'Metal012_armor/Metal012_1K-PNG_Roughness.png',
 });
-aplicarTexturaBoss('armor_dark', _ARMOR_TEX_BASE + 'Color.png', {
-    repeat: [2, 2],
-    normalUrl:    _ARMOR_TEX_BASE + 'NormalGL.png',
-    roughnessUrl: _ARMOR_TEX_BASE + 'Roughness.png',
+
+// placas escuras / juntas (base / canelas / ombreiras / antebraços) — Metal046 (Metal Dark)
+aplicarTexturaBoss('armor_dark', _B + 'Metal_Dark/Metal046A_1K-PNG_Color.png', {
+    repeat: [2, 2], color: 0xffffff,
+    normalUrl:    _B + 'Metal_Dark/Metal046A_1K-PNG_NormalGL.png',
+    roughnessUrl: _B + 'Metal_Dark/Metal046A_1K-PNG_Roughness.png',
+});
+
+// capa / colar — Fabric030 (Velvet)
+aplicarTexturaBoss('cape', _B + 'cape/Fabric030_1K-PNG_Color.png', {
+    repeat: [2, 3], color: 0xffffff,
+    normalUrl:    _B + 'cape/Fabric030_1K-PNG_NormalGL.png',
+    roughnessUrl: _B + 'cape/Fabric030_1K-PNG_Roughness.png',
+});
+
+// forro da capa — Fabric002
+aplicarTexturaBoss('cape_lining', _B + 'cape_lining/Fabric002_1K-JPG_Color.jpg', {
+    repeat: [2, 1], color: 0xffffff,
+    normalUrl:    _B + 'cape_lining/Fabric002_1K-JPG_NormalGL.jpg',
+    roughnessUrl: _B + 'cape_lining/Fabric002_1K-JPG_Roughness.jpg',
+});
+
+// pele (cabeça / pescoço) — Rock035 (Obsidiana/Rocha Escura)
+aplicarTexturaBoss('skin', _B + 'skin/Rock035_1K-PNG_Color.png', {
+    repeat: [1, 1], color: 0xffffff, emissive: 0x000000,
+    normalUrl:    _B + 'skin/Rock035_1K-PNG_NormalGL.png',
+    roughnessUrl: _B + 'skin/Rock035_1K-PNG_Roughness.png',
+});
+
+// couro (botas / cinto / luvas) — Leather033
+aplicarTexturaBoss('leather', _B + 'Leather/Leather033A_1K-PNG_Color.png', {
+    repeat: [2, 2], color: 0xffffff,
+    normalUrl:    _B + 'Leather/Leather033A_1K-PNG_NormalGL.png',
+    roughnessUrl: _B + 'Leather/Leather033A_1K-PNG_Roughness.png',
+});
+
+// metal (joelhos / cotovelos / fivela / espigões) — Metal008 (Gold)
+aplicarTexturaBoss('metal', _B + 'Metal008_gold/Metal008_1K-PNG_Color.png', {
+    repeat: [1, 1], color: 0xffffff, emissive: 0x000000,
+    normalUrl:    _B + 'Metal008_gold/Metal008_1K-PNG_NormalGL.png',
+    roughnessUrl: _B + 'Metal008_gold/Metal008_1K-PNG_Roughness.png',
+});
+
+// garras — Rock020
+aplicarTexturaBoss('claws', _B + 'Rock020_Claws/Rock020_1K-PNG_Color.png', {
+    repeat: [1, 1], color: 0xffffff, emissive: 0x000000,
+    normalUrl:    _B + 'Rock020_Claws/Rock020_1K-PNG_NormalGL.png',
+    roughnessUrl: _B + 'Rock020_Claws/Rock020_1K-PNG_Roughness.png',
 });
 
 // ----------------------------------------------------------------------
-// BOSS — construção do modelo
+// BOSS — construção e animação
 // ----------------------------------------------------------------------
-// "ancoras" — Groups posicionados para onde cada acessório deve assentar
 const _anchors = {
-    coroa:    null,  // topo da cabeça
-    aureola:  null,  // acima da coroa
-    brincos:  null,  // laterais (à altura das orelhas)
-    oculos:   null,  // frente da cabeça à altura dos olhos
-    mascara:  null,  // frente da cabeça à altura da boca
+    coroa:    null,
+    aureola:  null,
+    brincos:  null,
+    oculos:   null,
+    mascara:  null,
 };
 
 let _boss = null;
 let _t = 0;
+// escala base do boss — aumenta presença/altura (1 = tamanho original)
+const _BOSS_BASE_SCALE = 1.12;
 const _anim = {
     eyeLeft:  null,
     eyeRight: null,
     cape:     null,
-    aura:     null,
     runes:    [],
-    halo:     null,   // referência ao acessório de auréola para rodar
-    crown:    null,   // referência à coroa equipada (para subtle rotation)
+    halo:     null,
+    crown:    null,
+    armL:     null,
+    armR:     null,
+    attack: {
+        active: false,
+        type: 'none', // 'aereo', 'rasante', 'lateral', 'varredura'
+        side: 0,      // -1 (esq), 1 (dir)
+        timer: 0,
+        duration: 1.0,
+    }
 };
 
 /**
- * Constrói o boss e adiciona-o à cena. Devolve o THREE.Group raiz.
- * Por defeito veste 3 acessórios — passa `acessorios:[]` para não vestir
- * nenhum, ou outra lista para escolher.
+ * Dispara uma animação de ataque no boss.
+ * @param {string} type Tipo de ataque ('aereo', 'rasante', 'lateral', 'varredura')
+ * @param {number} duration Duração total da animação
+ * @param {object} opts Opções extras (ex: { side: -1 })
  */
+export function triggerBossAttackAnim(type, duration = 1.0, opts = {}) {
+    if (!_boss) return;
+    _anim.attack.active = true;
+    _anim.attack.type = type;
+    _anim.attack.duration = duration;
+    _anim.attack.timer = 0;
+    _anim.attack.side = opts.side || (Math.random() < 0.5 ? -1 : 1);
+}
+
 export function criarBoss(scene, posicao = new THREE.Vector3(0, 0, 0), {
-    acessorios = ['coroa_magica', 'mascara_eclipse', 'oculos_carga'],
+    acessorios = ['coroa_magica'],
 } = {}) {
     if (_boss) {
-        // se já existir, mova-se / re-anexe
         if (_boss.parent) _boss.parent.remove(_boss);
         scene.add(_boss);
         _boss.position.copy(posicao);
@@ -239,335 +292,274 @@ export function criarBoss(scene, posicao = new THREE.Vector3(0, 0, 0), {
     _boss = new THREE.Group();
     _boss.name = 'Boss';
     _boss.position.copy(posicao);
+    _anim.attack.active = false;
 
-    // ===== BASE / AURA ===================================================
-    // disco no chão
-    const baseDisc = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.95, 1.1, 0.08, 24),
-        matBossArmorDark
-    );
-    baseDisc.position.y = 0.04;
+    // BASE
+    const baseDisc = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.35, 0.10, 24), matBossArmorDark);
+    baseDisc.position.y = 0.05;
     baseDisc.receiveShadow = true;
     _boss.add(baseDisc);
 
-    // "saia" de energia (cone aberto invertido)
-    const aura = new THREE.Mesh(
-        new THREE.ConeGeometry(1.05, 0.75, 24, 1, true),
-        matBossAura
-    );
-    aura.position.y = 0.42;
-    _boss.add(aura);
-    _anim.aura = aura;
-
-    // ===== PERNAS ========================================================
+    // PERNAS
     function perna(side) {
         const g = new THREE.Group();
-        const coxa = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.7, 8), matBossArmor);
-        coxa.position.y = -0.35;
+        const coxa = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.18, 0.74, 8), matBossArmor);
+        coxa.position.y = -0.37;
         coxa.castShadow = true;
         g.add(coxa);
-        const joelho = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), matBossMetal);
-        joelho.position.y = -0.7;
+        const joelho = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 8), matBossMetal);
+        joelho.position.y = -0.74;
         g.add(joelho);
-        const canela = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.7, 8), matBossArmorDark);
-        canela.position.y = -1.05;
+        const canela = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.15, 0.72, 8), matBossArmorDark);
+        canela.position.y = -1.10;
         canela.castShadow = true;
         g.add(canela);
-        const bota = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.18, 0.46), matBossLeather);
-        bota.position.set(0, -1.42, 0.06);
+        const bota = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.20, 0.58), matBossLeather);
+        bota.position.set(0, -1.42, 0.08);
         g.add(bota);
-        g.position.set(side * 0.22, 1.5, 0);
+        g.position.set(side * 0.32, 1.5, 0);
         _boss.add(g);
-        return g;
     }
-    perna(-1);
-    perna(1);
+    perna(-1); perna(1);
 
-    // ===== TRONCO ========================================================
-    // peitoral
-    const torso = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.46, 0.38, 0.95, 12),
-        matBossArmor
-    );
-    torso.position.y = 1.92;
+    // TRONCO
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.66, 0.52, 1.10, 12), matBossArmor);
+    torso.position.y = 1.95;
     torso.castShadow = true;
     _boss.add(torso);
 
-    // placas laterais
     for (const side of [-1, 1]) {
-        const placa = new THREE.Mesh(
-            new THREE.BoxGeometry(0.18, 0.85, 0.42),
-            matBossArmorDark
-        );
-        placa.position.set(side * 0.4, 1.92, 0);
+        const placa = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.0, 0.52), matBossArmorDark);
+        placa.position.set(side * 0.62, 1.95, 0);
         placa.castShadow = true;
         _boss.add(placa);
     }
 
-    // cintura (cinto)
-    const cinto = new THREE.Mesh(
-        new THREE.TorusGeometry(0.42, 0.06, 8, 24),
-        matBossLeather
-    );
-    cinto.position.y = 1.45;
+    const cinto = new THREE.Mesh(new THREE.TorusGeometry(0.60, 0.08, 8, 24), matBossLeather);
+    cinto.position.y = 1.48;
     cinto.rotation.x = Math.PI / 2;
     _boss.add(cinto);
-    // fivela
-    const fivela = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.06), matBossMetal);
-    fivela.position.set(0, 1.45, 0.42);
+
+    const fivela = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.08), matBossMetal);
+    fivela.position.set(0, 1.48, 0.60);
     _boss.add(fivela);
 
-    // runas no peito (3 pequenas pedras)
     for (let i = 0; i < 3; i++) {
-        const r = new THREE.Mesh(
-            new THREE.OctahedronGeometry(0.045, 0),
-            matBossRune
-        );
-        r.position.set(-0.15 + i * 0.15, 2.05, 0.46);
+        const r = new THREE.Mesh(new THREE.OctahedronGeometry(0.055, 0), matBossRune);
+        r.position.set(-0.20 + i * 0.20, 2.15, 0.64);
         _boss.add(r);
         _anim.runes.push(r);
     }
 
-    // ===== OMBROS / PAULDRONS ============================================
+    // OMBROS
     for (const side of [-1, 1]) {
-        const pauldron = new THREE.Mesh(
-            new THREE.SphereGeometry(0.28, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2),
-            matBossArmorDark
-        );
-        pauldron.position.set(side * 0.55, 2.32, 0);
+        const pauldron = new THREE.Mesh(new THREE.SphereGeometry(0.40, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2), matBossArmorDark);
+        pauldron.position.set(side * 0.80, 2.42, 0);
         pauldron.castShadow = true;
         _boss.add(pauldron);
-        // espinho no ombro
-        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.32, 6), matBossMetal);
-        spike.position.set(side * 0.65, 2.45, 0);
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.42, 6), matBossMetal);
+        spike.position.set(side * 0.98, 2.56, 0);
         spike.rotation.z = -side * 0.4;
         _boss.add(spike);
     }
 
-    // ===== BRAÇOS ========================================================
+    // BRAÇOS
     function braco(side) {
         const g = new THREE.Group();
-        g.position.set(side * 0.55, 2.18, 0);
-
-        const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.6, 8), matBossArmor);
-        upper.position.y = -0.32;
+        g.position.set(side * 0.82, 2.32, 0);
+        const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.16, 0.66, 8), matBossArmor);
+        upper.position.y = -0.35;
         upper.castShadow = true;
         g.add(upper);
-
-        const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), matBossMetal);
-        elbow.position.y = -0.66;
+        const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), matBossMetal);
+        elbow.position.y = -0.72;
         g.add(elbow);
-
-        const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.09, 0.55, 8), matBossArmorDark);
-        fore.position.y = -0.96;
+        const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.60, 8), matBossArmorDark);
+        fore.position.y = -1.05;
         fore.castShadow = true;
         g.add(fore);
-
-        // luva
-        const luva = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), matBossLeather);
-        luva.position.y = -1.26;
+        const luva = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), matBossLeather);
+        luva.position.y = -1.38;
         g.add(luva);
-
-        // garras (3 dedos pontiagudos)
         for (let i = -1; i <= 1; i++) {
-            const garra = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.16, 5), matBossClaws);
-            garra.position.set(i * 0.06, -1.42, 0.06);
+            const garra = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.20, 5), matBossClaws);
+            garra.position.set(i * 0.08, -1.54, 0.08);
             garra.rotation.x = 0.3;
             g.add(garra);
         }
-
-        // leve inclinação para fora dos braços
         g.rotation.z = -side * 0.12;
         _boss.add(g);
         return g;
     }
-    braco(-1);
-    braco(1);
+    _anim.armL = braco(-1);
+    _anim.armR = braco(1);
 
-    // ===== PESCOÇO + CABEÇA ==============================================
-    const pescoco = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.13, 0.16, 0.18, 10),
-        matBossSkin
-    );
-    pescoco.position.y = 2.5;
+    // CABEÇA
+    const pescoco = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 0.22, 10), matBossSkin);
+    pescoco.position.y = 2.62;
     _boss.add(pescoco);
 
-    const cabeca = new THREE.Mesh(
-        new THREE.SphereGeometry(0.32, 16, 14),
-        matBossSkin
-    );
-    cabeca.position.y = 2.78;
+    const cabeca = new THREE.Mesh(new THREE.SphereGeometry(0.40, 16, 14), matBossSkin);
+    cabeca.position.y = 2.96;
     cabeca.castShadow = true;
     _boss.add(cabeca);
 
-    // olhos (esferas emissivas dentro da cabeça)
-    const olhoGeo = new THREE.SphereGeometry(0.06, 10, 8);
+    const olhoGeo = new THREE.SphereGeometry(0.075, 10, 8);
     const olhoL = new THREE.Mesh(olhoGeo, matBossEye);
-    olhoL.position.set(-0.11, 2.82, 0.27);
+    olhoL.position.set(-0.14, 3.00, 0.34);
     _boss.add(olhoL);
     _anim.eyeLeft = olhoL;
     const olhoR = new THREE.Mesh(olhoGeo, matBossEye);
-    olhoR.position.set( 0.11, 2.82, 0.27);
+    olhoR.position.set( 0.14, 3.00, 0.34);
     _boss.add(olhoR);
     _anim.eyeRight = olhoR;
 
-    // luz a sair dos olhos
     const eyeLight = new THREE.PointLight(0xff4020, 2.0, 4, 2);
-    eyeLight.position.set(0, 2.82, 0.4);
+    eyeLight.position.set(0, 3.00, 0.50);
     _boss.add(eyeLight);
 
-    // ===== CAPA ==========================================================
-    const cape = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.3, 2.2, 6, 10),
-        matBossCape
-    );
-    cape.position.set(0, 1.7, -0.4);
+    // CAPA — pendurada a partir dos ombros/parte de cima das costas, num
+    // pivô inclinado para trás para não entrar dentro da armadura.
+    const capePivot = new THREE.Group();
+    capePivot.position.set(0, 2.58, -0.72);
+    capePivot.rotation.x = 0.24;
+    _boss.add(capePivot);
+
+    const cape = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 2.7, 6, 10), matBossCape);
+    cape.position.y = -1.30; // topo da capa fica junto ao pivô (ombros)
     cape.castShadow = true;
-    _boss.add(cape);
+    capePivot.add(cape);
     _anim.cape = cape;
 
-    // forro interior visível na orla
-    const lining = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.25, 0.4),
-        matBossCapeLining
-    );
-    lining.position.set(0, 0.65, -0.39);
-    _boss.add(lining);
+    const lining = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.45), matBossCapeLining);
+    lining.position.set(0, -2.32, 0.03); // forro interior, junto à base da capa
+    capePivot.add(lining);
 
-    // colarinho alto que sobe atrás da cabeça
-    const colar = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.42, 0.45, 0.55, 12, 1, true, -Math.PI * 0.4, Math.PI * 0.8),
-        matBossCape
-    );
-    colar.position.set(0, 2.78, -0.05);
-    _boss.add(colar);
-
-    // ===== ANCORAS PARA ACESSÓRIOS =======================================
-    const headY = 2.78;
-    _anchors.coroa   = new THREE.Group(); _anchors.coroa.position.set(0, headY + 0.34, 0); _boss.add(_anchors.coroa);
-    _anchors.aureola = new THREE.Group(); _anchors.aureola.position.set(0, headY + 0.55, -0.02); _boss.add(_anchors.aureola);
-    _anchors.brincos = new THREE.Group(); _anchors.brincos.position.set(0, headY - 0.04, 0); _boss.add(_anchors.brincos);
-    _anchors.oculos  = new THREE.Group(); _anchors.oculos.position.set(0, headY + 0.04, 0.30); _boss.add(_anchors.oculos);
-    _anchors.mascara = new THREE.Group(); _anchors.mascara.position.set(0, headY - 0.06, 0.25); _boss.add(_anchors.mascara);
+    // ANCORAS
+    const headY = 2.96;
+    _anchors.coroa   = new THREE.Group(); _anchors.coroa.position.set(0, headY + 0.42, 0); _boss.add(_anchors.coroa);
+    _anchors.aureola = new THREE.Group(); _anchors.aureola.position.set(0, headY + 0.66, -0.02); _boss.add(_anchors.aureola);
+    _anchors.brincos = new THREE.Group(); _anchors.brincos.position.set(0, headY - 0.05, 0); _boss.add(_anchors.brincos);
+    _anchors.oculos  = new THREE.Group(); _anchors.oculos.position.set(0, headY + 0.05, 0.38); _boss.add(_anchors.oculos);
+    _anchors.mascara = new THREE.Group(); _anchors.mascara.position.set(0, headY + 0.04, 0); _boss.add(_anchors.mascara);
 
     scene.add(_boss);
-
-    // veste-se com os acessórios pedidos
     vestirAcessoriosBoss(acessorios);
-
     return _boss;
 }
 
-/**
- * Tira tudo o que está nos anchors e equipa os acessórios pedidos.
- * IDs aceites: 'coroa_magica', 'brincos_vida', 'aureola_caidos',
- *              'oculos_carga', 'mascara_eclipse'.
- */
 export function vestirAcessoriosBoss(ids = []) {
-    if (!_boss) { console.warn('[Boss] criarBoss(...) primeiro.'); return; }
-    // limpa anchors
+    if (!_boss) return;
     for (const k of Object.keys(_anchors)) {
         const a = _anchors[k];
         while (a.children.length) a.remove(a.children[0]);
     }
-    _anim.halo = null;
-    _anim.crown = null;
-
+    _anim.halo = null; _anim.crown = null;
     for (const id of ids) {
         const ac = criarAcessorio(id);
         if (!ac) continue;
         switch (id) {
-            case 'coroa_magica': {
-                ac.scale.setScalar(1.6);
-                _anchors.coroa.add(ac);
-                _anim.crown = ac;
-                break;
-            }
-            case 'aureola_caidos': {
-                ac.scale.setScalar(1.6);
-                ac.position.y = 0;
-                _anchors.aureola.add(ac);
-                _anim.halo = ac;
-                break;
-            }
-            case 'brincos_vida': {
-                // os brincos vêm em pares a ±0.14 (escala troféu).
-                // Para o boss empurro-os para fora da cabeça (raio ~0.32).
-                ac.scale.setScalar(1.2);
-                ac.position.y = -0.02;
-                for (const child of ac.children) child.position.x *= 2.4;
-                _anchors.brincos.add(ac);
-                break;
-            }
-            case 'oculos_carga': {
-                ac.scale.setScalar(1.5);
-                _anchors.oculos.add(ac);
-                break;
-            }
-            case 'mascara_eclipse': {
-                ac.scale.setScalar(1.5);
-                // levantar um pouco para tapar a metade inferior do rosto
-                ac.position.y = 0.02;
-                _anchors.mascara.add(ac);
-                break;
-            }
+            case 'coroa_magica': ac.scale.setScalar(2.0); _anchors.coroa.add(ac); _anim.crown = ac; break;
+            case 'aureola_caidos': ac.scale.setScalar(2.0); ac.position.y = 0; _anchors.aureola.add(ac); _anim.halo = ac; break;
+            case 'brincos_vida': ac.scale.setScalar(1.5); ac.position.y = -0.02; for (const child of ac.children) child.position.x *= 2.8; _anchors.brincos.add(ac); break;
+            case 'oculos_carga': ac.scale.setScalar(1.9); _anchors.oculos.add(ac); break;
+            // máscara — banda fina ao nível dos olhos: deixa a testa e a
+            // parte de baixo do rosto à mostra. raio ≈ raio da cabeça (0.40).
+            case 'mascara_eclipse': ac.scale.setScalar(2.5); ac.position.y = 0; _anchors.mascara.add(ac); break;
         }
     }
 }
 
-/** Devolve o group raiz do boss (null se ainda não foi criado). */
 export function getBossRoot() { return _boss; }
-
-/** Devolve a posição para a câmara apontar (centro do tronco). */
 export function getBossTargetPoint() {
     if (!_boss) return null;
-    return new THREE.Vector3(
-        _boss.position.x,
-        _boss.position.y + 2.0,
-        _boss.position.z
-    );
+    return new THREE.Vector3(_boss.position.x, _boss.position.y + 2.0, _boss.position.z);
 }
 
-/**
- * Animação idle do boss — chamar a cada frame.
- *   • Flutuação leve do corpo
- *   • Pulse dos olhos
- *   • Rotação da auréola
- *   • Sway da capa
- *   • Pulse das runas
- *   • Rotação lenta da aura
- */
 export function updateBoss(deltaTime) {
     if (!_boss) return;
     _t += deltaTime;
 
-    // flutuação
-    _boss.position.y = 0 + Math.sin(_t * 1.4) * 0.05;
-    // breath
+    // Reset base transformations
+    _boss.position.y = 0;
+    _boss.rotation.set(0, 0, 0);
+    if (_anim.armL) _anim.armL.rotation.set(0, 0, -0.12);
+    if (_anim.armR) _anim.armR.rotation.set(0, 0, 0.12);
+
+    // FLUTUAÇÃO IDLE
+    const idleFloat = Math.sin(_t * 1.4) * 0.05;
+    _boss.position.y += idleFloat;
     const b = 1 + Math.sin(_t * 1.8) * 0.015;
-    _boss.scale.set(1, b, 1);
+    _boss.scale.set(_BOSS_BASE_SCALE, _BOSS_BASE_SCALE * b, _BOSS_BASE_SCALE);
 
-    // olhos — flicker
+    // Outras animações idle
     if (_anim.eyeLeft && _anim.eyeRight) {
-        const eP = 2.2 + Math.sin(_t * 6) * 0.6 + Math.sin(_t * 17) * 0.25;
-        matBossEye.emissiveIntensity = eP;
+        matBossEye.emissiveIntensity = 2.2 + Math.sin(_t * 6) * 0.6 + Math.sin(_t * 17) * 0.25;
     }
-
-    // auréola roda devagar
     if (_anim.halo) _anim.halo.rotation.y += deltaTime * 0.8;
-    // coroa oscila ligeiramente
     if (_anim.crown) _anim.crown.rotation.y = Math.sin(_t * 0.6) * 0.15;
-
-    // capa sway
     if (_anim.cape) {
         _anim.cape.rotation.x = Math.sin(_t * 1.1) * 0.04;
         _anim.cape.rotation.z = Math.sin(_t * 0.7) * 0.025;
     }
+    matBossRune.emissiveIntensity = 1.8 + Math.sin(_t * 3.2) * 0.6;
 
-    // aura roda
-    if (_anim.aura) _anim.aura.rotation.y += deltaTime * 0.3;
+    // ANIMAÇÕES DE ATAQUE COMPLEXAS
+    if (_anim.attack.active) {
+        _anim.attack.timer += deltaTime;
+        const progress = Math.min(1, _anim.attack.timer / _anim.attack.duration);
+        const ease = Math.sin(progress * Math.PI); // Curva 0 -> 1 -> 0
 
-    // pulse das runas no peito
-    const ri = 1.8 + Math.sin(_t * 3.2) * 0.6;
-    matBossRune.emissiveIntensity = ri;
+        switch (_anim.attack.type) {
+            case 'aereo':
+                // Salto épico com braços erguidos
+                _boss.position.y += ease * 1.6;
+                if (_anim.armL) _anim.armL.rotation.x = -ease * 2.2;
+                if (_anim.armR) _anim.armR.rotation.x = -ease * 2.2;
+                break;
+
+            case 'rasante':
+                // Slam no chão / Agachado
+                _boss.position.y -= ease * 0.6;
+                _boss.rotation.x = ease * 0.3;
+                if (_anim.armL) {
+                    _anim.armL.rotation.x = ease * 1.2;
+                    _anim.armL.rotation.z = -0.12 - ease * 0.5;
+                }
+                if (_anim.armR) {
+                    _anim.armR.rotation.x = ease * 1.2;
+                    _anim.armR.rotation.z = 0.12 + ease * 0.5;
+                }
+                break;
+
+            case 'varredura':
+                // Braços abertos em cruz (horizontal sweep)
+                _boss.rotation.y = Math.sin(progress * Math.PI * 2) * 0.2;
+                if (_anim.armL) {
+                    _anim.armL.rotation.x = -0.5;
+                    _anim.armL.rotation.z = -0.12 - ease * 1.5;
+                }
+                if (_anim.armR) {
+                    _anim.armR.rotation.x = -0.5;
+                    _anim.armR.rotation.z = 0.12 + ease * 1.5;
+                }
+                break;
+
+            case 'lateral':
+                // Apontar e varrer com um braço lateralmente
+                _boss.rotation.y = -_anim.attack.side * ease * 0.4;
+                if (_anim.attack.side === -1 && _anim.armL) {
+                    _anim.armL.rotation.x = -1.2;
+                    _anim.armL.rotation.y = -ease * 1.5;
+                } else if (_anim.attack.side === 1 && _anim.armR) {
+                    _anim.armR.rotation.x = -1.2;
+                    _anim.armR.rotation.y = ease * 1.5;
+                }
+                break;
+        }
+
+        if (progress >= 1) {
+            _anim.attack.active = false;
+        }
+    }
 }

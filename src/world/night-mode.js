@@ -3,9 +3,9 @@
 //
 // Arquitectura para alta performance:
 //   • ~5 luzes reais (2 PointLights de lanterna + 2 SpotLights de janela
-//     com sombra + 1 holofote dourado sobre o herói com sombra + lua
-//     direccional + hemisphere). Cada luz é iterada por fragmento, por
-//     isso mantém-se a contagem baixa.
+//     com sombra + hemisphere). A luz do herói é a tocha que ele
+//     empunha (entities/jogador.js). Cada luz é iterada por fragmento,
+//     por isso mantém-se a contagem baixa.
 //     por fragmento pelos shaders Standard — mantemos a contagem baixa.
 //   • Centenas de "pirilampos" via THREE.Points + vertex-shader que
 //     anima a posição. Custo de luz: ZERO (apenas raster de sprites
@@ -38,9 +38,7 @@ let _targetActive = false;
 let _t = 0;
 let _time = 0;
 
-let _moonLight = null;
 let _hemiLight = null;
-let _playerAura = null;     // SpotLight a seguir o jogador
 let _nightGroup = null;
 let _fireflies = null;       // Points
 let _pollen = null;          // Points (ambiente nas árvores)
@@ -49,7 +47,6 @@ const _crystals = [];        // [{ mesh, basePos, phase }]
 const _lanterns = [];        // 4 lanternas
 const _torches = [];         // tochas do caminho (PointLight + chama animada)
 const _runas = [];           // 6 runas
-let _auraBeam = null;        // cone visível do holofote acima do herói
 let _moonSprite = null;
 let _moonHalo = null;
 
@@ -86,6 +83,10 @@ export function initNightMode(scene, sunLight, ambientLight, player, mainCamera,
     _ambientLight = ambientLight;
     _player = player;
 
+    // Modo nocturno: o sol deixa de projectar sombras. Todas as sombras do
+    // mundo passam a vir exclusivamente da tocha empunhada pelo jogador.
+    sunLight.castShadow = false;
+
     _orig.sunColor = sunLight.color.clone();
     _orig.sunIntensity = sunLight.intensity;
     _orig.ambColor = ambientLight.color.clone();
@@ -96,8 +97,7 @@ export function initNightMode(scene, sunLight, ambientLight, player, mainCamera,
 
     _createMoon();
     _createLanterns();
-    _createTorches();
-    _createPlayerAura();
+    // _createTorches(); // Removido a pedido do utilizador
     _createCrystals();
     _createFireflies();
     _createPollen();
@@ -154,16 +154,11 @@ export function updateNightMode(dt) {
         const mz = _player.position.z - 65;
         if (_moonSprite) _moonSprite.position.set(mx, my, mz);
         if (_moonHalo)   _moonHalo.position.set(mx, my, mz);
-        if (_moonLight) {
-            _moonLight.position.set(mx, my, mz);
-            _moonLight.target.position.copy(_player.position);
-        }
     }
 
     if (_t > 0.01) {
         _updateCrystals();
-        _updateTorches();
-        _updatePlayerAura();
+        // _updateTorches(); // Removido
         if (_fireflies)       _fireflies.material.uniforms.uTime.value = _time;
         if (_pollen)          _pollen.material.uniforms.uTime.value = _time;
         if (_wisps)           _wisps.material.uniforms.uTime.value = _time;
@@ -203,11 +198,10 @@ function _applyEnvironment(t) {
     _sunLight.intensity = _orig.sunIntensity * (1 - 0.82 * t);
 
     _ambientLight.color.copy(_ambDay).lerp(_ambNight, t);
-    _ambientLight.intensity = _orig.ambIntensity * (1 - 0.7 * t);
+    // preenchimento mínimo da noite — aumentado para melhor visibilidade
+    _ambientLight.intensity = _orig.ambIntensity * (1 - 0.25 * t);
 
-    if (_moonLight) _moonLight.intensity = 0.45 * t;
-    if (_hemiLight) _hemiLight.intensity = 0.40 * t;
-    // _playerAura.intensity é definido em _updatePlayerAura (com pulse)
+    if (_hemiLight) _hemiLight.intensity = 0.75 * t;
 
     // Densidade do nevoeiro também sobe gradualmente
     if (_scene.fog && _scene.fog.isFogExp2) {
@@ -230,7 +224,6 @@ function _applyEnvironment(t) {
     if (_moonHalo)   _moonHalo.material.opacity   = 0.4 * t;
 
     // Lanternas / cristais — modulam pela transição também
-    if (_auraBeam) _auraBeam.material.opacity = 0.18 * t;
     for (let i = 0; i < _lanterns.length; i++) {
         _lanterns[i].light.intensity = _lanterns[i].baseIntensity * t;
         _lanterns[i].sprite.material.opacity = t;
@@ -253,11 +246,6 @@ function _applyEnvironment(t) {
 // LUA
 // ===========================================================
 function _createMoon() {
-    _moonLight = new THREE.DirectionalLight(0x9bb8ff, 0);
-    _moonLight.position.set(-80, 90, -40);
-    _moonLight.target.position.set(0, 0, 0);
-    _nightGroup.add(_moonLight, _moonLight.target);
-
     _hemiLight = new THREE.HemisphereLight(0x4060a0, 0x101830, 0);
     _nightGroup.add(_hemiLight);
 
@@ -386,84 +374,11 @@ function _createLanterns() {
 
 
 // ===========================================================
-// AURA DO JOGADOR — SpotLight a apontar do céu para o player
-// (lanterna mágica). Não projecta sombras dinâmicas para poupar.
+// LUZ DO HERÓI — já não há luz própria aqui. A iluminação do jogador no
+// modo nocturno vem da PointLight da tocha empunhada (entities/jogador.js):
+// só existe e só projecta sombras quando a tocha está equipada. Sem tocha,
+// a noite fica escura — é intencional.
 // ===========================================================
-// HOLOFOTE DO HERÓI — luz dourada (oposto cromático do roxo dos cristais)
-// que desce do céu sobre o jogador com um cone visível, à maneira de
-// foco de palco. Substitui os 4 wisps anteriores: uma só fonte, grande,
-// inequívoca.
-const AURA_HEIGHT = 17;             // altura da fonte acima do chão
-const AURA_ANGLE  = Math.PI / 5.0;  // ~36° — cone mais largo
-const AURA_COLOR  = 0xffec70;       // dourado quente (oposto de roxo)
-
-function _createPlayerAura() {
-    _playerAura = new THREE.SpotLight(AURA_COLOR, 0, AURA_HEIGHT + 2, AURA_ANGLE, 0.45, 1.4);
-    _playerAura.castShadow = true;
-    _playerAura.shadow.mapSize.set(1024, 1024);
-    _playerAura.shadow.bias = -0.0006;
-    _playerAura.shadow.normalBias = 0.04;
-    _playerAura.shadow.camera.near = 1;
-    _playerAura.shadow.camera.far  = AURA_HEIGHT + 4;
-    _playerAura.shadow.camera.layers.enable(1);
-    _playerAura.target = new THREE.Object3D();
-    _nightGroup.add(_playerAura, _playerAura.target);
-
-    // ---- Feixe visível do holofote ----
-    // Cone aberto na base, ápice no topo (onde está a fonte). Material
-    // aditivo com fade vertical: ponto mais brilhante junto à fonte,
-    // desvanece à medida que se aproxima do chão.
-    const baseRadius = AURA_HEIGHT * Math.tan(AURA_ANGLE);
-    const beamGeo = new THREE.ConeGeometry(baseRadius, AURA_HEIGHT, 28, 1, true);
-    const beamMat = new THREE.ShaderMaterial({
-        uniforms: {
-            uColor:   { value: new THREE.Color(AURA_COLOR) },
-            uOpacity: { value: 0 },
-        },
-        vertexShader: `
-            varying float vY;
-            void main() {
-                // position.y vai de -H/2 (base) a +H/2 (ápice)
-                vY = position.y / ${(AURA_HEIGHT / 2).toFixed(4)} * 0.5 + 0.5; // 0..1
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-        `,
-        fragmentShader: `
-            uniform vec3  uColor;
-            uniform float uOpacity;
-            varying float vY;
-            void main() {
-                // mais brilhante no topo (junto à fonte), desvanece para o chão
-                float a = pow(vY, 1.6) * uOpacity;
-                gl_FragColor = vec4(uColor * (0.4 + 0.6 * vY), a);
-            }
-        `,
-        transparent: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-    });
-    _auraBeam = new THREE.Mesh(beamGeo, beamMat);
-    // ápice no topo (já é o caso por defeito da ConeGeometry)
-    _nightGroup.add(_auraBeam);
-}
-
-function _updatePlayerAura() {
-    if (!_player || !_playerAura) return;
-    const px = _player.position.x, pz = _player.position.z, py = _player.position.y;
-    _playerAura.position.set(px, py + AURA_HEIGHT, pz);
-    _playerAura.target.position.set(px, py, pz);
-
-    // Pulsação subtil da intensidade — sensação de holofote a vibrar
-    const pulse = 0.94 + 0.06 * Math.sin(_time * 1.8);
-    _playerAura.intensity = 12.0 * _t * pulse;
-
-    if (_auraBeam) {
-        // posicionar o cone para o ápice ficar à altura da fonte e
-        // a base ao nível do chão (centro fica a meia-altura).
-        _auraBeam.position.set(px, py + AURA_HEIGHT / 2, pz);
-    }
-}
 
 // ===========================================================
 // CRISTAIS GIGANTES — 4 colunas hexagonais emissivas

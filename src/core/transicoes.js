@@ -4,6 +4,7 @@ import { lojaScene, lojaSpawnPos } from '../world/loja.js';
 import { caseloScene, caseloSpawnPos, bossCrystalSafePos } from '../world/castelo.js';
 import { tavernScene, tavernSpawnPos, tavernQuartoReturnPos } from '../world/tavern.js';
 import { quartoScene, quartoSpawnPos } from '../world/quarto.js';
+import { bossDebugScene, initBossDebug } from '../world/boss-debug-scene.js';
 import { combateScene, posPlayerCombate, resetCombateScene, isBossMode } from '../world/combate-scene.js';
 import { hidePrompt } from '../ui/hud.js';
 import { switchMusic } from '../systems/audio.js';
@@ -385,6 +386,15 @@ export function sairBossParaCastelo(onAfterExit) {
     });
 }
 
+// ---- entrar no debug de texturas do boss ----
+export function entrarBossDebug() {
+    fade(1, () => {
+        initBossDebug();
+        estado.cena = 'boss_debug';
+        fade(0);
+    });
+}
+
 export function getMundoSnapshot() {
     return _mundoSnapshot;
 }
@@ -427,6 +437,8 @@ export function mudarCena(target) {
             estado.cena = 'mundo';
         }
         entrarTavern();
+    } else if (target === 'boss_debug') {
+        entrarBossDebug();
     }
 }
 

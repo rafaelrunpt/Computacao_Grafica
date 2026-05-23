@@ -10,6 +10,7 @@ import { mudarCena, estado, lojaPlayer, caseloPlayer } from '../core/transicoes.
 import { lojaScene, lojaColliders, stairsZones, blockedZones, fixedHeightZones } from '../world/loja.js';
 import { caseloScene, caseloColliders } from '../world/castelo.js';
 import * as THREE from 'three';
+import { setDebugModel, getDebugModelos, getDebugModeloAtivo } from '../world/boss-debug-scene.js';
 
 /**
  * MODERATOR / DEBUG TOOL
@@ -200,6 +201,12 @@ const moderator = {
 
     switchScene(target) {
         mudarCena(target);
+    },
+
+    // Abre o debug viewer de modelos e mostra o modelo escolhido.
+    verModelo(nome) {
+        setDebugModel(nome);
+        mudarCena('boss_debug');
     }
 };
 
@@ -284,11 +291,13 @@ modUI.innerHTML = `
         </div>
 
         <div style="font-size:10px;color:#c8a96e;margin:10px 0 4px 0;letter-spacing:1px;">CENAS / MUDANÇA</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:8px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:4px;">
             <button id="mod-scene-mundo" style="background:#4a90e2;color:#fff;border:none;cursor:pointer;padding:6px 2px;font-size:10px;font-weight:bold;">MUNDO</button>
             <button id="mod-scene-loja"  style="background:#8b5a2b;color:#fff;border:none;cursor:pointer;padding:6px 2px;font-size:10px;font-weight:bold;">LOJA</button>
             <button id="mod-scene-castelo" style="background:#55506a;color:#fff;border:none;cursor:pointer;padding:6px 2px;font-size:10px;font-weight:bold;">CASTELO</button>
         </div>
+        <div style="font-size:10px;color:#cc88ff;margin:10px 0 4px 0;letter-spacing:1px;">🔬 DEBUG DE MODELOS</div>
+        <div id="mod-modelos-grid" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;"></div>
 
         <div style="font-size:10px;color:#c8a96e;margin:10px 0 4px 0;letter-spacing:1px;">UTILIDADES</div>
         <div style="margin-bottom:8px;">
@@ -377,6 +386,24 @@ function renderItensGrid() {
     });
 }
 
+// --- grelha de modelos do debug viewer (boss / núcleo / wraith) ---
+function renderModelosGrid() {
+    const grid = document.getElementById('mod-modelos-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    const ativo = getDebugModeloAtivo();
+    for (const m of getDebugModelos()) {
+        const sel = m.id === ativo;
+        const b = document.createElement('button');
+        b.textContent = (sel ? '▸ ' : '') + m.label;
+        b.style.cssText =
+            `background:${sel ? '#ffd060' : '#7a3ad0'};color:${sel ? '#000' : '#fff'};` +
+            `border:none;cursor:pointer;padding:7px;font-size:11px;font-weight:bold;`;
+        b.onclick = () => { moderator.verModelo(m.id); renderModelosGrid(); };
+        grid.appendChild(b);
+    }
+}
+
 // --- eventos ---
 function setupEvents() {
     document.getElementById('mod-lvl-btn').onclick = () => moderator.setLevel(document.getElementById('mod-lvl-val').value);
@@ -454,6 +481,7 @@ window.addEventListener('keydown', (e) => {
         if (moderator.isOpen) {
             setupEvents();
             renderEstado();
+            renderModelosGrid();
             // reflectir HP/MaxHP/cintilas actuais nos inputs ao abrir
             document.getElementById('mod-hp-val').value    = playerStats.hp;
             document.getElementById('mod-maxhp-val').value = playerStats.maxHp;

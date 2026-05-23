@@ -28,7 +28,7 @@ export function criarRio(scene, colliders, fadeables, cullables) {
     function addCol(box, isRiver = false) { colliders.push({ box, isRiver }); }
 
     const RW = 6, RL = 210, RZ = BRIDGE_Z;
-    const riverMesh = new THREE.Mesh(new THREE.PlaneGeometry(RL, RW, 140, 16), matWater);
+    const riverMesh = new THREE.Mesh(new THREE.PlaneGeometry(RL, RW, 1, 1), matWater);
     riverMesh.rotation.x = -Math.PI / 2;
     riverMesh.position.set(0, 0.05, RZ);
     riverMesh.receiveShadow = true;

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { criarMapa, verificaColisao, shopDoorInteract, castleEnterBox, tavernEnterBox, guardianInteractBox, removerGuardiao, updateGuardiao, isGuardiaoPassagemConcedida, matWater, matBattleGrass, matBattleSky, matCorruptHalo, matContTrunk, matContLeaves, matContRock, zonasSulLimpas, isShopDesbloqueada, resetZonasBatalha, getBridgeHeight, getBauInteractBox, abrirBau, bauJaAberto, updateBau, bauJaColetado, coletarBau, getBauMascaraInteractBox, abrirBauMascara, bauMascaraJaAberto, updateBauMascara, bauMascaraJaColetado, coletarBauMascara, fadeables, cullables, worldParticles } from '../world/mapa.js';
-import { player, updatePlayerAnimation, setCoroaVisivel, setBrincosVisivel, setOculosVisivel, setAureolaVisivel, setMascaraVisivel, updateCoroaAnimacao } from '../entities/jogador.js';
+import { player, updatePlayerAnimation, setCoroaVisivel, setBrincosVisivel, setOculosVisivel, setAureolaVisivel, setMascaraVisivel, setTochaVisivel, updateCoroaAnimacao } from '../entities/jogador.js';
 import { adicionarItem, registarOnEquipChange, CATALOGO } from '../systems/inventario.js';
 import { ganharCintilas } from '../systems/currency.js';
 import { mostrarRecompensa } from '../ui/popup-recompensa.js';
@@ -16,6 +16,7 @@ import { tavernScene, getTavernHeight, tryMoveTavern, tavernSaidaBox, tavernBarm
 import { abrirIntroBartender, isIntroBartenderAberta } from '../ui/intro-bartender.js';
 import { abrirBartenderShop, isBartenderShopAberta } from '../ui/bartender-shop.js';
 import { quartoScene, tryMoveQuarto, getQuartoHeight, quartoSaidaBox, updateQuarto, quartoSpawnPos, quartoBauBox, bauQuartoAberto, abrirBauQuarto, bauQuartoColetado, coletarBauQuarto, quartoCamaBox } from '../world/quarto.js';
+import { bossDebugScene, bossDebugCamera, updateBossDebug } from '../world/boss-debug-scene.js';
 import { curar } from '../systems/player-stats.js';
 import { todasZonasLimpas } from '../world/mapa.js';
 import { combateScene, updateCombateScene } from '../world/combate-scene.js';
@@ -40,7 +41,7 @@ import { estado, lojaPlayer, caseloPlayer, tavernPlayer, quartoPlayer, setWorldS
 import moderator from '../systems/moderator.js'; // Ativa ferramentas de debug
 import { isPauseAberto, togglePause } from '../ui/pause-menu.js';
 import { tickFps } from '../ui/fps-counter.js';
-import { inicializarAudio, switchMusic, getCurrentTrack, playSFX } from '../systems/audio.js';
+import { inicializarAudio, switchMusic, getCurrentTrack, playSFX, tocarAtivacaoCristal, saltarParaClimaxMusical } from '../systems/audio.js';
 import { isTelaInicialAberta, updateTitleCamera, titleCamera, onTelaInicialFechar } from '../ui/tela-inicial.js';
 import { initNightMode, setNightMode, updateNightMode, pauseNightMode, resumeNightMode, renderNightWorld, resizeNightComposer, isNightInitialized } from '../world/night-mode.js';
 import { initWalkDust, updateWalkDust } from '../world/walk-dust.js';
@@ -66,12 +67,15 @@ skybox.visible = !!settings.nightMode;
 onSettingChange('nightMode', (on) => {
     skybox.visible = !!on;
     if (scene.background?.isColor) scene.background.setHex(on ? 0x020205 : 0x87ceeb);
+    // Altura da câmara: 3.8 à noite (mais imersivo), 5.5 de dia (melhor visibilidade)
+    _camOffset.y = on ? 3.8 : 5.5;
     // Iluminação mudou: re-bake da shadow map para reflectir o novo cenário.
     renderer.shadowMap.needsUpdate = true;
 });
 
 const _camTarget = new THREE.Vector3();
-const _camOffset = new THREE.Vector3(0, 3.8, 9.5);
+const _camOffset = new THREE.Vector3(0, settings.nightMode ? 3.8 : 5.5, 9.5);
+let _prevTodosCheios = false;
 
 // ---- câmara: fade-out de obstáculos entre câmara e player ----
 // Atenção: muitas meshes (árvores clonadas do template) partilham o mesmo material.
@@ -94,10 +98,10 @@ const _toObj  = new THREE.Vector3();
 // à frente da câmara — margem para os lados sem mostrar nada que esteja
 // claramente atrás.
 const CULL_DOT_MIN = -0.15;
-// objectos a menos de 12 m da câmara ficam sempre visíveis (segurança contra
+// objectos a menos de 9 m da câmara ficam sempre visíveis (segurança contra
 // pop-in para coisas grandes que estejam parcialmente atrás mas projectem
 // pixels no ecrã).
-const CULL_NEAR_KEEP_SQ = 144;
+const CULL_NEAR_KEEP_SQ = 81;
 
 // Aplica layer 1 (invisível à main cam, visível à shadow cam) em vez de visible=false.
 // Desta forma objetos culled continuam a projectar sombras correctamente.
@@ -212,15 +216,10 @@ sunLight.shadow.camera.layers.enable(1); // shadow camera vê os objetos culled 
 // ---- spotlight do jogador (cor oposta ao roxo: amarelo/ouro) ----
 const playerSpot = new THREE.SpotLight(0xfff500, 30, 9.6, Math.PI * 0.216, 0.5, 2.5);
 playerSpot.castShadow = true;
-// Shadow map maior + normalBias para eliminar o shadow acne. A 512² e com
-// normalBias 0 a luz (que segue o jogador) projectava manchas que cintilavam
-// a cada frame ao andar — invisíveis de dia (ambient alta) mas pretas de
-// noite (ambient ~0.18). castShadow é desligado no mundo exterior — ver o
-// bloco de transição de cena, onde o holofote nocturno (_playerAura) trata
-// da sombra do herói.
-playerSpot.shadow.mapSize.set(1024, 1024);
-playerSpot.shadow.bias = -0.0015;
-playerSpot.shadow.normalBias = 0.03;
+// Shadow map reduzido de 1024 para 512 para performance extrema.
+playerSpot.shadow.mapSize.set(512, 512);
+playerSpot.shadow.bias = -0.002;
+playerSpot.shadow.normalBias = 0.04;
 scene.add(playerSpot, playerSpot.target);
 
 // ---- constantes de movimento ----
@@ -252,6 +251,7 @@ function sincronizarAcessorio() {
     setOculosVisivel(eq === 'oculos_carga');
     setAureolaVisivel(eq === 'aureola_caidos');
     setMascaraVisivel(eq === 'mascara_eclipse');
+    setTochaVisivel(playerStats.equipped?.mao === 'tocha');
 }
 registarOnEquipChange(sincronizarAcessorio);
 sincronizarAcessorio();
@@ -301,6 +301,8 @@ inicializarAudio(mainCamera, {
     fechadura: 'assets/sounds/fechadura.mp3',
     abrir_bau: 'assets/sounds/abrir_bau.mp3',
     trovao:    'assets/sounds/trovao.mp3',
+    cristal:   'assets/sounds/cristal.mp3',
+    swoosh:    'assets/sounds/swoosh.mp3',
     transicao_batalha: 'assets/sounds/transicao_batalha.mp3',
     step_grass: 'assets/sounds/footsteps/relva.mp3',
     step_wood:  'assets/sounds/footsteps/wood.mp3',
@@ -860,13 +862,33 @@ function animateCaselo(deltaTime) {
 
     atualizarPedestais(deltaTime);
     atualizarAtmosferaCastelo(deltaTime);
-    bossCrystal.rotation.y += deltaTime * 1.2;
-    // Flutua acima do topo da pirâmide do altar com pequeno bobbing.
-    bossCrystal.position.y = bossCrystalRestY + Math.sin(Date.now() * 0.002) * 0.15;
-    // Quando todos os pedestais estiverem cheios, o cristal acelera e brilha
-    if (todosPedestaisCheios()) {
-        bossCrystal.material.emissiveIntensity = 2.4 + Math.sin(performance.now() * 0.006) * 1.0;
-        bossCrystal.rotation.y += deltaTime * 2.0;
+
+    const cheios = todosPedestaisCheios();
+    if (cheios && !_prevTodosCheios) {
+        tocarAtivacaoCristal();
+        // Salta para a marca de 1 minuto da música atual (seção épica)
+        saltarParaClimaxMusical();
+    }
+    _prevTodosCheios = cheios;
+
+    // A rotação e posição Y do bossCrystal são agora geridas em castelo.js (atualizarPedestais)
+    // para estarem sincronizadas com a corrupção e as partículas.
+    // Apenas mantemos aqui o brilho pulsante quando ativado.
+    if (cheios) {
+        // Escurece a cor base
+        bossCrystal.material.color.setHex(0x0a001a);
+        
+        // Transição progressiva e lenta (1 segundo para mudar de cor = ciclo de 2s)
+        const glow = Math.sin(performance.now() * 0.001 * Math.PI) * 0.5 + 0.5; 
+        bossCrystal.material.emissiveIntensity = 2.5 + glow * 4.5; // Brilho mais forte no pico
+        
+        const c1 = new THREE.Color(0x220044); 
+        const c2 = new THREE.Color(0x9933ff); // Roxo um pouco mais vivo
+        bossCrystal.material.emissive.copy(c1).lerp(c2, glow);
+    } else {
+        bossCrystal.material.color.setHex(0x8844ff);
+        bossCrystal.material.emissive.setHex(0x4400aa);
+        bossCrystal.material.emissiveIntensity = 1.8;
     }
 
     player.position.set(caseloPlayer.x, caseloPlayer.y, caseloPlayer.z);
@@ -1240,6 +1262,13 @@ function animateCombate(deltaTime) {
     renderer.render(combateScene, moderator.freeCam ? mainCamera : camCombate);
 }
 
+function animateBossDebug(deltaTime) {
+    updateBossDebug(deltaTime);
+    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+    renderer.setScissorTest(false);
+    renderer.render(bossDebugScene, moderator.freeCam ? mainCamera : bossDebugCamera);
+}
+
 let _prevCena = null;
 function animate() {
     requestAnimationFrame(animate);
@@ -1375,24 +1404,27 @@ function animate() {
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
             renderer.render(quartoScene, quartoCamera);
         } else if (estado.cena === 'combate') {
-            // Actualizar spotlight (lanterna mágica do herói)
-    // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
-    playerSpot.visible = luzNecessaria;
-    if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
-        playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-    }
-
-    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+            const luzNecessaria = true;
+            playerSpot.visible = luzNecessaria;
+            if (luzNecessaria) {
+                playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+                playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
+            }
+            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
             renderer.render(combateScene, isBossMode() ? combateBossCamera : combateCamera);
+        } else if (estado.cena === 'boss_debug') {
+            renderer.render(bossDebugScene, bossDebugCamera);
         }
-    } else if (estado.cena === 'mundo')   animateMundo(deltaTime);
-    else if (estado.cena === 'loja')    animateLoja(deltaTime);
-    else if (estado.cena === 'caselo')  animateCaselo(deltaTime);
-    else if (estado.cena === 'tavern')  animateTavern(deltaTime);
-    else if (estado.cena === 'quarto')  animateQuarto(deltaTime);
-    else if (estado.cena === 'combate') animateCombate(deltaTime);
+    } else {
+        // Lógica activa por cena
+        if (estado.cena === 'mundo')        animateMundo(deltaTime);
+        else if (estado.cena === 'loja')    animateLoja(deltaTime);
+        else if (estado.cena === 'caselo')  animateCaselo(deltaTime);
+        else if (estado.cena === 'tavern')  animateTavern(deltaTime);
+        else if (estado.cena === 'quarto')  animateQuarto(deltaTime);
+        else if (estado.cena === 'combate') animateCombate(deltaTime);
+        else if (estado.cena === 'boss_debug') animateBossDebug(deltaTime);
+    }
 
     avatarRenderer.render(avatarScene, avatarCam);
 }

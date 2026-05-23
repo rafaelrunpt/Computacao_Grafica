@@ -2,7 +2,7 @@
 // Combina movimento 3D (lunge do player) + overlay SVG (slash) + screen shake.
 import * as THREE from 'three';
 import { player } from '../entities/jogador.js';
-import { posPlayerCombate, posInimigoCombate, combateInimigo } from '../world/combate-scene.js';
+import { posPlayerCombate, posInimigoCombate, getInimigoActivo } from '../world/combate-scene.js';
 
 // ---- overlay SVG ----
 const overlay = document.createElement('div');
@@ -148,7 +148,9 @@ function playerLunge({ amount, dur, peaks = [0.5] }) {
 
 // ---- pulsar no inimigo (curto flash de emissivo) ----
 function pulsarInimigoCurto() {
-    const m = combateInimigo.material;
+    // usa o inimigo activo (wraith ou núcleo corrompido), não um fixo
+    const alvo = getInimigoActivo();
+    const m = alvo && alvo.material;
     if (!m) return;
     const original = m.emissiveIntensity;
     m.emissiveIntensity = 3.0;

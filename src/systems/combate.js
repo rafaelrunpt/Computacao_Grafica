@@ -154,7 +154,7 @@ export function iniciarCombateEm(x, z, tipo = 'wraith') {
     if (estadoJogo.emCombate || playerStats.derrotado) return;
     estadoJogo.combateX = x;
     estadoJogo.combateZ = z;
-    _tipoEncontro = (tipo === 'sluddy') ? 'sluddy' : 'wraith';
+    _tipoEncontro = (tipo === 'nucleo') ? 'nucleo' : 'wraith';
     setTipoInimigo(_tipoEncontro);
     iniciarCombate();
 }
@@ -171,10 +171,10 @@ const inimigoBase = {
     xpDrop: 45,
     cintilasDrop: 24,
 };
-// Inimigo fraco (Sluddy) — manifesta-se nas terras a sul, junto à loja.
+// Inimigo fraco (Núcleo Corrompido) — manifesta-se nas terras a sul, junto à loja.
 // Drops e vida reduzidos para servir de "treino" no início.
-const sluddyBase = {
-    nome: 'SLUDDY',
+const nucleoBase = {
+    nome: 'NÚCLEO CORROMPIDO',
     hp: 18, maxHp: 18,
     atk: 3,
     xpDrop: 40,
@@ -225,13 +225,13 @@ const ATAQUES_WRAITH = [
     { nome: 'Dreno Espectral',    multATK: 1.00,          efeito: 'roubo',       som: 'dreno',     cor: '200,90,255',  perigo: 2 },
     { nome: 'Estilhaço do Vazio', multATK: 0.60, hits: 2, efeito: null,          som: 'estilhaco', cor: '90,140,255',  perigo: 2 },
 ];
-const ATAQUES_SLUDDY = [
-    { nome: 'Cuspo Pegajoso', multATK: 1.00, efeito: null,          som: 'cuspo',  cor: '120,200,80', perigo: 1 },
-    { nome: 'Baba Corrosiva', multATK: 0.80, efeito: 'enfraquecer', som: 'baba',   cor: '160,220,60', perigo: 2 },
-    { nome: 'Embate Viscoso', multATK: 1.35, efeito: null,          som: 'embate', cor: '90,180,90',  perigo: 2 },
+const ATAQUES_NUCLEO = [
+    { nome: 'Lascas do Vazio',   multATK: 1.00, efeito: null,          som: 'cuspo',  cor: '170,90,235',  perigo: 1 },
+    { nome: 'Praga Rúnica',      multATK: 0.80, efeito: 'enfraquecer', som: 'baba',   cor: '120,70,210',  perigo: 2 },
+    { nome: 'Esmagamento Ímpio', multATK: 1.35, efeito: null,          som: 'embate', cor: '210,100,255', perigo: 2 },
 ];
 function pickAtaqueInimigo() {
-    const pool = _tipoEncontro === 'sluddy' ? ATAQUES_SLUDDY : ATAQUES_WRAITH;
+    const pool = _tipoEncontro === 'nucleo' ? ATAQUES_NUCLEO : ATAQUES_WRAITH;
     return pool[Math.floor(Math.random() * pool.length)];
 }
 // Golpe que o inimigo vai usar no próximo turno — telegrafado para os Óculos.
@@ -278,7 +278,7 @@ function escalarStats(base, lvl = _nivelInimigo) {
 function novoInimigo() {
     // dificuldade acompanha o nível do jogador (+2 no modo noite)
     setNivelInimigo(nivelDificuldade());
-    const base = _tipoEncontro === 'sluddy' ? sluddyBase : inimigoBase;
+    const base = _tipoEncontro === 'nucleo' ? nucleoBase : inimigoBase;
     inimigoAtual = escalarStats(base);
     _setEnfraquecido(false);
     _proximoAtaqueInimigo = pickAtaqueInimigo();

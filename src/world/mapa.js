@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { makeTerrainShader, terraTex, matBattleGrass, matContRock, matCorruptHalo } from './shaders.js';
+import { makeTerrainShader, terraTex, matBattleGrass, matContRock, matCorruptHalo, rockTex, rockNormal, rockRough, grassTex, madeiraTex } from './shaders.js';
 import { criarRio, getBridgePassage } from './rio.js';
 import { Bau } from './bau.js';
 import { criarGuardiao as _criarGuardiao, removerGuardiao as _removerGuardiao } from '../entities/guardiao.js';
@@ -89,7 +89,13 @@ export let shopDoorInteract = null;
 const matTerrainN = makeTerrainShader(0x9ec87a, 0xd4b882);
 const matTerrainS = makeTerrainShader(0x9ec87a, 0xd4b882);
 
-const matRock     = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9 });
+const matRock     = new THREE.MeshStandardMaterial({ 
+    map: rockTex,
+    normalMap: rockNormal,
+    roughnessMap: rockRough,
+    color: 0xffffff, 
+    roughness: 0.9 
+});
 
 export let castleEnterBox = null;
 export let tavernEnterBox = null;
@@ -173,7 +179,7 @@ let treeTemplate = null;       // THREE.Group clonável, preenchido após o load
 const treePendingQueue = [];   // { scene, x, z, contaminada, zoneRef } — aguardam o load
 
 const treeLoader = new GLTFLoader();
-treeLoader.load('assets/models/ambiente/tree.glb', (gltf) => {
+treeLoader.load('assets/models/ambiente/handpainted_pine_tree.glb', (gltf) => {
     treeTemplate = gltf.scene;
     for (const p of treePendingQueue) _spawnTree(p.scene, p.x, p.z, p.contaminada, p.zoneRef);
     treePendingQueue.length = 0;
@@ -189,11 +195,51 @@ function _corruptionStrength(x, z) {
     return Math.max(0, 1 - dist / CASTLE_CORRUPT_RADIUS);
 }
 
+// Hitbox das árvores — calculado a partir da malha REAL, já colocada e
+// escalada na cena. Assim a caixa fica exactamente na posição e na altura
+// onde a árvore aparece, mesmo que o modelo GLB tenha a origem deslocada.
+// TREE_HITBOX_SCALE ajusta a largura: 1 = tamanho exacto da árvore,
+// <1 encolhe para o tronco, >1 alarga.
+const TREE_HITBOX_SCALE = 0.2;
+const _treeBox = new THREE.Box3();
+const _treeCenter = new THREE.Vector3();
+const _treeSize = new THREE.Vector3();
+function _treeColliderBox(tree) {
+    tree.updateMatrixWorld(true);
+    _treeBox.setFromObject(tree);
+    _treeBox.getCenter(_treeCenter);
+    _treeBox.getSize(_treeSize);
+    const hx = _treeSize.x * 0.5 * TREE_HITBOX_SCALE;
+    const hz = _treeSize.z * 0.5 * TREE_HITBOX_SCALE;
+    return new THREE.Box3(
+        new THREE.Vector3(_treeCenter.x - hx, _treeBox.min.y, _treeCenter.z - hz),
+        new THREE.Vector3(_treeCenter.x + hx, _treeBox.max.y, _treeCenter.z + hz)
+    );
+}
+
+// hash determinístico 2D → [0,1): a rotação/escala das árvores dependem
+// só da posição (não de Math.random), por isso ficam SEMPRE iguais em
+// cada arranque do jogo.
+function _hash2(x, z) {
+    const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+    return s - Math.floor(s);
+}
+
 function _spawnTree(scene, x, z, contaminada, zoneRef = null) {
     const tree = treeTemplate.clone(true);
     tree.position.set(x, 0, z);
-    tree.rotation.y = Math.random() * Math.PI * 2;
-    tree.scale.setScalar(1.5 + Math.random() * 0.25);
+    // rotação e escala determinísticas (hash da posição) — as árvores
+    // ficam SEMPRE iguais em cada arranque do jogo.
+    tree.rotation.y = _hash2(x, z) * Math.PI * 2;
+    // Escala visual base (0.006) com +20% — árvores 20% maiores.
+    tree.scale.setScalar((0.006 + _hash2(z, x) * 0.0015) * 1.2);
+    // assenta a base do modelo no chão: a origem do GLB não está na base,
+    // por isso sem este ajuste a árvore afunda — e a parte abaixo de
+    // y=-0.3 é cortada pelo clipping plane global ("metade invisível").
+    tree.updateMatrixWorld(true);
+    tree.position.y -= new THREE.Box3().setFromObject(tree).min.y;
+    // Pequeno offset extra para garantir que a base fica acima da corrupção/chão
+    tree.position.y += 0.03;
 
     const castleT = _corruptionStrength(x, z);
     const battleT = contaminada ? 0.55 : 0;
@@ -203,29 +249,29 @@ function _spawnTree(scene, x, z, contaminada, zoneRef = null) {
         if (!c.isMesh) return;
         c.castShadow = true;
         c.receiveShadow = true;
+        c.renderOrder = 10;
         if (t > 0.01) {
             // guardar cor original antes de clonar/modificar
             const origColor = c.material.color.clone();
             c.material = c.material.clone();
             c.material.userData.cleanColor = origColor;
-            const darken = 1 - t * 0.72;
+            // escurece bem menos para não saturar no nightmode
+            const darken = 1 - t * 0.20;
             c.material.color.multiplyScalar(darken);
-            c.material.color.r += t * 0.10;
-            c.material.color.b += t * 0.18;
+            c.material.color.r += t * 0.05;
+            c.material.color.b += t * 0.10;
             if (c.material.emissive) {
-                c.material.emissive.setRGB(t * 0.10, 0, t * 0.20);
+                c.material.emissive.setRGB(t * 0.08, 0, t * 0.15);
             } else {
-                c.material.emissive = new THREE.Color(t * 0.10, 0, t * 0.20);
+                c.material.emissive = new THREE.Color(t * 0.08, 0, t * 0.15);
             }
-            c.material.emissiveIntensity = 0.3 + t * 0.5;
+            c.material.emissiveIntensity = 0.2 + t * 0.30;
         }
     });
     scene.add(tree);
     cullables.push(tree);
-    addCollider(new THREE.Box3(
-        new THREE.Vector3(x - 0.3, 0, z - 0.3),
-        new THREE.Vector3(x + 0.3, 1.8, z + 0.3)
-    ));
+    // colisor calculado da malha real, já posicionada e escalada na cena
+    addCollider(_treeColliderBox(tree));
     // registar árvore na zona de batalha para poder restaurar depois
     if (zoneRef && contaminada) zoneRef.trees.push(tree);
     return tree;
@@ -235,11 +281,9 @@ function criarArvore(scene, x, z, contaminada = false, zoneRef = null) {
     if (treeTemplate) {
         _spawnTree(scene, x, z, contaminada, zoneRef);
     } else {
+        // o colisor é calculado da malha — adicionado em _spawnTree quando
+        // o GLB terminar de carregar (a árvore ainda não existe aqui).
         treePendingQueue.push({ scene, x, z, contaminada, zoneRef });
-        addCollider(new THREE.Box3(
-            new THREE.Vector3(x - 0.3, 0, z - 0.3),
-            new THREE.Vector3(x + 0.3, 1.8, z + 0.3)
-        ));
     }
 }
 
@@ -292,7 +336,8 @@ function criarZonaBatalha(scene, cx, cz, raio, seed, tipo = 'wraith') {
     geo.computeVertexNormals();
 
     const mesh = new THREE.Mesh(geo, matBattleGrass);
-    mesh.position.set(cx, 0.04, cz);
+    mesh.position.set(cx, 0.015, cz);
+    mesh.renderOrder = -1;
     scene.add(mesh);
 
     const part = criarParticulasZona(scene, cx, cz, raio);
@@ -340,7 +385,8 @@ function criarZonaCorrupta(scene, cx, cz, raio, seed) {
     const haloR = raio * 2.8;  // raio muito maior que a zona central
     const halo = new THREE.Mesh(new THREE.PlaneGeometry(haloR * 2, haloR * 2), matCorruptHalo);
     halo.rotation.x = -Math.PI / 2;
-    halo.position.set(cx, 0.03, cz);
+    halo.position.set(cx, 0.010, cz);
+    halo.renderOrder = -2;
     scene.add(halo);
 
     // --- zona central densa (matBattleGrass original) ---
@@ -367,7 +413,8 @@ function criarZonaCorrupta(scene, cx, cz, raio, seed) {
     geo.computeVertexNormals();
 
     const mesh = new THREE.Mesh(geo, matBattleGrass);
-    mesh.position.set(cx, 0.05, cz);
+    mesh.position.set(cx, 0.018, cz);
+    mesh.renderOrder = -1;
     scene.add(mesh);
 
     criarParticulasZona(scene, cx, cz, raio);
@@ -508,6 +555,56 @@ function criarInn(scene, cx, cz, scale = 0.1, rotationY = 0, yOffset = 0) {
             new THREE.Vector3(-41.05, 2.5, 37.95),
         );
     }, undefined, e => console.error('Erro gobble-inn:', e));
+}
+
+// ---- POTION SHOP (Nova Construção) ----
+function criarPotionShop(scene, cx, cz) {
+    const loader = new GLTFLoader();
+    const posX = cx, posZ = cz;
+    loader.load('assets/models/constructions/potion.glb', (gltf) => {
+        const m = gltf.scene;
+        m.position.set(posX, 0, posZ);
+        m.scale.setScalar(0.01); // Diminuído drasticamente como solicitado
+        m.rotation.y = 0; // Virado para Norte (para o player/câmara)
+        m.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+
+        m.updateMatrixWorld(true);
+        const bb = new THREE.Box3().setFromObject(m);
+        m.position.y -= bb.min.y;
+        m.position.y -= 2.1;
+        scene.add(m);
+
+        // Atualizar BB após ajuste Y
+        bb.setFromObject(m);
+        
+        // Paredes de colisão precisas solicitadas (x:-21 a -15, z:-46 a -39)
+        const wallH = 4;
+        const wallT = 0.2;
+        // Norte (z=-39)
+        addCollider(new THREE.Box3(new THREE.Vector3(-21, 0, -39 - wallT), new THREE.Vector3(-15, wallH, -39)));
+        // Sul (z=-46) - Movida 1 unidade para trás
+        addCollider(new THREE.Box3(new THREE.Vector3(-21, 0, -46), new THREE.Vector3(-15, wallH, -46 + wallT)));
+        // Oeste (x=-21) - Estendida até -46
+        addCollider(new THREE.Box3(new THREE.Vector3(-21 - wallT, 0, -46), new THREE.Vector3(-21, wallH, -39)));
+        // Este (x=-15) - Estendida até -46
+        addCollider(new THREE.Box3(new THREE.Vector3(-15, 0, -46), new THREE.Vector3(-15 + wallT, wallH, -39)));
+
+        // Chão interior (x:-21 a -15, z:-46 a -39) - Agora com profundidade 7
+        const floorGeo = new THREE.PlaneGeometry(6, 7);
+        const floorMat = new THREE.MeshStandardMaterial({ 
+            map: madeiraTex, 
+            color: 0xa08060, // Tom de madeira quente
+            roughness: 0.7
+        });
+        const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+        floorMesh.rotation.x = -Math.PI / 2;
+        floorMesh.position.set(-18, 0.015, -42.5); // Centro ajustado para o novo tamanho (7/2)
+        floorMesh.receiveShadow = true;
+        scene.add(floorMesh);
+
+        fadeables.push(m);
+        cullables.push(m);
+    }, undefined, e => console.error('Erro Potion Shop:', e));
 }
 
 // ---- terrenos ----
@@ -651,22 +748,32 @@ export function naVila(x, z) {
     return x >= VILLAGE_BOUNDS.minX && x <= VILLAGE_BOUNDS.maxX
         && z >= VILLAGE_BOUNDS.minZ && z <= VILLAGE_BOUNDS.maxZ;
 }
-// margem de exclusão de árvores nos caminhos (alargada para caminhos sinuosos)
-const PATH_W = 5.0;
+// Margem de exclusão de árvores nos caminhos. O shader do terreno alarga
+// a borda do caminho com ruído até ~1.9× a largura base (hw≈3.2 → ~6 u);
+// a exclusão tem de ser MAIS larga (~7) para nenhuma árvore nascer sobre
+// as lajes (textura PavingStones) do caminho.
+const PATH_W = 7.0;
 function naFaixaCaminho(x, z) {
     // caminho central vertical (norte e sul)
     if (Math.abs(x) < PATH_W) return true;
-    // caminho horizontal para a shop (z≈25, x: -34→2)
-    if (z > 21 && z < 29 && x > -36 && x < 3) return true;
-    // ramificação horizontal sul a z=-35 (x: -55→0)
-    if (z > -39 && z < -31 && x > -58 && x < 3) return true;
-    // ramificação horizontal sul a z=-55 (x: 0→55)
-    if (z > -59 && z < -51 && x > -3 && x < 58) return true;
+    // caminho horizontal para a shop (z≈25)
+    if (z > 18 && z < 32 && x > -37 && x < 6) return true;
+    // ramificação horizontal sul a z=-35
+    if (z > -42 && z < -28 && x > -60 && x < 6) return true;
+    // ramificação horizontal sul a z=-55
+    if (z > -62 && z < -48 && x > -6 && x < 60) return true;
     // vertical oeste (x≈-45, z: -80→-35)
-    if (z < -31 && z > -83 && Math.abs(x + 45) < PATH_W) return true;
+    if (z < -29 && z > -85 && Math.abs(x + 45) < PATH_W) return true;
     // vertical leste (x≈45, z: -85→-55)
-    if (z < -51 && z > -88 && Math.abs(x - 45) < PATH_W) return true;
+    if (z < -49 && z > -90 && Math.abs(x - 45) < PATH_W) return true;
     return false;
+}
+
+// banda do rio + ponte (rio horizontal em z≈0): nenhuma árvore nasce na
+// água, na ponte, nas bocas do rio nem na margem imediata — só relva.
+const RIO_BANDA = 7;
+function naFaixaRio(z) {
+    return Math.abs(z) < RIO_BANDA;
 }
 
 // ---- castelo exterior — GLB ----
@@ -687,8 +794,18 @@ function criarCastelo(scene) {
         cullables.push(m);
     }, undefined, e => console.error('Erro castelo GLB:', e));
 
-    // caminho de acesso ao portão
-    makePath(3.5, 12, CX, CZ + D/2 + 5.5, scene);
+    // caminho de acesso ao portão (agora corrompido)
+    const pathW = 3.5, pathD = 12;
+    const pathGeo = new THREE.PlaneGeometry(pathW, pathD);
+    const pathMat = matBattleGrass.clone();
+    pathMat.uniforms.uTime = matBattleGrass.uniforms.uTime; // Partilha o tempo para animar
+    pathMat.uniforms.uCenter = { value: new THREE.Vector2(0.5, 1.0) }; // Centro na porta (topo do rectângulo)
+    
+    const pathMesh = new THREE.Mesh(pathGeo, pathMat);
+    pathMesh.rotation.x = -Math.PI / 2;
+    pathMesh.position.set(CX, 0.02, CZ + D/2 + 5.5);
+    pathMesh.receiveShadow = true;
+    scene.add(pathMesh);
 
     // zona de interação do portão (frente sul do castelo, fora das muralhas)
     castleEnterBox = new THREE.Box3(
@@ -719,9 +836,12 @@ function criarGuardiao(scene) {
 // estruturas grandes do mapa que NUNCA devem ter árvores/rochas em cima
 const _estruturas = [
     { x: SHOP_CX, z: SHOP_CZ, r: 9 },   // loja
+    { x: -44.9,   z: 33.5,    r: 12 },  // Gobble Inn (taverna)
     { x: 0,       z: -80,     r: 16 },  // castelo + muralhas
+    { x: -18,     z: -43,     r: 3 },   // Potion Shop (nova posição)
     { x: 0,       z: 4.5,     r: 4 },   // guardião / saída da ponte
-    { x: 70,      z: 70,      r: 4 },   // baú
+    { x: 70,      z: 70,      r: 4 },   // baú da coroa
+    { x: -78,     z: 78,      r: 4 },   // baú da máscara
     ];const _propsColocadas = []; // {x,z,r}
 const MIN_DIST_ARVORES   = 3.2; // distância mínima entre árvores
 const MIN_DIST_ROCHA_ARV = 2.2; // árvore→rocha
@@ -750,15 +870,16 @@ export function criarMapa(scene) {
     criarShop(scene, SHOP_CX, SHOP_CZ);
     // Gobble Inn na vila — norte da loja, dentro de VILLAGE_BOUNDS
     criarInn(scene, -45, 35, 0.01, 0, -2);
+    criarPotionShop(scene, -18, -43);
     criarCastelo(scene);
     // zona corrupta ao redor do castelo (z=-80) — visual roxo, sem encontros
     criarZonaCorrupta(scene, 0, -80, 28, 111);
 
-    // zonas de batalha norte do rio (perto da loja e da taverna) — SLUDDY
+    // zonas de batalha norte do rio (perto da loja e da taverna) — NÚCLEO CORROMPIDO
     // (inimigo fraco, drops reduzidos, ideal para o início da aventura).
-    const znB1 = criarZonaBatalha(scene,  28,  28, 12, 202, 'sluddy');
-    const znB2 = criarZonaBatalha(scene,  28,  60, 10, 303, 'sluddy');
-    const znB3 = criarZonaBatalha(scene, -28,  65,  9, 404, 'sluddy');
+    const znB1 = criarZonaBatalha(scene,  28,  28, 12, 202, 'nucleo');
+    const znB2 = criarZonaBatalha(scene,  28,  60, 10, 303, 'nucleo');
+    const znB3 = criarZonaBatalha(scene, -28,  65,  9, 404, 'nucleo');
 
     // zonas de batalha sul (depois da ponte) — WRAITH ("SHACO CORROMPIDO"),
     // inimigo duro com HP e drops aumentados.
@@ -771,12 +892,14 @@ export function criarMapa(scene) {
 
     // árvores norte — densa, cobre toda a área afastada dos caminhos
     let placed = 0;
-    for (let i = 0; i < 1500 && placed < 200; i++) {
+    for (let i = 0; i < 2000 && placed < 300; i++) {
         const x = (rand() * 2 - 1) * 94;
         const z = 5 + rand() * 90;
         if (naFaixaCaminho(x, z)) continue;
-        if (naVila(x, z)) continue;
-        if (!_longeDeEstruturas(x, z)) continue;
+        if (naFaixaRio(z)) continue;
+        // Na vila (onde estão a shop e a taverna), permitimos árvores mas com margem maior das estruturas
+        const margemExtra = naVila(x, z) ? 2.5 : 0; 
+        if (!_longeDeEstruturas(x, z, margemExtra)) continue;
         if (!_longeDeProps(x, z, MIN_DIST_ARVORES / 2)) continue;
         const zoneRef = _findZoneAt(x, z, [znB1, znB2, znB3]);
         criarArvore(scene, x, z, !!zoneRef, zoneRef);
@@ -790,6 +913,7 @@ export function criarMapa(scene) {
         const x = (rand() * 2 - 1) * 94;
         const z = -(5 + rand() * 90);
         if (naFaixaCaminho(x, z)) continue;
+        if (naFaixaRio(z)) continue;
         if (naVila(x, z)) continue;
         if (!_longeDeEstruturas(x, z)) continue;
         if (!_longeDeProps(x, z, MIN_DIST_ARVORES / 2)) continue;
@@ -957,3 +1081,5 @@ export function verificaColisao(futuroX, futuroZ) {
     }
     return false;
 }
+
+

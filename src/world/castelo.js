@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { matBattleGrass, matBattleSky, matBattleDark } from './shaders.js';
 import { criarAcessorio } from './acessorios.js';
+import { atualizarSomVorticeCristal, getAudioListener, setSwooshAudio } from '../systems/audio.js';
 
 // ---- dimensões da sala do boss ----
 const W = 22;   // largura
@@ -70,13 +71,195 @@ for (let ti = 0; ti < tochaPositions.length; ti++) {
 }
 
 // ---- materiais ----
-const matStone    = new THREE.MeshStandardMaterial({ color: 0x55506a, roughness: 0.9, flatShading: true });
+const _texLoader = new THREE.TextureLoader();
+
+// PAREDE
+const texBaseW = 'assets/textures/castelo/parede/Bricks058_1K-PNG_';
+const mapColorW = _texLoader.load(texBaseW + 'Color.png');
+const mapNormalW = _texLoader.load(texBaseW + 'NormalGL.png');
+const mapRoughnessW = _texLoader.load(texBaseW + 'Roughness.png');
+
+[mapColorW, mapNormalW, mapRoughnessW].forEach(tex => {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(4, 2); 
+});
+mapColorW.colorSpace = THREE.SRGBColorSpace;
+
+const matStone = new THREE.MeshStandardMaterial({
+    map: mapColorW,
+    normalMap: mapNormalW,
+    roughnessMap: mapRoughnessW,
+    roughness: 1.0,
+});
+
+// CHÃO
+const texBaseF = 'assets/textures/castelo/chao/Rubber001_1K-PNG/Rubber001_1K-PNG_';
+const mapColorF = _texLoader.load(texBaseF + 'Color.png');
+const mapNormalF = _texLoader.load(texBaseF + 'NormalGL.png');
+const mapRoughnessF = _texLoader.load(texBaseF + 'Roughness.png');
+
+[mapColorF, mapNormalF, mapRoughnessF].forEach(tex => {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(6, 6); 
+});
+mapColorF.colorSpace = THREE.SRGBColorSpace;
+
+const matFloor = new THREE.MeshStandardMaterial({
+    map: mapColorF,
+    normalMap: mapNormalF,
+    roughnessMap: mapRoughnessF,
+    roughness: 0.8,
+});
+
+// PILARES
+const texBaseP = 'assets/textures/castelo/pilares/Travertine013_1K-PNG/Travertine013_1K-PNG_';
+const mapColorP = _texLoader.load(texBaseP + 'Color.png');
+const mapNormalP = _texLoader.load(texBaseP + 'NormalGL.png');
+const mapRoughnessP = _texLoader.load(texBaseP + 'Roughness.png');
+
+[mapColorP, mapNormalP, mapRoughnessP].forEach(tex => {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(1, 4); // Repete mais na vertical para o fuste do pilar
+});
+mapColorP.colorSpace = THREE.SRGBColorSpace;
+
+const matPillar = new THREE.MeshStandardMaterial({
+    map: mapColorP,
+    normalMap: mapNormalP,
+    roughnessMap: mapRoughnessP,
+    roughness: 0.9,
+});
+
+// PLATAFORMA PIRÂMIDE (Altar)
+const texBaseA = 'assets/textures/castelo/plataforma_piramide/Fabric004_1K-PNG/Fabric004_1K-PNG_';
+const mapColorA = _texLoader.load(texBaseA + 'Color.png');
+const mapNormalA = _texLoader.load(texBaseA + 'NormalGL.png');
+const mapRoughnessA = _texLoader.load(texBaseA + 'Roughness.png');
+const mapMetalnessA = _texLoader.load(texBaseA + 'Metalness.png');
+
+[mapColorA, mapNormalA, mapRoughnessA, mapMetalnessA].forEach(tex => {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(2, 2);
+});
+mapColorA.colorSpace = THREE.SRGBColorSpace;
+
+const matAltar = new THREE.MeshStandardMaterial({
+    map: mapColorA,
+    normalMap: mapNormalA,
+    roughnessMap: mapRoughnessA,
+    metalnessMap: mapMetalnessA,
+    roughness: 0.8,
+});
+
+// TAPETE
+const texBaseT = 'assets/textures/castelo/tapete/Fabric016_1K-PNG/Fabric016_1K-PNG_';
+const mapColorT = _texLoader.load(texBaseT + 'Color.png');
+const mapNormalT = _texLoader.load(texBaseT + 'NormalGL.png');
+const mapRoughnessT = _texLoader.load(texBaseT + 'Roughness.png');
+
+[mapColorT, mapNormalT, mapRoughnessT].forEach(tex => {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(1, 4); 
+});
+mapColorT.colorSpace = THREE.SRGBColorSpace;
+
+const matCarpet = new THREE.MeshStandardMaterial({
+    map: mapColorT,
+    normalMap: mapNormalT,
+    roughnessMap: mapRoughnessT,
+    color: 0xaa4444,
+    roughness: 1.0,
+});
+
 const matStoneDark= new THREE.MeshStandardMaterial({ color: 0x3a3550, roughness: 0.9, flatShading: true });
-const matFloor    = new THREE.MeshStandardMaterial({ color: 0x3a3448, roughness: 0.95 });
-const matCarpet   = new THREE.MeshStandardMaterial({ color: 0x7a1515, roughness: 1.0 });
-const matPillar   = new THREE.MeshStandardMaterial({ color: 0x4a4560, roughness: 0.85, flatShading: true });
-const matAltar    = new THREE.MeshStandardMaterial({ color: 0x2a1245, roughness: 0.8 });
 const matRune     = new THREE.MeshStandardMaterial({ color: 0xaa44ff, emissive: 0x8800cc, emissiveIntensity: 1.8 });
+
+// TEXTURAS DE METAL PINTADO (Partilhadas entre Teto e Cristal)
+const texBaseC = 'assets/textures/castelo/cristal/PaintedMetal002_1K-PNG/PaintedMetal002_1K-PNG_';
+const mapColorC = _texLoader.load(texBaseC + 'Color.png');
+const mapNormalC = _texLoader.load(texBaseC + 'NormalGL.png');
+const mapRoughnessC = _texLoader.load(texBaseC + 'Roughness.png');
+const mapMetalnessC = _texLoader.load(texBaseC + 'Metalness.png');
+
+// MATERIAL DO TETO (mesma textura do cristal, definida aqui para evitar ReferenceError)
+const mapColorCeil = mapColorC.clone();
+const mapNormalCeil = mapNormalC.clone();
+const mapRoughnessCeil = mapRoughnessC.clone();
+[mapColorCeil, mapNormalCeil, mapRoughnessCeil].forEach(tex => {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(8, 8); 
+});
+const matCeiling = new THREE.MeshStandardMaterial({
+    map: mapColorCeil,
+    normalMap: mapNormalCeil,
+    roughnessMap: mapRoughnessCeil,
+    color: 0x6600aa, // Roxo mais vibrante (igual à cor base do cristal)
+    emissive: 0x330088, // Adicionado brilho emissivo roxo
+    emissiveIntensity: 0.8, // Intensidade para não ficar totalmente preto
+    roughness: 0.6, // Ligeiramente mais brilhante para refletir luzes
+    metalness: 0.5,
+});
+
+// ---- CORRUPÇÃO MÍSTICA DO TETO ----
+// A textura de metal pintado mantém-se; por cima do material PBR é
+// injectado um shader que faz alastrar veias/vórtice de energia roxa.
+// `uCorrupcao` (0..1) cresce à medida que os pedestais são preenchidos
+// e chega ao máximo quando os 5 cilindros estão activos.
+const _ceilingUniforms = {
+    uTime:      { value: 0 },
+    uCorrupcao: { value: 0 },
+};
+matCeiling.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime      = _ceilingUniforms.uTime;
+    shader.uniforms.uCorrupcao = _ceilingUniforms.uCorrupcao;
+
+    shader.vertexShader = 'varying vec2 vCorrUv;\n' + shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\n    vCorrUv = uv;'
+    );
+
+    shader.fragmentShader =
+        'varying vec2 vCorrUv;\n' +
+        'uniform float uTime;\n' +
+        'uniform float uCorrupcao;\n' +
+        'float corrHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n' +
+        'float corrSn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);\n' +
+        '  return mix(mix(corrHash(i), corrHash(i+vec2(1.0,0.0)), f.x),\n' +
+        '             mix(corrHash(i+vec2(0.0,1.0)), corrHash(i+vec2(1.0,1.0)), f.x), f.y); }\n' +
+        'float corrFbm(vec2 p){ float v=0.0, a=0.5;\n' +
+        '  for(int i=0;i<3;i++){ v+=a*corrSn(p); p=p*2.1+vec2(3.1,1.7); a*=0.5; } return v; }\n' +
+        'vec2 corrRot(vec2 p, float a){ float c=cos(a), s=sin(a); return mat2(c,-s,s,c)*p; }\n' +
+        shader.fragmentShader.replace(
+            '#include <dithering_fragment>',
+            `#include <dithering_fragment>
+            if (uCorrupcao > 0.001) {
+                float T = uTime;
+                vec2 p = vCorrUv * 7.0;
+                // vórtice
+                vec2 sw = corrRot(p - 3.5, T * 0.09);
+                float swirlN = corrFbm(sw * 1.3 + vec2(T * 0.06, 0.0));
+                // veias de corrupção — largas e em 3 camadas, bem visíveis
+                float veins = pow(corrSn(p * 2.0 + T * 0.16), 3.0)
+                            + pow(corrSn(p * 1.5 - T * 0.12 + 1.7), 4.0) * 0.9
+                            + pow(corrSn(p * 3.0 + T * 0.20 + 4.3), 5.0) * 0.6;
+                // brilhos pontuais
+                float spark = pow(corrSn(p * 3.4 + T * 0.30), 7.0);
+                spark      += pow(corrSn(p * 5.0 - T * 0.24 + 5.1), 8.0) * 0.8;
+                float pulse = 0.5 + 0.5 * sin(T * 2.0);
+                vec3 glowMid    = vec3(0.45, 0.05, 0.85);
+                vec3 glowBright = vec3(0.95, 0.30, 1.30);
+                vec3 sparkCol   = vec3(1.30, 0.75, 1.30);
+                vec3 corr = glowMid * swirlN * 1.4;
+                corr += glowBright * veins * (1.0 + 0.7 * pulse);
+                corr += sparkCol * spark * (0.8 + 0.6 * pulse);
+                // escurece bem a base para o glow saltar à vista
+                gl_FragColor.rgb = mix(gl_FragColor.rgb,
+                                       gl_FragColor.rgb * 0.45, uCorrupcao * 0.6);
+                gl_FragColor.rgb += corr * uCorrupcao;
+            }`
+        );
+};
+matCeiling.needsUpdate = true;
 
 
 function box(w, h, d, mat, x, y, z) {
@@ -234,7 +417,55 @@ export function atualizarPedestais(deltaTime) {
         p._trofeuPivot.position.y = (p._colunaH / 2 + 0.18)
             + Math.sin(performance.now() * 0.0025) * 0.04;
     }
+
+    // corrupção do teto — só ativa quando os 5 cilindros estão todos
+    // activos; faz uma transição suave do limpo para o corrompido.
+    _ceilingUniforms.uTime.value += deltaTime;
+    const _alvoCorr = todosPedestaisCheios() ? 1 : 0;
+    const _c = _ceilingUniforms.uCorrupcao;
+    // Aumentado de 0.35 para 0.5 para chegar à velocidade máxima um pouco mais rápido
+    _c.value += (_alvoCorr - _c.value) * Math.min(1, deltaTime * 0.5);
+
+    // Atualiza o som do vórtice dinamicamente
+    atualizarSomVorticeCristal(_c.value);
+
+    // Quando todos os pedestais estão cheios, o cristal sobe e o feixe intensifica
+    if (_c.value > 0.001) {
+        // Cristal sobe suavemente até um máximo de +2.0m da posição base
+        const targetY = bossCrystalRestY + (_c.value * 2.0);
+        bossCrystal.position.y += (targetY - bossCrystal.position.y) * Math.min(1, deltaTime * 0.8);
+        
+        // Luz acompanha o cristal e ganha intensidade progressiva
+        crystalLight.position.y = bossCrystal.position.y;
+        const glow = Math.sin(performance.now() * 0.001 * Math.PI) * 0.5 + 0.5;
+        crystalLight.intensity = _c.value * (12 + glow * 28);
+        crystalLight.color.setHSL(0.75, 1.0, 0.4 + glow * 0.25);
+
+        // Feixe intensifica (de 0.15 a 0.8)
+        _feixeMat.uniforms.uIntensity.value = 0.15 + _c.value * 0.65;
+        
+        // Partículas à volta do cristal tornam-se mais densas e sincronizam o pulso
+        _mistMat.uniforms.uActivation.value = _c.value;
+        _mistMat.uniforms.uPulse.value = glow; // Passamos o pulso lento (0..1) para o shader
+
+        // Cristal acelera a rotação em sincronia com a ativação (Apenas Eixo Y)
+        const easedC = _c.value * _c.value;
+        const rotSpeed = 1.2 + easedC * 6.8;
+        bossCrystal.rotation.y += deltaTime * rotSpeed;
+        
+        // Garante que X e Z ficam estáticos/alinhados
+        bossCrystal.rotation.x = 0;
+        bossCrystal.rotation.z = 0;
+    } else {
+        // Rotação base calma (Apenas Eixo Y)
+        bossCrystal.rotation.y += deltaTime * 1.2;
+        bossCrystal.rotation.x = 0;
+        bossCrystal.rotation.z = 0;
+        crystalLight.intensity *= 0.9; // Apaga luz se desativar
+        _mistMat.uniforms.uActivation.value *= 0.9;
+    }
 }
+
 
 // ---- paredes ----
 // Paredes de pedra com a altura útil H — a câmara aponta para cima
@@ -248,16 +479,12 @@ box(0.6, H, D, matStone, -W / 2, H / 2, 0);
 box(0.6, H, D, matStone,  W / 2, H / 2, 0);
 // parede sul — sem malhas visuais; colisores em caseloColliders mantêm o gap da porta
 
-// ---- "céu" corrupto — mesmo visual das zonas de confronto ----
-// Plano horizontal grande exactamente à altura do topo das paredes.
-// matBattleSky usa coordenadas world-space em XZ, por isso o padrão
-// varia naturalmente sobre o plano (sem esticamento). É grande o
-// suficiente para cobrir toda a área que a câmara vê para cima.
+// ---- "céu" corrupto agora com textura de metal pintado ----
 {
     const tetoSize = Math.max(W, D) * 6;
     const teto = new THREE.Mesh(
         new THREE.PlaneGeometry(tetoSize, tetoSize),
-        matBattleSky
+        matCeiling
     );
     teto.rotation.x = Math.PI / 2;          // virado para baixo
     teto.position.set(0, H - 0.02, 0);      // mesmo nível do topo das paredes
@@ -277,10 +504,10 @@ for (const px of pillarX) {
         pillar.position.set(px, H / 2, pz);
         pillar.castShadow = true;    // sombras simétricas — as 4 tochas projectam
         caseloScene.add(pillar);
-        // capitel
-        box(1.3, 0.4, 1.3, matStoneDark, px, H - 0.2, pz);
-        // base
-        box(1.3, 0.4, 1.3, matStoneDark, px, 0.2, pz);
+        // capitel — mesma textura do fuste do pilar
+        box(1.3, 0.4, 1.3, matPillar, px, H - 0.2, pz);
+        // base — mesma textura do fuste do pilar
+        box(1.3, 0.4, 1.3, matPillar, px, 0.2, pz);
     }
 }
 
@@ -311,25 +538,51 @@ totemRune.position.set(TOTEM_X, TOTEM_TOP_Y + 0.04, TOTEM_Z);
 caseloScene.add(totemRune);
 
 // cristal maligno a flutuar acima da pirâmide
+mapColorC.colorSpace = THREE.SRGBColorSpace;
+
 const crystalGeo = new THREE.OctahedronGeometry(0.7, 0);
 const crystalMat = new THREE.MeshStandardMaterial({
-    color: 0x6600aa,
+    map: mapColorC,
+    normalMap: mapNormalC,
+    roughnessMap: mapRoughnessC,
+    metalnessMap: mapMetalnessC,
+    color: 0x8844ff,
     emissive: 0x4400aa,
-    emissiveIntensity: 1.5,
-    transparent: true,
-    opacity: 0.85,
+    emissiveIntensity: 1.8, // Ligeiro aumento no brilho
+    transparent: false,
+    opacity: 1.0,
+    metalness: 1.0,
+    roughness: 0.2,
     flatShading: true,
 });
 const crystal = new THREE.Mesh(crystalGeo, crystalMat);
 crystal.position.set(TOTEM_X, TOTEM_TOP_Y + 0.95, TOTEM_Z);
 crystal.rotation.y = Math.PI / 4;
-// IMPORTANTE: NÃO activar castShadow no cristal. O material é transparente
-// (`opacity: 0.85`) e three.js renderiza shadow maps a partir da silhueta
-// opaca da geometria — daria um "diamante fantasma" no chão em sítios
-// onde a sombra escapasse aos limites do altar.
 crystal.castShadow = false;
 caseloScene.add(crystal);
 export const bossCrystal = crystal;
+
+// Configura Áudio Posicional (3D) para o swoosh
+const listener = getAudioListener();
+if (listener) {
+    const swooshPositional = new THREE.PositionalAudio(listener);
+    const loader = new THREE.AudioLoader();
+    loader.load('assets/sounds/swoosh.mp3', (buffer) => {
+        swooshPositional.setBuffer(buffer);
+        swooshPositional.setRefDistance(3); // Começa a baixar após 3 metros
+        swooshPositional.setRolloffFactor(2); // Baixa depressa com a distância
+        swooshPositional.setDistanceModel('exponential');
+        setSwooshAudio(swooshPositional);
+    });
+    crystal.add(swooshPositional); // Acopla o som ao cristal para efeito 3D
+}
+
+// Luz dinâmica que o cristal emite ao ativar
+const crystalLight = new THREE.PointLight(0xcc66ff, 0, 15);
+crystalLight.position.set(TOTEM_X, TOTEM_TOP_Y + 0.95, TOTEM_Z);
+crystalLight.castShadow = false; // Evita excesso de luzes com sombra
+caseloScene.add(crystalLight);
+
 // Altura "base" da animação de bobbing — exportada para o main.js usar.
 export const bossCrystalRestY = TOTEM_TOP_Y + 0.95;
 
@@ -345,18 +598,18 @@ export const bossCrystalSafePos = new THREE.Vector3(TOTEM_X, 0, -3.0);
 
 // ---- zona de saída (perto da entrada) ----
 export const caseloSaidaBox = new THREE.Box3(
-    new THREE.Vector3(-2.2, 0,  D / 2 - 1.5),
-    new THREE.Vector3( 2.2, 3,  D / 2 + 0.5)
+    new THREE.Vector3(-2.2, 0,  D / 2),
+    new THREE.Vector3( 2.2, 3,  D / 2 + 2.0)
 );
 
 // ---- colisores interiores ----
 export const caseloColliders = [
     // paredes (ajustadas para bater certo com os 0.6 de espessura visual)
-    new THREE.Box3(new THREE.Vector3(-W/2-0.1, 0, -D/2-0.1), new THREE.Vector3(-W/2+0.3, H, D/2+0.1)),
-    new THREE.Box3(new THREE.Vector3( W/2-0.3, 0, -D/2-0.1), new THREE.Vector3( W/2+0.1, H, D/2+0.1)),
+    new THREE.Box3(new THREE.Vector3(-W/2-0.1, 0, -D/2-0.1), new THREE.Vector3(-W/2+0.3, H, D/2+2.0)),
+    new THREE.Box3(new THREE.Vector3( W/2-0.3, 0, -D/2-0.1), new THREE.Vector3( W/2+0.1, H, D/2+2.0)),
     new THREE.Box3(new THREE.Vector3(-W/2, 0, -D/2-0.1),     new THREE.Vector3( W/2, H, -D/2+0.3)),
-    // parede sul: fechada para movimento — saída só via interação E (caseloSaidaBox)
-    new THREE.Box3(new THREE.Vector3(-W/2, 0, D/2-0.5),      new THREE.Vector3( W/2, H, D/2+0.5)),
+    // parede sul: movida mais para trás (z=D/2 + 1.5)
+    new THREE.Box3(new THREE.Vector3(-W/2, 0, D/2+1.5),      new THREE.Vector3( W/2, H, D/2+2.0)),
     // altar (pirâmide escalonada — agora também serve de pedestal do cristal)
     new THREE.Box3(new THREE.Vector3(-3.1, 0, -D/2+1.5),     new THREE.Vector3( 3.1, 2, -D/2+5.5)),
     // pilares
@@ -367,12 +620,12 @@ export const caseloColliders = [
 ];
 
 // ---- posição de spawn dentro do castelo ----
-export const caseloSpawnPos = new THREE.Vector3(0, 0, D / 2 - 1.3);
+export const caseloSpawnPos = new THREE.Vector3(0, 0, D / 2 + 0.5);
 
 // ---- minimapa ortográfico ----
 export const caseloMiniCam = new THREE.OrthographicCamera(
     -W / 2 - 1,  W / 2 + 1,
-     D / 2 + 1, -D / 2 - 1,
+     D / 2 + 3, -D / 2 - 1,
     0.1, 60
 );
 caseloMiniCam.position.set(0, 25, 0);
@@ -384,7 +637,7 @@ caseloMiniCam.lookAt(0, 0, 0);
 // Nenhum dos elementos abaixo toca em colliders, pedestais ou no totem.
 // Tudo é decorativo + animado por shader; o custo CPU em update é trivial.
 
-const _atmosTime = { t: 0 };
+const _atmosTime = { t: 0, mist: 0 };
 
 // ---- 1) Brasas a subir das 4 tochas (THREE.Points + vertex shader) ----
 function _criarEmbers() {
@@ -519,55 +772,84 @@ const _motesMat = _criarMotes();
 
 // ---- 3) Espirais de corrupção à volta do cristal central ----
 function _criarMistCristal() {
-    const N = 50;
+    const N = 120; // Aumentado de 50 para 120 para preencher melhor
     const positions = new Float32Array(N * 3);
     const phases    = new Float32Array(N);
     const radii     = new Float32Array(N);
+    const speeds    = new Float32Array(N);
+
     for (let i = 0; i < N; i++) {
         positions[i*3]   = TOTEM_X;
-        positions[i*3+1] = TOTEM_TOP_Y + 0.1 + Math.random() * 2.4;
+        positions[i*3+1] = TOTEM_TOP_Y + 0.1 + Math.random() * 4.5;
         positions[i*3+2] = TOTEM_Z;
         phases[i] = Math.random() * Math.PI * 2;
-        radii[i]  = 0.55 + Math.random() * 1.3;
+        radii[i]  = 0.4 + Math.random() * 1.5;
+        speeds[i] = 0.5 + Math.random() * 1.5;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geo.setAttribute('aPhase',   new THREE.BufferAttribute(phases, 1));
     geo.setAttribute('aRadius',  new THREE.BufferAttribute(radii, 1));
+    geo.setAttribute('aSpeed',   new THREE.BufferAttribute(speeds, 1));
 
     const mat = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0 },
+            uMistTime: { value: 0 },
+            uPulse: { value: 0 }, // Sincronizado com o cristal (0..1)
+            uActivation: { value: 0 }, // 0..1 para controlar densidade/agitação
             uPixelRatio: { value: window.devicePixelRatio || 1 },
         },
         vertexShader: `
             attribute float aPhase;
             attribute float aRadius;
-            uniform float uTime;
+            attribute float aSpeed;
+            uniform float uMistTime;
+            uniform float uActivation;
             uniform float uPixelRatio;
             varying float vPulse;
+            varying float vAlpha;
             void main() {
-                float ang = uTime * (0.45 + aRadius * 0.18) + aPhase;
+                float t = uMistTime;
+                float ang = t * (0.45 + aRadius * 0.2) * aSpeed + aPhase;
+                
+                // As partículas espalham-se mais com a ativação
+                float r = aRadius * (1.0 + uActivation * 0.5);
                 vec3 p = position;
-                p.x += cos(ang) * aRadius;
-                p.z += sin(ang) * aRadius;
-                p.y += sin(uTime * 0.6 + aPhase) * 0.35;
+                p.x += cos(ang) * r;
+                p.z += sin(ang) * r;
+                // Sobem mais alto com a ativação
+                p.y += sin(t * 0.6 + aPhase) * 0.5 + (uActivation * aPhase * 0.5);
+                
                 vec4 mv = modelViewMatrix * vec4(p, 1.0);
                 gl_Position = projectionMatrix * mv;
                 float d = -mv.z;
-                gl_PointSize = uPixelRatio * (4.5 + 1.5 * aRadius) * (35.0 / max(d, 1.0));
-                vPulse = 0.5 + 0.5 * sin(uTime * 1.3 + aPhase);
+                
+                // Tamanho aumenta com ativação
+                gl_PointSize = uPixelRatio * (4.0 + 3.0 * uActivation) * (35.0 / max(d, 1.0));
+                vPulse = 0.5 + 0.5 * sin(t * 2.0 + aPhase);
+                vAlpha = smoothstep(0.1, 0.4, aPhase/6.28 + uActivation); // Mais partículas visíveis com uActivation
             }
         `,
         fragmentShader: `
+            uniform float uPulse;
             varying float vPulse;
+            varying float vAlpha;
             void main() {
                 vec2 c = gl_PointCoord - 0.5;
                 float d = length(c);
                 if (d > 0.5) discard;
                 float core = smoothstep(0.5, 0.0, d);
-                vec3 col = vec3(0.55, 0.10, 0.85);
-                gl_FragColor = vec4(col, core * (0.25 + 0.35 * vPulse));
+                
+                // Sincroniza as cores com o cristal: roxo escuro -> roxo elétrico
+                vec3 c1 = vec3(0.13, 0.0, 0.26); // Equivale a 0x220044
+                vec3 c2 = vec3(0.53, 0.0, 1.0);  // Equivale a 0x8800ff
+                vec3 col = mix(c1, c2, uPulse);
+                
+                // Adiciona um brilho individual extra para não ser uniforme demais
+                col *= (0.8 + 0.4 * vPulse);
+                
+                gl_FragColor = vec4(col, core * (0.3 + 0.5 * vPulse) * vAlpha);
             }
         `,
         transparent: true,
@@ -591,7 +873,10 @@ function _criarFeixeCristal() {
 
     const geo = new THREE.ConeGeometry(baseR, beamH, 28, 1, true);
     const mat = new THREE.ShaderMaterial({
-        uniforms: { uTime: { value: 0 } },
+        uniforms: { 
+            uTime: { value: 0 },
+            uIntensity: { value: 0.15 }, // Intensidade base baixa
+        },
         vertexShader: `
             varying float vNorm;
             void main() {
@@ -603,13 +888,14 @@ function _criarFeixeCristal() {
         `,
         fragmentShader: `
             uniform float uTime;
+            uniform float uIntensity;
             varying float vNorm;
             void main() {
                 // mais brilho perto do topo (fonte)
                 float fade = pow(vNorm, 1.6);
                 fade *= 0.55 + 0.25 * sin(uTime * 1.5);
                 vec3 col = vec3(0.50, 0.15, 0.85);
-                gl_FragColor = vec4(col * fade, fade * 0.45);
+                gl_FragColor = vec4(col * fade * (uIntensity * 4.0), fade * uIntensity);
             }
         `,
         transparent: true,
@@ -629,6 +915,10 @@ export function atualizarAtmosferaCastelo(deltaTime) {
     _atmosTime.t += deltaTime;
     const t = _atmosTime.t;
 
+    // Tempo acumulado para as partículas do cristal (permite aceleração suave sem saltos)
+    const mistSpeed = 1.0 + _mistMat.uniforms.uActivation.value * 1.5;
+    _atmosTime.mist += deltaTime * mistSpeed;
+
     // flicker independente por tocha (intensidade da luz + emissive da chama)
     for (const tch of _torches) {
         const f = 0.80
@@ -644,5 +934,6 @@ export function atualizarAtmosferaCastelo(deltaTime) {
     _embersMat.uniforms.uTime.value = t;
     _motesMat .uniforms.uTime.value = t;
     _mistMat  .uniforms.uTime.value = t;
+    _mistMat  .uniforms.uMistTime.value = _atmosTime.mist;
     _feixeMat .uniforms.uTime.value = t;
 }

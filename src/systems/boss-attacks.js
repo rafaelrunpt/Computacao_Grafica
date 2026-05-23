@@ -24,6 +24,7 @@
 // ======================================================================
 import * as THREE from 'three';
 import { player } from '../entities/jogador.js';
+import { getBossRoot, triggerBossAttackAnim } from '../entities/boss.js';
 import { combateScene, posPlayerCombate, isBossMode } from '../world/combate-scene.js';
 import { keys } from '../core/input.js';
 import { receberDano, playerStats } from './player-stats.js';
@@ -527,7 +528,15 @@ export function atualizarFaseDesvio(deltaTime) {
     _spawnTimer -= deltaTime;
     if (_spawnTimer <= 0) {
         const factory = FACTORIES[Math.floor(Math.random() * FACTORIES.length)];
-        _projectiles.push(factory());
+        const pr = factory();
+        _projectiles.push(pr);
+
+        // Gatilho de animação no boss sincronizado com o tempo de aviso (telegraph)
+        // Passa o tipo exacto para animações elaboradas (salto, slam, sweep, etc)
+        const opts = {};
+        if (pr.type === 'lateral') opts.side = pr.fromLeft ? -1 : 1;
+        triggerBossAttackAnim(pr.type, pr.teleDur, opts);
+
         const base = SPAWN_MIN + Math.random() * (SPAWN_MAX - SPAWN_MIN);
         _spawnTimer = base / _speedMult();
     }

@@ -44,8 +44,8 @@ lojaCamera.position.set(0, 9, 10);
 lojaCamera.lookAt(0, 1, -2);
 
 // câmara do castelo — posição estática
-caseloCamera.position.set(0, 7, 14);
-caseloCamera.lookAt(0, 2, -6);
+caseloCamera.position.set(0, 3.69, 15);
+caseloCamera.lookAt(0, 4, 0);
 
 // câmara da taverna — posição estática (capturada via free cam)
 tavernCamera.position.set(-18.66, 10.74, 10.00);
@@ -55,8 +55,9 @@ tavernCamera.lookAt(-6.84, 3.91, 0.70);
 quartoCamera.position.set(1.4, 3.2, 4.2);
 quartoCamera.lookAt(1.4, 0.8, -1.5);
 
-// câmara do combate — estática, lateral, enquadra player (esq.) e inimigo (dir.)
-combateCamera.position.set(0.2, 3.4, 8.2);
+// câmara do combate — estática, em ângulo 3/4 a partir da esquerda para
+// se ver a CARA do inimigo (estilo Pokémon); player à esq., inimigo à dir.
+combateCamera.position.set(-5.6, 3.4, 10.2);
 combateCamera.lookAt(0.2, 1.0, 0);
 
 // câmara do boss — boss em (0,0,-3.5), player em (0,0,2.0).

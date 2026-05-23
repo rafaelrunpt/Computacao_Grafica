@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { playSFX, stopSFX } from '../systems/audio.js';
+import { getNightT } from '../world/night-mode.js';
 
 // ---------------------------------------------------------
 // 1. MATERIAIS 
@@ -353,6 +354,72 @@ headGroup.add(mascaraGroup);
 export function setMascaraVisivel(v) { mascaraGroup.visible = !!v; }
 
 // ---------------------------------------------------------
+// 4g. TOCHA DO VIAJANTE (item de mão — empunhada ao equipar)
+// Fonte de luz do herói no modo nocturno: a PointLight vive na chama,
+// por isso luz e sombras seguem a mão automaticamente.
+// ---------------------------------------------------------
+// Pose do braço direito ao empunhar — esticado para a frente.
+const RIGHT_ARM_TORCH = -1.5;
+// Intensidade base da luz (× nightT × flicker).
+const TOCHA_INTENSIDADE = 26;
+
+export const tochaGroup = new THREE.Group();
+tochaGroup.name = 'tochaGroup';
+tochaGroup.visible = false;
+// agarrada na mão direita; contra-roda a pose do braço para a tocha
+// ficar vertical (chama para cima) com o braço esticado.
+tochaGroup.position.set(0, -0.34, 0);
+tochaGroup.rotation.x = -RIGHT_ARM_TORCH;
+
+// cabo de madeira
+const matCabo = new THREE.MeshStandardMaterial({ color: 0x4a2f1a, roughness: 0.95 });
+const cabo = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.03, 0.36, 8), matCabo);
+cabo.position.y = 0.18;
+tochaGroup.add(cabo);
+
+// taça metálica no topo do cabo
+const matTaca = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.5, metalness: 0.6 });
+const taca = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.035, 0.07, 8), matTaca);
+taca.position.y = 0.39;
+tochaGroup.add(taca);
+
+// chama — cone interior pequeno; brilho moderado para o bloom não
+// rebentar quando a câmara olha de perto para a cara do herói.
+const matChamaInt = new THREE.MeshBasicMaterial();
+matChamaInt.color.setRGB(1.6, 1.0, 0.42);
+const chamaInt = new THREE.Mesh(new THREE.ConeGeometry(0.038, 0.15, 10), matChamaInt);
+chamaInt.position.y = 0.49;
+// chama exterior — halo aditivo subtil
+const matChamaExt = new THREE.MeshBasicMaterial({
+    color: 0xff7a18, transparent: true, opacity: 0.22,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+});
+const chamaExt = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.22, 10), matChamaExt);
+chamaExt.position.y = 0.51;
+tochaGroup.add(chamaInt, chamaExt);
+
+// luz da tocha — PointLight na chama; projecta sombras (cube shadow)
+const tochaLuz = new THREE.PointLight(0xffce7a, 0, 30, 2);
+tochaLuz.position.y = 0.55;
+tochaLuz.castShadow = true;
+tochaLuz.shadow.mapSize.set(1024, 1024);
+tochaLuz.shadow.bias = -0.003;
+tochaLuz.shadow.normalBias = 0.06;
+tochaLuz.shadow.camera.near = 0.2;
+tochaLuz.shadow.camera.far  = 32;
+tochaLuz.shadow.camera.layers.enable(1); // vê também objectos culled (layer 1)
+tochaGroup.add(tochaLuz);
+
+rightArmGroup.add(tochaGroup);
+
+tochaGroup.userData.t = 0;
+tochaGroup.userData.luz = tochaLuz;
+tochaGroup.userData.chamaInt = chamaInt;
+tochaGroup.userData.chamaExt = chamaExt;
+
+export function setTochaVisivel(v) { tochaGroup.visible = !!v; }
+
+// ---------------------------------------------------------
 // 5. JUNTAR TUDO NO BONECO
 // ---------------------------------------------------------
 player.add(leftLeg, rightLeg, bodyGroup, leftArmGroup, rightArmGroup, headGroup);
@@ -402,6 +469,16 @@ export function updateCoroaAnimacao(deltaTime) {
         mascaraGroup.userData.t += deltaTime;
         const pulse = 0.5 + Math.sin(mascaraGroup.userData.t * 2.5) * 0.5;
         mascaraGroup.userData.runa.emissiveIntensity = 1.5 + 1.2 * pulse;
+    }
+    if (tochaGroup.visible) {
+        tochaGroup.userData.t += deltaTime;
+        const tt = tochaGroup.userData.t;
+        // flicker irregular — duas frequências, como uma chama a tremer
+        const flick = 0.80 + 0.13 * Math.sin(tt * 11) + 0.09 * Math.sin(tt * 23 + 1.3);
+        // a luz só ilumina de noite (getNightT→1); de dia fica só a chama visível
+        tochaGroup.userData.luz.intensity = TOCHA_INTENSIDADE * getNightT() * flick;
+        tochaGroup.userData.chamaInt.scale.set(1, 0.88 + 0.20 * Math.sin(tt * 13), 1);
+        tochaGroup.userData.chamaExt.scale.set(1, 0.80 + 0.30 * Math.sin(tt * 9 + 0.7), 1);
     }
 }
 
@@ -453,5 +530,10 @@ export function updatePlayerAnimation(isMoving, deltaTime, surfaceType = 'grass'
         walkTime = 0;
         _lastStepSide = 0;
         _lastSurface = null;
+    }
+
+    // Tocha equipada → braço direito esticado a empunhá-la (sobrepõe o balanço do andar).
+    if (tochaGroup.visible) {
+        player.userData.rightArm.rotation.x = RIGHT_ARM_TORCH;
     }
 }
