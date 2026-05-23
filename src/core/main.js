@@ -22,7 +22,7 @@ import { todasZonasLimpas } from '../world/mapa.js';
 import { combateScene, updateCombateScene } from '../world/combate-scene.js';
 import { skybox, starMat } from '../world/sky.js';
 import { renderer, mainCamera, lojaCamera, caseloCamera, tavernCamera, quartoCamera, combateCamera, combateBossCamera } from './renderer.js';
-import { isBossMode } from '../world/combate-scene.js';
+import { isBossMode, precarregarBoss } from '../world/combate-scene.js';
 import { keys, registarCallbackInput } from './input.js';
 import { ganharXP, playerStats, recalcularMaxHp } from '../systems/player-stats.js';
 import { buildAvatarScene, syncAvatarMaterials, avatarRenderer, avatarScene, avatarCam, showPrompt, hidePrompt } from '../ui/hud.js';
@@ -944,6 +944,10 @@ function animateCaselo(deltaTime) {
         tocarAtivacaoCristal();
         // Salta para a marca de 1 minuto da música atual (seção épica)
         saltarParaClimaxMusical();
+        // Pré-carrega o boss agora que o jogador acaba de cumprir o ritual.
+        // A peleja arranca quando ele interagir com o cristal — temos esses
+        // segundos para fazer o upload das ~24 texturas + meshes sem hitch.
+        precarregarBoss();
     }
     _prevTodosCheios = cheios;
 

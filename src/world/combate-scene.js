@@ -256,28 +256,37 @@ export function getInimigoActivo() {
 }
 
 // ----------------------------------------------------------------------
-// BOSS — adicionado à mesma cena, escondido por defeito.
-// É activado por `setBossMode(true)`; nessa altura o wraith é
-// escondido e o boss aparece na mesma marca (posInimigoCombate).
+// BOSS — instanciação ADIADA (lazy). O boss usa ~24 texturas PBR a 1K
+// (~125 MB de VRAM) e dezenas de meshes. Em vez de o criar ao importar
+// este módulo (que acontece logo no arranque), criamo-lo só na primeira
+// vez que se entra em modo boss. Os jogadores que nunca cheguem a essa
+// peleja não pagam o custo. Em placas integradas é a maior poupança
+// individual de memória.
 // ----------------------------------------------------------------------
-// boss tem origem nos pés (base a y≈0), por isso ignoramos o offset Y
-// usado pelo wraith.
-const bossPos = posInimigoCombate.clone();
-bossPos.y = 0;
-criarBoss(combateScene, bossPos, {
-    acessorios: ['coroa_magica'],
-});
-const _bossRoot = getBossRoot();
-if (_bossRoot) {
-    _bossRoot.visible = false;
-    // virado para o jogador (player em -X)
-    _bossRoot.rotation.y = -Math.PI / 2 + 0.25;
+let _bossRoot = null;
+function _ensureBossInstanciado() {
+    if (_bossRoot) return _bossRoot;
+    const bossPos = posInimigoCombate.clone();
+    bossPos.y = 0;
+    criarBoss(combateScene, bossPos, {
+        acessorios: ['coroa_magica'],
+    });
+    _bossRoot = getBossRoot();
+    if (_bossRoot) {
+        _bossRoot.visible = false;
+        _bossRoot.rotation.y = -Math.PI / 2 + 0.25;
+    }
+    return _bossRoot;
 }
+// Pré-carregamento opcional, para chamar quando o jogador se aproxima
+// do cristal (ou outro gatilho antecipado) e queremos amortizar o load.
+export function precarregarBoss() { _ensureBossInstanciado(); }
 
 let _bossMode = false;
 export function isBossMode() { return _bossMode; }
 export function setBossMode(on) {
     _bossMode = !!on;
+    if (_bossMode) _ensureBossInstanciado(); // garante criação no primeiro toggle
     if (_bossRoot) _bossRoot.visible = _bossMode;
     // O boss é um singleton partilhado — pode ter sido movido para a cena
     // de debug. Ao activar o modo boss, garantir que está nesta cena.

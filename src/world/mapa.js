@@ -4,6 +4,7 @@ import { makeTerrainShader, terraTex, matBattleGrass, matContRock, matCorruptHal
 import { criarRio, getBridgePassage } from './rio.js';
 import { Bau } from './bau.js';
 import { criarGuardiao as _criarGuardiao, removerGuardiao as _removerGuardiao } from '../entities/guardiao.js';
+import { renderer } from '../core/renderer.js';
 
 export { matBattleGrass, matBattleSky, matWater, matContTrunk, matContLeaves, matContRock, matCorruptHalo } from './shaders.js';
 export { getBridgeHeight } from './rio.js';
@@ -173,15 +174,25 @@ function _findZoneAt(x, z, zones) {
     return null;
 }
 
-// ---- árvore GLB ----
-let treeTemplate = null;       // THREE.Group clonável, preenchido após o load
-const treePendingQueue = [];   // { scene, x, z, contaminada, zoneRef } — aguardam o load
+// ---- árvore GLB → InstancedMesh ----
+// As ~330 árvores são renderizadas como InstancedMesh em vez de Object3D
+// clonado por árvore. Antes eram ~660+ draw-calls (2 sub-meshes × 330
+// árvores) + outro tanto no shadow pass — gargalo de CPU em Firefox/Windows
+// que mantinha a NVIDIA capada a ~10%. Com InstancedMesh ficamos com 1
+// draw-call por (sub-mesh, bucket de corrupção) — tipicamente 10-20 no
+// total, redução de ~30-60×.
+let treeTemplate = null;
+const _treeSpawnList = []; // { scene, x, z, contaminada, zoneRef }
+let _criarMapaDone = false;
+let _forestBuilt = false;
+let _treeBboxLocal = null;
 
 const treeLoader = new GLTFLoader();
 treeLoader.load('assets/models/ambiente/handpainted_pine_tree.glb', (gltf) => {
     treeTemplate = gltf.scene;
-    for (const p of treePendingQueue) _spawnTree(p.scene, p.x, p.z, p.contaminada, p.zoneRef);
-    treePendingQueue.length = 0;
+    treeTemplate.updateMatrixWorld(true);
+    _treeBboxLocal = new THREE.Box3().setFromObject(treeTemplate);
+    _tryBuildForest();
 }, undefined, e => console.error('Erro tree.glb:', e));
 
 // coordenadas do castelo — usadas para corrupção progressiva por distância
@@ -194,27 +205,10 @@ function _corruptionStrength(x, z) {
     return Math.max(0, 1 - dist / CASTLE_CORRUPT_RADIUS);
 }
 
-// Hitbox das árvores — calculado a partir da malha REAL, já colocada e
-// escalada na cena. Assim a caixa fica exactamente na posição e na altura
-// onde a árvore aparece, mesmo que o modelo GLB tenha a origem deslocada.
-// TREE_HITBOX_SCALE ajusta a largura: 1 = tamanho exacto da árvore,
-// <1 encolhe para o tronco, >1 alarga.
+// Hitbox das árvores — calculada a partir do bbox do template (em escala 1)
+// transformado pela matriz da instância. TREE_HITBOX_SCALE encolhe a largura
+// para o tronco (1 = visual completo, <1 mais apertado).
 const TREE_HITBOX_SCALE = 0.2;
-const _treeBox = new THREE.Box3();
-const _treeCenter = new THREE.Vector3();
-const _treeSize = new THREE.Vector3();
-function _treeColliderBox(tree) {
-    tree.updateMatrixWorld(true);
-    _treeBox.setFromObject(tree);
-    _treeBox.getCenter(_treeCenter);
-    _treeBox.getSize(_treeSize);
-    const hx = _treeSize.x * 0.5 * TREE_HITBOX_SCALE;
-    const hz = _treeSize.z * 0.5 * TREE_HITBOX_SCALE;
-    return new THREE.Box3(
-        new THREE.Vector3(_treeCenter.x - hx, _treeBox.min.y, _treeCenter.z - hz),
-        new THREE.Vector3(_treeCenter.x + hx, _treeBox.max.y, _treeCenter.z + hz)
-    );
-}
 
 // hash determinístico 2D → [0,1): a rotação/escala das árvores dependem
 // só da posição (não de Math.random), por isso ficam SEMPRE iguais em
@@ -224,65 +218,162 @@ function _hash2(x, z) {
     return s - Math.floor(s);
 }
 
-const _treeMatCache = new Map(); // key: originalMat.uuid + "_" + t_rounded
-
-function _spawnTree(scene, x, z, contaminada, zoneRef = null) {
-    const tree = treeTemplate.clone(true);
-    tree.position.set(x, 0, z);
-    tree.rotation.y = _hash2(x, z) * Math.PI * 2;
-    tree.scale.setScalar((0.006 + _hash2(z, x) * 0.0015) * 1.2);
-    tree.updateMatrixWorld(true);
-    tree.position.y -= new THREE.Box3().setFromObject(tree).min.y;
-    tree.position.y += 0.03;
-
-    const castleT = _corruptionStrength(x, z);
-    const battleT = contaminada ? 0.55 : 0;
-    const t = Math.min(1, Math.max(battleT, castleT));
-
-    tree.traverse(c => {
-        if (!c.isMesh) return;
-        c.castShadow = true;
-        c.receiveShadow = true;
-        // Removido renderOrder = 10 para permitir otimizações de sorting do Three.js
-        if (t > 0.01) {
-            const t_round = Math.round(t * 10) / 10;
-            const key = c.material.uuid + "_" + t_round;
-            if (_treeMatCache.has(key)) {
-                c.material = _treeMatCache.get(key);
-            } else {
-                const origColor = c.material.color.clone();
-                const newMat = c.material.clone();
-                newMat.userData.cleanColor = origColor;
-                const darken = 1 - t_round * 0.20;
-                newMat.color.multiplyScalar(darken);
-                newMat.color.r += t_round * 0.05;
-                newMat.color.b += t_round * 0.10;
-                if (newMat.emissive) {
-                    newMat.emissive.setRGB(t_round * 0.08, 0, t_round * 0.15);
-                } else {
-                    newMat.emissive = new THREE.Color(t_round * 0.08, 0, t_round * 0.15);
-                }
-                newMat.emissiveIntensity = 0.2 + t_round * 0.30;
-                _treeMatCache.set(key, newMat);
-                c.material = newMat;
-            }
-        }
-    });
-    scene.add(tree);
-    cullables.push(tree);
-    addCollider(_treeColliderBox(tree));
-    if (zoneRef && contaminada) zoneRef.trees.push(tree);
-    return tree;
+const _treeMatCache = new Map(); // key: baseMat.uuid + "_" + t_rounded
+function _getCorruptedMaterial(baseMat, t_round) {
+    if (t_round <= 0.01) return baseMat;
+    const key = baseMat.uuid + "_" + t_round;
+    if (_treeMatCache.has(key)) return _treeMatCache.get(key);
+    const origColor = baseMat.color.clone();
+    const newMat = baseMat.clone();
+    newMat.userData.cleanColor = origColor;
+    const darken = 1 - t_round * 0.20;
+    newMat.color.multiplyScalar(darken);
+    newMat.color.r += t_round * 0.05;
+    newMat.color.b += t_round * 0.10;
+    if (newMat.emissive) {
+        newMat.emissive.setRGB(t_round * 0.08, 0, t_round * 0.15);
+    } else {
+        newMat.emissive = new THREE.Color(t_round * 0.08, 0, t_round * 0.15);
+    }
+    newMat.emissiveIntensity = 0.2 + t_round * 0.30;
+    _treeMatCache.set(key, newMat);
+    return newMat;
 }
 
 function criarArvore(scene, x, z, contaminada = false, zoneRef = null) {
-    if (treeTemplate) {
-        _spawnTree(scene, x, z, contaminada, zoneRef);
-    } else {
-        // o colisor é calculado da malha — adicionado em _spawnTree quando
-        // o GLB terminar de carregar (a árvore ainda não existe aqui).
-        treePendingQueue.push({ scene, x, z, contaminada, zoneRef });
+    // Só enfileira — o build do forest é feito uma vez, em batch,
+    // depois de criarMapa terminar E o GLB ter carregado.
+    _treeSpawnList.push({ scene, x, z, contaminada, zoneRef });
+}
+
+function _tryBuildForest() {
+    if (_forestBuilt) return;
+    if (!treeTemplate || !_criarMapaDone) return;
+    _forestBuilt = true;
+    if (_treeSpawnList.length === 0) return;
+    _buildInstancedForest();
+    _treeSpawnList.length = 0;
+}
+
+function _buildInstancedForest() {
+    // Enumera sub-meshes do template (tronco, copa, …) com a matriz local
+    // relativa ao root do template (o template está com identidade, então
+    // matrixWorld é local-to-root directamente).
+    const submeshes = []; // { geometry, baseMaterial, localToRoot }
+    treeTemplate.traverse(c => {
+        if (!c.isMesh) return;
+        submeshes.push({
+            geometry: c.geometry,
+            baseMaterial: Array.isArray(c.material) ? c.material[0] : c.material,
+            localToRoot: c.matrixWorld.clone(),
+        });
+    });
+    if (submeshes.length === 0) return;
+
+    const templateMinY = _treeBboxLocal ? _treeBboxLocal.min.y : 0;
+    const _yAxis = new THREE.Vector3(0, 1, 0);
+
+    // Agrupar matrizes de instância por (sub-mesh, bucket de corrupção).
+    const groups = new Map(); // key="i_t" -> { submeshIdx, t_round, matrices[], scene }
+
+    const treeMat = new THREE.Matrix4();
+    const instMat = new THREE.Matrix4();
+    const quat    = new THREE.Quaternion();
+    const pos     = new THREE.Vector3();
+    const scl     = new THREE.Vector3();
+    const colSize = new THREE.Vector3();
+    const colCen  = new THREE.Vector3();
+    const _colBox = new THREE.Box3();
+
+    for (const spawn of _treeSpawnList) {
+        const { x, z, contaminada, zoneRef, scene } = spawn;
+        const rotY  = _hash2(x, z) * Math.PI * 2;
+        const scale = (0.006 + _hash2(z, x) * 0.0015) * 1.2;
+        // yOffset assenta o pé da árvore no chão (igual ao código antigo).
+        // Rotação Y não altera bbox.min.y; só a escala importa.
+        const yOff  = -templateMinY * scale + 0.03;
+
+        quat.setFromAxisAngle(_yAxis, rotY);
+        pos.set(x, yOff, z);
+        scl.set(scale, scale, scale);
+        treeMat.compose(pos, quat, scl);
+
+        const castleT = _corruptionStrength(x, z);
+        const battleT = contaminada ? 0.55 : 0;
+        const t = Math.min(1, Math.max(battleT, castleT));
+        const t_round = t > 0.01 ? Math.round(t * 10) / 10 : 0;
+
+        for (let i = 0; i < submeshes.length; i++) {
+            const key = i + '_' + t_round;
+            let g = groups.get(key);
+            if (!g) {
+                g = { submeshIdx: i, t_round, matrices: [], scene };
+                groups.set(key, g);
+            }
+            instMat.multiplyMatrices(treeMat, submeshes[i].localToRoot);
+            g.matrices.push(instMat.clone());
+        }
+
+        // Collider: bbox do template transformado pela matriz da instância,
+        // depois encolhido em XZ para a hitbox do tronco.
+        if (_treeBboxLocal) {
+            _colBox.copy(_treeBboxLocal).applyMatrix4(treeMat);
+            _colBox.getCenter(colCen);
+            _colBox.getSize(colSize);
+            const hx = colSize.x * 0.5 * TREE_HITBOX_SCALE;
+            const hz = colSize.z * 0.5 * TREE_HITBOX_SCALE;
+            addCollider(new THREE.Box3(
+                new THREE.Vector3(colCen.x - hx, _colBox.min.y, colCen.z - hz),
+                new THREE.Vector3(colCen.x + hx, _colBox.max.y, colCen.z + hz)
+            ));
+        }
+
+        // Tracking de materiais por zona para a limpeza visual quando a
+        // zona é purificada (limparZonaBatalha). Cada zona acumula a lista
+        // de materiais corrompidos que as suas árvores usam.
+        if (zoneRef && contaminada && t_round > 0.01) {
+            if (!zoneRef.materials) zoneRef.materials = new Set();
+            for (let i = 0; i < submeshes.length; i++) {
+                const mat = _getCorruptedMaterial(submeshes[i].baseMaterial, t_round);
+                zoneRef.materials.add(mat);
+            }
+        }
     }
+
+    // Constrói um InstancedMesh por grupo.
+    let totalInstances = 0;
+    for (const g of groups.values()) {
+        const sm  = submeshes[g.submeshIdx];
+        const mat = _getCorruptedMaterial(sm.baseMaterial, g.t_round);
+        // Força recompilação do shader: quando o material original do GLB era
+        // usado pelo template (não renderizado), o Three.js pode ter-lhe
+        // associado um program não-instanciado. Marcamos needsUpdate para
+        // o próximo render gerar a variante INSTANCED — sem isto, o Safari
+        // não desenhava as sombras das árvores (Chrome também tinha o sintoma
+        // de "sombras só aparecem após toggle dia/noite").
+        mat.needsUpdate = true;
+        const im  = new THREE.InstancedMesh(sm.geometry, mat, g.matrices.length);
+        for (let i = 0; i < g.matrices.length; i++) im.setMatrixAt(i, g.matrices[i]);
+        im.instanceMatrix.needsUpdate = true;
+        im.castShadow = true;
+        im.receiveShadow = true;
+        // Bounding sphere explícita das instâncias — alguns browsers (notado
+        // em Safari) saltavam o shadow pass quando a sphere ficava por
+        // calcular. frustumCulled=false evita o teste para o main render,
+        // mas o shadow renderer ainda pode usar a sphere para early-out.
+        im.computeBoundingSphere?.();
+        im.frustumCulled = false;
+        g.scene.add(im);
+        totalInstances += g.matrices.length;
+    }
+    // Força um re-bake da shadow map agora que as árvores existem na cena.
+    // A bake inicial (renderer.js) e o force-bake da mudança de cena podem
+    // ter acontecido ANTES do GLB carregar; sem este disparo, as sombras das
+    // árvores só apareciam quando o player se mexesse o suficiente para o
+    // throttle de distância disparar (o que dava o sintoma de "as sombras
+    // só aparecem se eu clicar dia/noite no menu").
+    renderer.shadowMap.needsUpdate = true;
+    console.log(`[Floresta] ${totalInstances} árvores em ${groups.size} InstancedMesh(es).`);
 }
 
 // ---- rocha ----
@@ -981,6 +1072,11 @@ export function criarMapa(scene) {
     _bauMascara = new Bau(scene, -78, 0, 78, 'mascara_eclipse', Math.PI * 0.25);
     colliders.push({ box: _bauMascara.getColliderBox(), isRiver: false }); _gridDirty = true;
 
+    // Sinaliza ao builder de árvores que pode construir o forest (se o GLB
+    // já carregou) ou marcar para construir assim que o load terminar.
+    _criarMapaDone = true;
+    _tryBuildForest();
+
     console.log('Mapa criado.');
 }
 
@@ -998,30 +1094,31 @@ export function limparZonaBatalha(playerX, playerZ) {
         if (!zo.box.containsPoint(pt)) continue;
         // remove meshes roxos da zona (solo + tufos)
         for (const m of zo.meshes) zo.scene.remove(m);
-        // restaura cor natural das árvores contaminadas desta zona
-        const treeSnapshots = [];
-        for (const tree of zo.trees) {
-            const matSnap = [];
-            tree.traverse(c => {
-                if (!c.isMesh || !c.material.userData.cleanColor) return;
-                matSnap.push({
-                    mat: c.material,
-                    corruptColor:    c.material.color.clone(),
-                    corruptEmissive: c.material.emissive.clone(),
-                    corruptIntensity: c.material.emissiveIntensity,
+        // Restaura cor natural dos materiais corrompidos desta zona. Com o
+        // sistema instanciado, as árvores partilham materiais por bucket
+        // de corrupção — operamos directamente sobre o conjunto registado
+        // em zoneRef.materials durante o build do forest.
+        const matSnaps = [];
+        if (zo.materials) {
+            for (const mat of zo.materials) {
+                if (!mat.userData.cleanColor) continue;
+                matSnaps.push({
+                    mat,
+                    corruptColor:    mat.color.clone(),
+                    corruptEmissive: mat.emissive.clone(),
+                    corruptIntensity: mat.emissiveIntensity,
                 });
-                c.material.color.copy(c.material.userData.cleanColor);
-                c.material.emissive.setRGB(0, 0, 0);
-                c.material.emissiveIntensity = 0;
-            });
-            treeSnapshots.push(matSnap);
+                mat.color.copy(mat.userData.cleanColor);
+                mat.emissive.setRGB(0, 0, 0);
+                mat.emissiveIntensity = 0;
+            }
         }
         // retira do array de encontros
         const gi = grassZones.indexOf(zo.box);
         if (gi !== -1) grassZones.splice(gi, 1);
         battleZoneObjects.splice(i, 1);
 
-        _clearedZones.push({ zoneObj: zo, treeSnapshots });
+        _clearedZones.push({ zoneObj: zo, matSnaps });
         return true;
     }
     return false;
@@ -1033,15 +1130,12 @@ export function limparZonaBatalha(playerX, playerZ) {
 export function resetZonasBatalha() {
     let restored = 0;
     while (_clearedZones.length) {
-        const { zoneObj, treeSnapshots } = _clearedZones.pop();
+        const { zoneObj, matSnaps } = _clearedZones.pop();
         for (const m of zoneObj.meshes) zoneObj.scene.add(m);
-        for (let k = 0; k < zoneObj.trees.length; k++) {
-            const snap = treeSnapshots[k] || [];
-            for (const s of snap) {
-                s.mat.color.copy(s.corruptColor);
-                s.mat.emissive.copy(s.corruptEmissive);
-                s.mat.emissiveIntensity = s.corruptIntensity;
-            }
+        for (const s of (matSnaps || [])) {
+            s.mat.color.copy(s.corruptColor);
+            s.mat.emissive.copy(s.corruptEmissive);
+            s.mat.emissiveIntensity = s.corruptIntensity;
         }
         grassZones.push(zoneObj.box);
         battleZoneObjects.push(zoneObj);

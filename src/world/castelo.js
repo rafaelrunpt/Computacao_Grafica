@@ -71,13 +71,35 @@ for (let ti = 0; ti < tochaPositions.length; ti++) {
 }
 
 // ---- materiais ----
+// Texturas são CARREGADAS LAZILY (ver _lazyTex + precarregarTexturasCastelo).
+// O castelo ocupa ~110 MB de VRAM em texturas 1K não-comprimidas; deferir o
+// upload até o jogador efectivamente entrar no castelo poupa essa memória
+// durante toda a fase inicial do jogo (placas integradas com 500 MB beneficiam
+// bastante; em placas dedicadas é só boa higiene).
 const _texLoader = new THREE.TextureLoader();
+const _lazyQueue = []; // { tex, url }
+let _texturasCarregadas = false;
+function _lazyTex(url) {
+    const tex = new THREE.Texture();
+    _lazyQueue.push({ tex, url });
+    return tex;
+}
+export function precarregarTexturasCastelo() {
+    if (_texturasCarregadas) return;
+    _texturasCarregadas = true;
+    for (const { tex, url } of _lazyQueue) {
+        _texLoader.load(url, (loaded) => {
+            tex.image = loaded.image;
+            tex.needsUpdate = true;
+        });
+    }
+}
 
 // PAREDE
 const texBaseW = 'assets/textures/castelo/parede/Bricks058_1K-PNG_';
-const mapColorW = _texLoader.load(texBaseW + 'Color.png');
-const mapNormalW = _texLoader.load(texBaseW + 'NormalGL.png');
-const mapRoughnessW = _texLoader.load(texBaseW + 'Roughness.png');
+const mapColorW = _lazyTex(texBaseW + 'Color.png');
+const mapNormalW = _lazyTex(texBaseW + 'NormalGL.png');
+const mapRoughnessW = _lazyTex(texBaseW + 'Roughness.png');
 
 [mapColorW, mapNormalW, mapRoughnessW].forEach(tex => {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -94,9 +116,9 @@ const matStone = new THREE.MeshStandardMaterial({
 
 // CHÃO
 const texBaseF = 'assets/textures/castelo/chao/Rubber001_1K-PNG/Rubber001_1K-PNG_';
-const mapColorF = _texLoader.load(texBaseF + 'Color.png');
-const mapNormalF = _texLoader.load(texBaseF + 'NormalGL.png');
-const mapRoughnessF = _texLoader.load(texBaseF + 'Roughness.png');
+const mapColorF = _lazyTex(texBaseF + 'Color.png');
+const mapNormalF = _lazyTex(texBaseF + 'NormalGL.png');
+const mapRoughnessF = _lazyTex(texBaseF + 'Roughness.png');
 
 [mapColorF, mapNormalF, mapRoughnessF].forEach(tex => {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -113,9 +135,9 @@ const matFloor = new THREE.MeshStandardMaterial({
 
 // PILARES
 const texBaseP = 'assets/textures/castelo/pilares/Travertine013_1K-PNG/Travertine013_1K-PNG_';
-const mapColorP = _texLoader.load(texBaseP + 'Color.png');
-const mapNormalP = _texLoader.load(texBaseP + 'NormalGL.png');
-const mapRoughnessP = _texLoader.load(texBaseP + 'Roughness.png');
+const mapColorP = _lazyTex(texBaseP + 'Color.png');
+const mapNormalP = _lazyTex(texBaseP + 'NormalGL.png');
+const mapRoughnessP = _lazyTex(texBaseP + 'Roughness.png');
 
 [mapColorP, mapNormalP, mapRoughnessP].forEach(tex => {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -132,10 +154,10 @@ const matPillar = new THREE.MeshStandardMaterial({
 
 // PLATAFORMA PIRÂMIDE (Altar)
 const texBaseA = 'assets/textures/castelo/plataforma_piramide/Fabric004_1K-PNG/Fabric004_1K-PNG_';
-const mapColorA = _texLoader.load(texBaseA + 'Color.png');
-const mapNormalA = _texLoader.load(texBaseA + 'NormalGL.png');
-const mapRoughnessA = _texLoader.load(texBaseA + 'Roughness.png');
-const mapMetalnessA = _texLoader.load(texBaseA + 'Metalness.png');
+const mapColorA = _lazyTex(texBaseA + 'Color.png');
+const mapNormalA = _lazyTex(texBaseA + 'NormalGL.png');
+const mapRoughnessA = _lazyTex(texBaseA + 'Roughness.png');
+const mapMetalnessA = _lazyTex(texBaseA + 'Metalness.png');
 
 [mapColorA, mapNormalA, mapRoughnessA, mapMetalnessA].forEach(tex => {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -153,9 +175,9 @@ const matAltar = new THREE.MeshStandardMaterial({
 
 // TAPETE
 const texBaseT = 'assets/textures/castelo/tapete/Fabric016_1K-PNG/Fabric016_1K-PNG_';
-const mapColorT = _texLoader.load(texBaseT + 'Color.png');
-const mapNormalT = _texLoader.load(texBaseT + 'NormalGL.png');
-const mapRoughnessT = _texLoader.load(texBaseT + 'Roughness.png');
+const mapColorT = _lazyTex(texBaseT + 'Color.png');
+const mapNormalT = _lazyTex(texBaseT + 'NormalGL.png');
+const mapRoughnessT = _lazyTex(texBaseT + 'Roughness.png');
 
 [mapColorT, mapNormalT, mapRoughnessT].forEach(tex => {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -176,15 +198,17 @@ const matRune     = new THREE.MeshStandardMaterial({ color: 0xaa44ff, emissive: 
 
 // TEXTURAS DE METAL PINTADO (Partilhadas entre Teto e Cristal)
 const texBaseC = 'assets/textures/castelo/cristal/PaintedMetal002_1K-PNG/PaintedMetal002_1K-PNG_';
-const mapColorC = _texLoader.load(texBaseC + 'Color.png');
-const mapNormalC = _texLoader.load(texBaseC + 'NormalGL.png');
-const mapRoughnessC = _texLoader.load(texBaseC + 'Roughness.png');
-const mapMetalnessC = _texLoader.load(texBaseC + 'Metalness.png');
+const mapColorC = _lazyTex(texBaseC + 'Color.png');
+const mapNormalC = _lazyTex(texBaseC + 'NormalGL.png');
+const mapRoughnessC = _lazyTex(texBaseC + 'Roughness.png');
+const mapMetalnessC = _lazyTex(texBaseC + 'Metalness.png');
 
-// MATERIAL DO TETO (mesma textura do cristal, definida aqui para evitar ReferenceError)
-const mapColorCeil = mapColorC.clone();
-const mapNormalCeil = mapNormalC.clone();
-const mapRoughnessCeil = mapRoughnessC.clone();
+// MATERIAL DO TETO (mesma textura do cristal mas repeat 8×8).
+// Não usamos .clone() porque o clone não acompanha o `image` do original quando
+// este é carregado lazily — duplicamos o lazyTex com o mesmo URL.
+const mapColorCeil = _lazyTex(texBaseC + 'Color.png');
+const mapNormalCeil = _lazyTex(texBaseC + 'NormalGL.png');
+const mapRoughnessCeil = _lazyTex(texBaseC + 'Roughness.png');
 [mapColorCeil, mapNormalCeil, mapRoughnessCeil].forEach(tex => {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(8, 8); 

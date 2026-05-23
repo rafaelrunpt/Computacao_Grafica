@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { player } from '../entities/jogador.js';
 import { lojaScene, lojaSpawnPos } from '../world/loja.js';
-import { caseloScene, caseloSpawnPos, bossCrystalSafePos } from '../world/castelo.js';
+import { caseloScene, caseloSpawnPos, bossCrystalSafePos, precarregarTexturasCastelo } from '../world/castelo.js';
 import { tavernScene, tavernSpawnPos, tavernQuartoReturnPos } from '../world/tavern.js';
 import { quartoScene, quartoSpawnPos } from '../world/quarto.js';
 import { bossDebugScene, initBossDebug } from '../world/boss-debug-scene.js';
@@ -230,6 +230,11 @@ export function entrarCaselo() {
     if (estado.ePressBloqueado) return;
     estado.ePressBloqueado = true;
     hidePrompt();
+    // Dispara o upload das ~21 texturas 1K do castelo (≈110 MB de VRAM).
+    // É feito ANTES do fade negro para que durante a transição (~1.5s) o
+    // browser tenha tempo de fazer fetch + decode + upload, evitando textura
+    // em branco no primeiro frame da cena.
+    precarregarTexturasCastelo();
     switchMusic('castle', 1.0);
     iniciarTransicaoCastelo(() => {
         caseloPlayer.x = caseloSpawnPos.x;
