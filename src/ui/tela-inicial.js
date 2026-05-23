@@ -437,7 +437,7 @@ version.style.cssText = `
     font-size: 10px; color: #d4a830; opacity: 0.6;
     font-family: monospace; pointer-events: none; z-index: 300;
 `;
-version.textContent = 'v1.5-perf-fix';
+version.textContent = 'v1.6-perf-fix';
 overlay.appendChild(version);
 
 // esconde toda a UI de jogo enquanto o ecrã inicial está activo

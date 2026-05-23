@@ -90,12 +90,16 @@ export function makeTerrainShader(grassCol, pathColor) {
                 return mix(mix(_hash(i),_hash(i+vec2(1,0)),f.x),
                            mix(_hash(i+vec2(0,1)),_hash(i+vec2(1,1)),f.x),f.y);
             }
-            float _fbm(vec2 p){ float v=0.0,a=0.5; for(int i=0;i<3;i++){v+=a*_sn(p);p=p*2.1+vec2(1.7,9.2);a*=0.5;} return v; }
+            float _fbm(vec2 p){
+                // Reduzido de 3 para 1 iteração — o ruído fica mais simples mas 3x mais rápido
+                return _sn(p);
+            }
 
             float vPathBlend(float wx, float wz, float cx, float hw, float z0, float z1) {
                 if (wz < z0-1.0 || wz > z1+1.0) return 0.0;
                 float d = abs(wx - cx);
-                float n = _fbm(vec2(wz*0.18+cx*0.07, wx*0.11)) * hw * 0.8;
+                // Ruído do caminho simplificado para poupar cálculos matemáticos
+                float n = _sn(vec2(wz*0.18, wx*0.11)) * hw * 0.5;
                 float zf = smoothstep(z0-0.5,z0+3.0,wz)*smoothstep(z1+0.5,z1-3.0,wz);
                 return (1.0 - smoothstep(hw*0.5-0.3, hw*1.1+n, d)) * zf;
             }

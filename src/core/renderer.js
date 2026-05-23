@@ -8,7 +8,7 @@ export const renderer = new THREE.WebGLRenderer({
 renderer.setSize(window.innerWidth, window.innerHeight);
 // Cap agressivo: HiDPI dá pouquíssima diferença visual mas custa 2-4× mais pixels.
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = settings.quality !== 'baixa';
 // PCFSoftShadowMap: kernel 3×3 suaviza os edges — elimina shimmer em sombras grandes.
 // A 1024² é 4× mais barato que PCFSoft a 2048² (original), mesmo com o filtro maior.
 // Em qualidade baixa usamos o filtro mais simples (PCF) para poupar GPU.
