@@ -430,6 +430,16 @@ foot.style.cssText = `
 foot.innerHTML = `DESENVOLVIDO POR ALEXANDRE PEREIRA, FRANCISCO MONTEIRO E JOÃO GUEDES<br>PROJECTO WEBGL  ·  THREE.JS`;
 overlay.appendChild(foot);
 
+// indicador de versão (para teste de performance)
+const version = document.createElement('div');
+version.style.cssText = `
+    position: absolute; top: 10px; right: 10px;
+    font-size: 10px; color: #d4a830; opacity: 0.6;
+    font-family: monospace; pointer-events: none; z-index: 300;
+`;
+version.textContent = 'v1.1-perf-fix';
+overlay.appendChild(version);
+
 // esconde toda a UI de jogo enquanto o ecrã inicial está activo
 document.body.classList.add('title-screen-active');
 const styleHide = document.createElement('style');
