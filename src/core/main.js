@@ -106,34 +106,49 @@ const CULL_NEAR_KEEP_SQ = 81;
 // Aplica layer 1 (invisível à main cam, visível à shadow cam) em vez de visible=false.
 // Desta forma objetos culled continuam a projectar sombras correctamente.
 function _setLayer(obj, inFront) {
-    // Optimização: só traversar se o estado mudou
     if (obj.userData._culled === !inFront) return;
     obj.userData._culled = !inFront;
-    obj.traverse(c => {
-        if (inFront) { c.layers.enable(0); c.layers.disable(1); }
-        else          { c.layers.disable(0); c.layers.enable(1); }
-    });
+    
+    // Cache de meshes para evitar traverse recursivo (pesado para o CPU com centenas de árvores)
+    if (!obj.userData._meshCache) {
+        const meshes = [];
+        obj.traverse(c => { if (c.isMesh) meshes.push(c); });
+        obj.userData._meshCache = meshes;
+    }
+    
+    const meshes = obj.userData._meshCache;
+    for (let i = 0; i < meshes.length; i++) {
+        if (inFront) { meshes[i].layers.enable(0); meshes[i].layers.disable(1); }
+        else          { meshes[i].layers.disable(0); meshes[i].layers.enable(1); }
+    }
 }
 
 function _cullBehindCamera(camera) {
     camera.getWorldDirection(_camFwd);
     const cp = camera.position;
+    const dotMin = CULL_DOT_MIN;
+    const nearSq = CULL_NEAR_KEEP_SQ;
+
     for (let i = 0; i < cullables.length; i++) {
         const obj = cullables[i];
         
-        // Optimização extra: se o objecto estiver completamente abaixo do chão
-        // ocultamos para poupar draw calls. Usamos -1.0 como margem de segurança.
+        // Se estiver abaixo do chão, escondemos logo
         if (obj.position.y < -1.0) {
             _setLayer(obj, false);
             continue;
         }
 
         const center = obj.userData.cullCenter || obj.position;
-        _toObj.subVectors(center, cp);
-        const d2 = _toObj.lengthSq();
-        if (d2 < CULL_NEAR_KEEP_SQ) { _setLayer(obj, true); continue; }
-        _toObj.multiplyScalar(1 / Math.sqrt(d2));
-        _setLayer(obj, _toObj.dot(_camFwd) > CULL_DOT_MIN);
+        _toObj.x = center.x - cp.x;
+        _toObj.y = center.y - cp.y;
+        _toObj.z = center.z - cp.z;
+        
+        const d2 = _toObj.x*_toObj.x + _toObj.y*_toObj.y + _toObj.z*_toObj.z;
+        if (d2 < nearSq) { _setLayer(obj, true); continue; }
+        
+        const invD = 1 / Math.sqrt(d2);
+        const dot = (_toObj.x * invD * _camFwd.x) + (_toObj.y * invD * _camFwd.y) + (_toObj.z * invD * _camFwd.z);
+        _setLayer(obj, dot > dotMin);
     }
 }
 
