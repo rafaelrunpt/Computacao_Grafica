@@ -225,8 +225,12 @@ function _applyEnvironment(t) {
 
     // Lanternas / cristais — modulam pela transição também
     for (let i = 0; i < _lanterns.length; i++) {
-        _lanterns[i].light.intensity = _lanterns[i].baseIntensity * t;
-        _lanterns[i].sprite.material.opacity = t;
+        const lan = _lanterns[i];
+        const flicker = 0.85 + 0.15 * Math.sin(_time * 10 + lan.phase) + 0.05 * Math.sin(_time * 22 + lan.phase * 1.5);
+        lan.light.intensity = lan.baseIntensity * t * flicker;
+        if (lan.sprite) {
+            lan.sprite.material.opacity = t * flicker;
+        }
     }
     for (let i = 0; i < _crystals.length; i++) {
         _crystals[i].mesh.material.emissiveIntensity =
@@ -304,20 +308,34 @@ function _cullBelowGround(scene) {
 // 2 SpotLights direccionadas a sair das janelas para o chão
 // (loja, taberna) com sombras locais nítidas.
 // ===========================================================
-// Removido: o utilizador prefere colocar manualmente as luzes das janelas
-// das casas/castelo, por isso não geramos PointLights nem SpotLights por
-// defeito a partir daqui. Tanto LANTERN_POINTS como LANTERN_SPOTS_DIR
-// ficam vazios — _createLanterns não fará nada.
-const LANTERN_POINTS = [];
+const LANTERN_POINTS = [
+    { x: -15.0, y: 2.2, z: -39.0, color: 0xffcc00, intensity: 3.5, distance: 7, noSprite: true }, // Lanterna Direita
+    { x: -21.0, y: 2.2, z: -39.0, color: 0xffcc00, intensity: 3.5, distance: 7, noSprite: true }  // Lanterna Esquerda
+];
 
 // SpotLights que projectam um cone de luz "da janela" para o chão.
-// castShadow=true com shadowmap pequeno mas com frustum apertado dá
-// sombras nítidas só no patch iluminado (~3-4m raio).
-// Removido: estes spotlights apontavam para o chão junto à loja/taberna e
-// desenhavam um círculo de luz debaixo do mercador/bartender, dando a
-// sensação de "marcador" sobre a posição do NPC. Os PointLights decorativos
-// em LANTERN_POINTS continuam a iluminar o ambiente sem essa pegada nítida.
-const LANTERN_SPOTS_DIR = [];
+const LANTERN_SPOTS_DIR = [
+    {
+        pos: [-15.0, 2.2, -39.0],
+        aim: [-15.0, 0, -39.0],
+        color: 0xffaa00,
+        intensity: 3.0,
+        distance: 8,
+        angle: Math.PI / 4,
+        penumbra: 0.8,
+        noShadow: true
+    },
+    {
+        pos: [-21.0, 2.2, -39.0],
+        aim: [-21.0, 0, -39.0],
+        color: 0xffaa00,
+        intensity: 3.0,
+        distance: 8,
+        angle: Math.PI / 4,
+        penumbra: 0.8,
+        noShadow: true
+    }
+];
 
 function _createLanterns() {
     // ---- pontos decorativos (sem sombras) ----
@@ -326,49 +344,47 @@ function _createLanterns() {
         light.position.set(s.x, s.y, s.z);
         _nightGroup.add(light);
 
-        const colorHex = '#' + s.color.toString(16).padStart(6, '0');
-        const tex = _radialTexture('#ffffff', colorHex);
-        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-            map: tex, color: s.color, transparent: true, opacity: 0,
-            depthWrite: false, blending: THREE.AdditiveBlending,
-        }));
-        sprite.scale.set(1.4, 1.4, 1);
-        sprite.position.set(s.x, s.y, s.z);
-        _nightGroup.add(sprite);
+        let sprite = null;
+        if (!s.noSprite) {
+            const colorHex = '#' + s.color.toString(16).padStart(6, '0');
+            const tex = _radialTexture('#ffffff', colorHex);
+            sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: tex, color: s.color, transparent: true, opacity: 0,
+                depthWrite: false, blending: THREE.AdditiveBlending,
+            }));
+            const sc = s.spriteScale || 1.4;
+            sprite.scale.set(sc, sc, 1);
+            sprite.position.set(s.x, s.y, s.z);
+            _nightGroup.add(sprite);
+        }
 
-        _lanterns.push({ light, sprite, baseIntensity: s.intensity });
+        _lanterns.push({ 
+            light, sprite, 
+            baseIntensity: s.intensity,
+            phase: Math.random() * Math.PI * 2
+        });
     }
 
-    // ---- spotlights de janela (com sombra) ----
+    // ---- spotlights de janela (sem sombra para performance) ----
     for (const s of LANTERN_SPOTS_DIR) {
         const sp = new THREE.SpotLight(
             s.color, 0, s.distance, s.angle, s.penumbra, 1.5,
         );
         sp.position.set(s.pos[0], s.pos[1], s.pos[2]);
         sp.target.position.set(s.aim[0], s.aim[1], s.aim[2]);
-        sp.castShadow = true;
-        // Shadowmap pequeno — luz local e cone apertado, 512² chega.
-        sp.shadow.mapSize.set(512, 512);
-        sp.shadow.bias = -0.0008;
-        sp.shadow.normalBias = 0.04;
-        sp.shadow.camera.near = 0.5;
-        sp.shadow.camera.far  = s.distance + 2;
-        // a câmara do shadow vê também layer 1 (objectos culled pela main cam)
-        sp.shadow.camera.layers.enable(1);
+        
+        if (!s.noShadow) {
+            sp.castShadow = true;
+            sp.shadow.mapSize.set(512, 512);
+            sp.shadow.bias = -0.0008;
+            sp.shadow.normalBias = 0.04;
+            sp.shadow.camera.near = 0.5;
+            sp.shadow.camera.far  = s.distance + 2;
+            sp.shadow.camera.layers.enable(1);
+        }
+        
         _nightGroup.add(sp, sp.target);
-
-        // pequeno sprite na "janela" para indicar a fonte da luz
-        const colorHex = '#' + s.color.toString(16).padStart(6, '0');
-        const tex = _radialTexture('#ffffff', colorHex);
-        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-            map: tex, color: s.color, transparent: true, opacity: 0,
-            depthWrite: false, blending: THREE.AdditiveBlending,
-        }));
-        sprite.scale.set(0.9, 0.9, 1);
-        sprite.position.set(s.pos[0], s.pos[1], s.pos[2]);
-        _nightGroup.add(sprite);
-
-        _lanterns.push({ light: sp, sprite, baseIntensity: s.intensity });
+        _lanterns.push({ light: sp, sprite: null, baseIntensity: s.intensity, phase: Math.random() * Math.PI * 2 });
     }
 }
 

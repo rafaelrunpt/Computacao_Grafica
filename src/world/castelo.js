@@ -518,10 +518,6 @@ box(4.5, 0.5, 3, matAltar, 0, 0.75, -D / 2 + 3.2);
 box(3, 0.5, 2.2, matAltar, 0, 1.25, -D / 2 + 3.0);
 
 // ---- prisma do boss — agora em cima da pirâmide do altar ----
-// A própria pirâmide escalonada (3 patamares, topo em y=1.5) substitui a
-// coluna/base antiga. O prisma roda no ponto mais alto. O jogador interage
-// por baixo, em frente ao altar (não pode subir — o colisor do altar
-// bloqueia).
 const TOTEM_X = 0;
 const TOTEM_Z = -D / 2 + 3.5;   // = centro da pirâmide (~-6.5 em D=20)
 const TOTEM_TOP_Y = 1.5;        // topo da pirâmide (altar mais alto = y 1.0..1.5)
@@ -610,8 +606,8 @@ export const caseloColliders = [
     new THREE.Box3(new THREE.Vector3(-W/2, 0, -D/2-0.1),     new THREE.Vector3( W/2, H, -D/2+0.3)),
     // parede sul: movida mais para trás (z=D/2 + 1.5)
     new THREE.Box3(new THREE.Vector3(-W/2, 0, D/2+1.5),      new THREE.Vector3( W/2, H, D/2+2.0)),
-    // altar (pirâmide escalonada — agora também serve de pedestal do cristal)
-    new THREE.Box3(new THREE.Vector3(-3.1, 0, -D/2+1.5),     new THREE.Vector3( 3.1, 2, -D/2+5.5)),
+    // altar (pirâmide escalonada — agora também serve de pedestal do cristal) - atualizado para 8x5
+    new THREE.Box3(new THREE.Vector3(-4.1, 0, -D/2+1.0),     new THREE.Vector3( 4.1, 2.5, -D/2+6.0)),
     // pilares
     new THREE.Box3(new THREE.Vector3(-W/2+0.8, 0, -D/2+0.8), new THREE.Vector3(-W/2+2.2, H, -D/2+2.2)),
     new THREE.Box3(new THREE.Vector3( W/2-2.2, 0, -D/2+0.8), new THREE.Vector3( W/2-0.8, H, -D/2+2.2)),
@@ -919,12 +915,26 @@ export function atualizarAtmosferaCastelo(deltaTime) {
     const mistSpeed = 1.0 + _mistMat.uniforms.uActivation.value * 1.5;
     _atmosTime.mist += deltaTime * mistSpeed;
 
+    const corruption = _ceilingUniforms.uCorrupcao.value;
+    const orangeLight = new THREE.Color(0xff6600);
+    const purpleLight = new THREE.Color(0x9933ff);
+    const orangeFire  = new THREE.Color(0xff4400);
+    const purpleFire  = new THREE.Color(0x6600aa);
+    const orangeEmiss = new THREE.Color(0xff2200);
+    const purpleEmiss = new THREE.Color(0x330088);
+
     // flicker independente por tocha (intensidade da luz + emissive da chama)
     for (const tch of _torches) {
         const f = 0.80
                 + 0.30 * Math.sin(t * 12 + tch.phase)
                 + 0.15 * Math.sin(t * 23 + tch.phase * 1.7);
         tch.light.intensity = tch.baseIntensity * f;
+        
+        // Transição de cor baseada na corrupção
+        tch.light.color.copy(orangeLight).lerp(purpleLight, corruption);
+        tch.fire.material.color.copy(orangeFire).lerp(purpleFire, corruption);
+        tch.fire.material.emissive.copy(orangeEmiss).lerp(purpleEmiss, corruption);
+
         tch.fireMat.emissiveIntensity = 1.6 + 1.0 * f * 0.5;
         tch.fire.scale.y = 0.9 + 0.20 * Math.cos(t * 11 + tch.phase);
         tch.fire.scale.x = 0.95 + 0.10 * Math.sin(t * 15 + tch.phase);

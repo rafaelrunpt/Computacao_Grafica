@@ -72,27 +72,42 @@ playerPlate.innerHTML = `
 `;
 document.body.appendChild(playerPlate);
 
-// ---- caixa de mensagens (registo, no topo por baixo da placa) ----
+// ---- caixa de mensagens (registo, canto superior direito) ----
 const logBox = document.createElement('div');
+logBox.id = 'combate-log';
 logBox.style.cssText = `
-    position: fixed; top: 84px; left: 50%; transform: translateX(-50%);
-    background: linear-gradient(180deg, rgba(20,0,30,0.88), rgba(10,0,20,0.92));
-    border: 1px solid #aa44dd;
+    position: fixed; top: 14px; right: 14px;
+    background: linear-gradient(180deg, rgba(30,0,45,0.92), rgba(15,0,25,0.96));
+    border: 2px solid #aa44dd;
     border-radius: 8px;
-    padding: 5px 14px;
-    min-height: 22px;
-    width: min(440px, 70vw);
-    text-align: center;
+    padding: 8px 14px;
+    width: 320px;
+    max-height: 34px; /* Altura exata para 1 linha com padding */
+    overflow: hidden;
     color: #f0d0ff;
-    font-size: 12px;
+    font-size: 13px;
+    line-height: 18px;
     text-shadow: 0 0 4px #aa44dd, 1px 1px 0 #000;
-    box-shadow: 0 0 10px rgba(120,40,160,0.35), inset 0 0 10px rgba(60,0,100,0.45);
-    pointer-events: none;
-    z-index: 81;
+    box-shadow: 0 0 14px rgba(160,60,200,0.4), inset 0 0 10px rgba(80,0,120,0.5);
+    pointer-events: auto; /* Agora clicável */
+    cursor: pointer;
+    z-index: 110;
     display: none;
+    transition: max-height 0.3s ease-out, background 0.2s;
 `;
-logBox.textContent = '';
+logBox.innerHTML = '<div id="log-content" style="overflow:hidden;"></div>';
 document.body.appendChild(logBox);
+
+let _logExpandido = false;
+logBox.onclick = () => {
+    _logExpandido = !_logExpandido;
+    logBox.style.maxHeight = _logExpandido ? '300px' : '34px';
+    logBox.style.overflowY = _logExpandido ? 'auto' : 'hidden';
+    logBox.style.background = _logExpandido 
+        ? 'linear-gradient(180deg, rgba(40,0,65,0.95), rgba(20,0,35,0.98))'
+        : 'linear-gradient(180deg, rgba(30,0,45,0.92), rgba(15,0,25,0.96))';
+    logBox.scrollTop = 0;
+};
 
 // ---- painel de acções (canto inferior direito) ----
 const actionsBar = document.createElement('div');
@@ -428,19 +443,28 @@ export function esconderCombateUI() {
     ataquesPanel.style.display = 'none';
 }
 
-// Log de combate com histórico — mantém as últimas 3 linhas, a mais
+// Log de combate com histórico — mantém as últimas 15 linhas, a mais
 // recente destacada e as anteriores esmaecidas.
 const _logHist = [];
 export function setLog(texto) {
-    _logHist.push(texto);
-    if (_logHist.length > 3) _logHist.shift();
-    logBox.innerHTML = _logHist.map((t, i) => {
-        const desdeFim = _logHist.length - 1 - i;   // 0 = mais recente
-        const op = desdeFim === 0 ? 1 : (desdeFim === 1 ? 0.5 : 0.3);
-        const fw = desdeFim === 0 ? 'bold' : 'normal';
-        const fs = desdeFim === 0 ? '12px' : '10.5px';
-        return `<div style="opacity:${op};font-weight:${fw};font-size:${fs};">${t}</div>`;
+    _logHist.unshift(texto); // Adiciona ao início para o mais recente estar no topo
+    if (_logHist.length > 15) _logHist.pop();
+    
+    const content = document.getElementById('log-content');
+    if (!content) return;
+
+    content.innerHTML = _logHist.map((t, i) => {
+        const op = i === 0 ? 1 : (i < 3 ? 0.6 : 0.35);
+        const fw = i === 0 ? 'bold' : 'normal';
+        const fs = i === 0 ? '13px' : '11px';
+        const border = i === 0 ? 'border-bottom: 1px solid rgba(170,68,221,0.2); padding-bottom: 4px; margin-bottom: 4px;' : '';
+        return `<div style="opacity:${op};font-weight:${fw};font-size:${fs};text-align:left;${border}">${t}</div>`;
     }).join('');
+    
+    // Se estiver colapsado, garante que a primeira linha é visível
+    if (!_logExpandido) {
+        logBox.scrollTop = 0;
+    }
 }
 
 // Óculos do Vidente — revela o próximo ataque inimigo (ou esconde, com at=null).

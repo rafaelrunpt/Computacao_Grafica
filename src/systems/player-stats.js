@@ -76,15 +76,23 @@ export function getLevelDamageMult() {
 // Recalcula maxHp a partir da base + bónus de equipamento. Chamar
 // sempre que muda o equipamento ou se sobe de nível.
 export function recalcularMaxHp() {
+    const antigoMax = playerStats.maxHp;
     const novoMax = playerStats.baseMaxHp + getMaxHpBonus();
-    const delta = novoMax - playerStats.maxHp;
+    
+    if (novoMax === antigoMax) return; // Nada a fazer se o máximo não mudou
+
+    const delta = novoMax - antigoMax;
     playerStats.maxHp = novoMax;
+
     if (delta > 0) {
-        // ao ganhar HP máx (ex.: equipar brincos), aproveita o boost
-        playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + delta);
-    } else {
-        playerStats.hp = Math.min(playerStats.hp, playerStats.maxHp);
-    }
+        // Ao ganhar HP máx (ex.: equipar brincos), o HP actual sobe na mesma 
+        // proporção para manter a percentagem ou o bónus fixo, mas apenas uma vez.
+        playerStats.hp += delta;
+    } 
+    
+    // Garante que o HP nunca excede o novo máximo (essencial para quando desequipa)
+    playerStats.hp = Math.min(playerStats.hp, playerStats.maxHp);
+
     if (_onHPChange) _onHPChange();
 }
 

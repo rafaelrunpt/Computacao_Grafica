@@ -214,12 +214,20 @@ scene.add(sunLight, sunLight.target);
 sunLight.shadow.camera.layers.enable(1); // shadow camera vê os objetos culled (layer 1)
 
 // ---- spotlight do jogador (cor oposta ao roxo: amarelo/ouro) ----
-const playerSpot = new THREE.SpotLight(0xfff500, 30, 9.6, Math.PI * 0.216, 0.5, 2.5);
+// Posicionado muito alto para evitar colisão com o cenário e simular luz orbital
+// Penumbra a 1.0 garante um desvanecimento suave do centro para as bordas
+const playerSpot = new THREE.SpotLight(0xfff500, 900, 30, 0.28, 1.0, 2.0);
 playerSpot.castShadow = true;
-// Shadow map reduzido de 1024 para 512 para performance extrema.
-playerSpot.shadow.mapSize.set(512, 512);
-playerSpot.shadow.bias = -0.002;
-playerSpot.shadow.normalBias = 0.04;
+// Shadow map de 1024 para melhor precisão nas sombras do herói.
+playerSpot.shadow.mapSize.set(1024, 1024);
+// Ajuste de bias para evitar "shadow acne" e garantir que a sombra se liga ao pé do herói
+playerSpot.shadow.bias = -0.0001; 
+playerSpot.shadow.normalBias = 0.05;
+// Câmara de sombra ajustada para a altura de 15m
+playerSpot.shadow.camera.near = 5;
+playerSpot.shadow.camera.far = 25;
+playerSpot.shadow.camera.fov = 40;
+playerSpot.shadow.camera.layers.enable(1); // Importante: ver objetos na layer 1 para sombras
 scene.add(playerSpot, playerSpot.target);
 
 // ---- constantes de movimento ----
@@ -350,7 +358,7 @@ function animateMundo(deltaTime) {
     if (emCutscene) updateSpaceCutscene(deltaTime, mainCamera);
 
     // Actualizar spotlight do jogador
-    playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+    playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
     playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
 
     // shadowMap.autoUpdate está desligado por defeito (ver renderer.js).
@@ -574,7 +582,7 @@ function animateMundo(deltaTime) {
     const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
@@ -732,7 +740,7 @@ function animateLoja(deltaTime) {
     const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
@@ -904,7 +912,7 @@ function animateCaselo(deltaTime) {
     const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
@@ -1056,7 +1064,7 @@ function animateTavern(deltaTime) {
     updateMerchant(deltaTime, player.position);
 
     // Actualizar spotlight na loja
-    playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+    playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
     playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
 
     // Actualizar spotlight (lanterna mágica do herói)
@@ -1064,7 +1072,7 @@ function animateTavern(deltaTime) {
     const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
@@ -1209,7 +1217,7 @@ function animateQuarto(deltaTime) {
     updateQuarto(deltaTime);
 
     // Actualizar spotlight no quarto
-    playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+    playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
     playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
 
     // Actualizar spotlight (lanterna mágica do herói)
@@ -1217,7 +1225,7 @@ function animateQuarto(deltaTime) {
     const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
@@ -1252,7 +1260,7 @@ function animateCombate(deltaTime) {
     const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
@@ -1310,7 +1318,7 @@ function animate() {
     const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
@@ -1349,7 +1357,7 @@ function animate() {
     const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
@@ -1361,7 +1369,7 @@ function animate() {
     const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
@@ -1373,7 +1381,7 @@ function animate() {
     const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
@@ -1385,7 +1393,7 @@ function animate() {
     const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
@@ -1397,7 +1405,7 @@ function animate() {
     const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
@@ -1407,7 +1415,7 @@ function animate() {
             const luzNecessaria = true;
             playerSpot.visible = luzNecessaria;
             if (luzNecessaria) {
-                playerSpot.position.set(player.position.x, player.position.y + 6.0, player.position.z);
+                playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
                 playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
             }
             renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);

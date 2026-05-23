@@ -566,7 +566,27 @@ function criarPotionShop(scene, cx, cz) {
         m.position.set(posX, 0, posZ);
         m.scale.setScalar(0.01); // Diminuído drasticamente como solicitado
         m.rotation.y = 0; // Virado para Norte (para o player/câmara)
-        m.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+        m.traverse(c => {
+            if (c.isMesh) {
+                const name = c.name.toLowerCase();
+                // Nomes específicos do Blender: latern001, latern003
+                const isLantern = name.includes('latern001') || name.includes('latern003');
+
+                c.castShadow = true;
+                c.receiveShadow = true;
+
+                if (c.material) {
+                    const mats = Array.isArray(c.material) ? c.material : [c.material];
+                    for (const mat of mats) {
+                        const n = mat.name.toLowerCase();
+                        if (isLantern || n.includes('lamp') || n.includes('yellow') || n.includes('light') || n.includes('glow') || n.includes('glass')) {
+                            mat.emissive = new THREE.Color(0xffaa00);
+                            mat.emissiveIntensity = 5.0;
+                        }
+                    }
+                }
+            }
+        });
 
         m.updateMatrixWorld(true);
         const bb = new THREE.Box3().setFromObject(m);
@@ -892,7 +912,7 @@ export function criarMapa(scene) {
 
     // árvores norte — densa, cobre toda a área afastada dos caminhos
     let placed = 0;
-    for (let i = 0; i < 2000 && placed < 300; i++) {
+    for (let i = 0; i < 2000 && placed < 180; i++) {
         const x = (rand() * 2 - 1) * 94;
         const z = 5 + rand() * 90;
         if (naFaixaCaminho(x, z)) continue;
@@ -909,7 +929,7 @@ export function criarMapa(scene) {
 
     // árvores sul — ainda mais densas e escuras
     placed = 0;
-    for (let i = 0; i < 1800 && placed < 250; i++) {
+    for (let i = 0; i < 1800 && placed < 150; i++) {
         const x = (rand() * 2 - 1) * 94;
         const z = -(5 + rand() * 90);
         if (naFaixaCaminho(x, z)) continue;
