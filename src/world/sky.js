@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 
-const starGeo = new THREE.SphereGeometry(450, 64, 64);
+// Tesselação reduzida (32x16). A 450 unidades a esfera ocupa quase todo o
+// frustum — o detalhe veio sempre do shader (estrelas/lua), não da malha;
+// 64x64 = 8192 triângulos era desperdício puro no vertex stage.
+const starGeo = new THREE.SphereGeometry(450, 32, 16);
 export const starMat = new THREE.ShaderMaterial({
     uniforms: {
         uTime: { value: 0 }

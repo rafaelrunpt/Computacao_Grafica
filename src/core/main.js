@@ -384,6 +384,27 @@ function verificaColisaoCaselo(nx, nz) {
 // --------------------------------------------------------
 let _frameCount = 0; // contador global de frames para throttling
 
+// Throttle do re-bake da shadow map por DISTÂNCIA percorrida pelo player.
+// Sombras só são re-renderizadas quando o player se mexeu o suficiente para
+// se notar o deslocamento — corta o shadow pass de 60Hz para ~15-25Hz em
+// movimento normal, sem flicker visível. ENORME ganho de CPU em Firefox/Windows
+// porque cada bake itera 400+ meshes (árvores, rochas, edifícios).
+const _lastShadowBakePos = new THREE.Vector3(Infinity, 0, Infinity);
+const SHADOW_BAKE_MIN_DIST_SQ = 0.18 * 0.18;
+function _maybeMarkShadowUpdate(forceOrPos) {
+    const pos = (forceOrPos && forceOrPos.isVector3) ? forceOrPos : player.position;
+    const dx = pos.x - _lastShadowBakePos.x;
+    const dz = pos.z - _lastShadowBakePos.z;
+    if (dx*dx + dz*dz >= SHADOW_BAKE_MIN_DIST_SQ) {
+        renderer.shadowMap.needsUpdate = true;
+        _lastShadowBakePos.set(pos.x, 0, pos.z);
+    }
+}
+function _forceShadowUpdate() {
+    renderer.shadowMap.needsUpdate = true;
+    _lastShadowBakePos.set(Infinity, 0, Infinity);
+}
+
 function animateMundo(deltaTime) {
     let isMoving = false;
     updateNightMode(deltaTime);
@@ -394,9 +415,8 @@ function animateMundo(deltaTime) {
     const emCutscene = isSpaceCutsceneActive();
     if (emCutscene) updateSpaceCutscene(deltaTime, mainCamera);
 
-    // Actualizar spotlight do jogador
-    playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-    playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
+    // Spotlight do jogador é actualizado abaixo (dentro do bloco de render),
+    // evitando dois `position.set` por frame.
 
     // shadowMap.autoUpdate está desligado por defeito (ver renderer.js).
     // Marcamos needsUpdate só quando algo dinâmico precisa de reflectir a
@@ -405,16 +425,21 @@ function animateMundo(deltaTime) {
     // determinará se o jogador andou neste frame.
     // (decisão final acontece no fim de animateMundo)
 
-    // Animar partículas roxas nas zonas corruptas do mapa
-    for (let i = 0; i < worldParticles.length; i++) {
-        const pts = worldParticles[i];
-        if (!pts.parent) continue; // zona pode ter sido limpa
-        const pos = pts.geometry.attributes.position;
-        for (let j = 0; j < pos.count; j++) {
-            pos.array[j * 3 + 1] += deltaTime * 0.35;
-            if (pos.array[j * 3 + 1] > 4.0) pos.array[j * 3 + 1] = 0;
+    // Animar partículas roxas nas zonas corruptas — throttled a 30Hz (cada 2
+    // frames). Sobe a velocidade ao dobro para compensar o salto temporal,
+    // mantendo a aparência visual idêntica. Evita upload de buffer todo o frame.
+    if ((_frameCount & 1) === 0) {
+        const dt2 = deltaTime * 2;
+        for (let i = 0; i < worldParticles.length; i++) {
+            const pts = worldParticles[i];
+            if (!pts.parent) continue;
+            const pos = pts.geometry.attributes.position;
+            for (let j = 0; j < pos.count; j++) {
+                pos.array[j * 3 + 1] += dt2 * 0.35;
+                if (pos.array[j * 3 + 1] > 4.0) pos.array[j * 3 + 1] = 0;
+            }
+            pos.needsUpdate = true;
         }
-        pos.needsUpdate = true;
     }
 
     if (!emCutscene && !estadoJogo.emCombate && !mapaAberto && !isDialogoAberto() && !isInventarioAberto() && !isLockpickAberto()) {
@@ -587,8 +612,10 @@ function animateMundo(deltaTime) {
         mainCamera.position.lerp(_camTarget, 1 - Math.pow(0.01, deltaTime));
         mainCamera.lookAt(player.position.x, 1.2, player.position.z);
 
-        // Raycast de fade: throttled a cada 3 frames — o resultado dura bem entre frames.
-        if (_frameCount % 3 === 0) {
+        // Raycast de fade: throttled a cada 6 frames (10Hz @ 60fps).
+        // intersectObjects(fadeables, true) é recursivo sobre centenas de meshes;
+        // dura bem entre frames porque o fade em si é interpolado a cada frame.
+        if (_frameCount % 6 === 0) {
             _camLook.set(player.position.x, player.position.y + 0.6, player.position.z);
             _camRayDir.subVectors(_camLook, mainCamera.position);
             const dist = _camRayDir.length();
@@ -631,11 +658,13 @@ function animateMundo(deltaTime) {
         // jogo normal — não fazemos culling por câmara para nada desaparecer.
         if (emCutscene) _restoreAllCullables();
         else            _cullBehindCamera(mainCamera);
-        // Shadow map: só precisamos de re-renderizar a shadow map quando há
-        // movimento dinâmico em cena. Marcamos needsUpdate apenas se o
-        // jogador se mexeu OU está em combate (inimigos a mexerem-se).
-        if (isMoving || estadoJogo.emCombate) {
+        // Shadow map: re-bake throttled por distância percorrida (ver
+        // _maybeMarkShadowUpdate). Em combate forçamos pois há inimigos a
+        // mexerem-se sem movimento do player.
+        if (estadoJogo.emCombate) {
             renderer.shadowMap.needsUpdate = true;
+        } else if (isMoving) {
+            _maybeMarkShadowUpdate();
         }
         // Modo nocturno usa EffectComposer (bloom + output sRGB). Em
         // qualidade baixa saltamos o composer (mip-chain do bloom é caro).
@@ -783,12 +812,11 @@ function animateLoja(deltaTime) {
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
-    // Shadow map: o renderer tem autoUpdate desligado (ver renderer.js) e
-    // só re-renderiza as sombras quando needsUpdate é marcado. A loja tem
-    // sempre conteúdo dinâmico — o herói a andar e a mercadora (idle +
-    // rotação todos os frames) — por isso marcamo-lo aqui em cada frame.
-    // Sem isto a sombra fica congelada no bake feito ao entrar na cena.
-    renderer.shadowMap.needsUpdate = true;
+    // Shadow map: throttled por distância (ver _maybeMarkShadowUpdate).
+    // A mercadora roda lentamente: forçamos um bake adicional a cada 8
+    // frames (~7Hz) para manter a sombra dela actualizada sem custo.
+    _maybeMarkShadowUpdate();
+    if ((_frameCount & 7) === 0) renderer.shadowMap.needsUpdate = true;
 
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
@@ -956,10 +984,10 @@ function animateCaselo(deltaTime) {
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
-    // Shadow map: autoUpdate está desligado (ver renderer.js). Marcamos o
-    // re-bake aqui em cada frame — senão a sombra do herói congela na
-    // posição em que ele entrou na cena e deixa de o acompanhar.
-    renderer.shadowMap.needsUpdate = true;
+    // Shadow map: throttled por distância. O castelo tem efeitos atmosféricos
+    // contínuos (pulsar do cristal) que beneficiam de um refresh periódico.
+    _maybeMarkShadowUpdate();
+    if ((_frameCount & 7) === 0) renderer.shadowMap.needsUpdate = true;
 
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
@@ -1117,13 +1145,10 @@ function animateTavern(deltaTime) {
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
-    // Shadow map: tal como na loja, o renderer tem autoUpdate desligado
-    // (ver renderer.js) e só re-renderiza quando needsUpdate é marcado.
-    // A taverna tem conteúdo dinâmico (o herói e os NPCs), por isso
-    // marcamo-lo aqui em cada frame — caso contrário a sombra do jogador
-    // congela na pose/posição em que ele entrou na cena e deixa de o
-    // acompanhar (os objectos estáticos ficam bem por nunca se moverem).
-    renderer.shadowMap.needsUpdate = true;
+    // Shadow map: throttled. NPCs da taverna mexem-se devagar — um refresh
+    // periódico (8 em 8 frames) chega para os acompanhar.
+    _maybeMarkShadowUpdate();
+    if ((_frameCount & 7) === 0) renderer.shadowMap.needsUpdate = true;
 
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
 
@@ -1271,10 +1296,9 @@ function animateQuarto(deltaTime) {
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
-    // Shadow map: autoUpdate está desligado (ver renderer.js). Marcamos o
-    // re-bake aqui em cada frame — senão a sombra do herói congela na
-    // posição em que ele entrou na cena e deixa de o acompanhar.
-    renderer.shadowMap.needsUpdate = true;
+    // Shadow map: throttled por distância (quarto pequeno e quase estático).
+    _maybeMarkShadowUpdate();
+    if ((_frameCount & 15) === 0) renderer.shadowMap.needsUpdate = true;
 
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
@@ -1337,8 +1361,9 @@ function animate() {
             pauseNightMode();
         }
         _prevCena = estado.cena;
-        // Mudança de cena → forçar re-bake da shadow map na cena nova.
-        renderer.shadowMap.needsUpdate = true;
+        // Mudança de cena → forçar re-bake completo da shadow map (e reset
+        // do throttle de distância para que o próximo bake na cena nova passe).
+        _forceShadowUpdate();
         // No mundo exterior o holofote nocturno (_playerAura) já projecta a
         // sombra do herói; manter também o playerSpot a projectar duplicava
         // o cálculo e fazia o shadow acne cintilar a preto ao andar. Nos
