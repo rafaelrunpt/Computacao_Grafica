@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { criarMapa, verificaColisao, shopDoorInteract, castleEnterBox, tavernEnterBox, guardianInteractBox, removerGuardiao, updateGuardiao, isGuardiaoPassagemConcedida, matWater, matBattleGrass, matBattleSky, matCorruptHalo, matContTrunk, matContLeaves, matContRock, zonasSulLimpas, isShopDesbloqueada, resetZonasBatalha, getBridgeHeight, getBauInteractBox, abrirBau, bauJaAberto, updateBau, bauJaColetado, coletarBau, getBauMascaraInteractBox, abrirBauMascara, bauMascaraJaAberto, updateBauMascara, bauMascaraJaColetado, coletarBauMascara, fadeables, cullables, worldParticles } from '../world/mapa.js';
+import { criarMapa, verificaColisao, shopDoorInteract, bruxaInteractBox, updateBruxaMapa, castleEnterBox, tavernEnterBox, guardianInteractBox, removerGuardiao, updateGuardiao, isGuardiaoPassagemConcedida, matWater, matBattleGrass, matBattleSky, matCorruptHalo, matContTrunk, matContLeaves, matContRock, zonasSulLimpas, isShopDesbloqueada, resetZonasBatalha, getBridgeHeight, getBauInteractBox, abrirBau, bauJaAberto, updateBau, bauJaColetado, coletarBau, getBauMascaraInteractBox, abrirBauMascara, bauMascaraJaAberto, updateBauMascara, bauMascaraJaColetado, coletarBauMascara, fadeables, cullables, worldParticles } from '../world/mapa.js';
 import { player, updatePlayerAnimation, setCoroaVisivel, setBrincosVisivel, setOculosVisivel, setAureolaVisivel, setMascaraVisivel, setTochaVisivel, updateCoroaAnimacao } from '../entities/jogador.js';
-import { adicionarItem, registarOnEquipChange, CATALOGO } from '../systems/inventario.js';
+import { adicionarItem, registarOnEquipChange, CATALOGO, usarItem, temItem } from '../systems/inventario.js';
 import { ganharCintilas } from '../systems/currency.js';
 import { mostrarRecompensa } from '../ui/popup-recompensa.js';
 import { verificarEncontro, estadoJogo, zonaBatalhaProximoCentro, iniciarCombateEm, iniciarBossFight } from '../systems/combate.js';
 import { atualizarFaseDesvio } from '../systems/boss-attacks.js';
 import { renderizarMinimapa } from '../world/minimapa.js';
-import { lojaScene, lojaColliders, lojaSaidaBox, getLojaHeight, tryMoveLoja, getBauLojaInteractBox, bauLojaJaAberto, bauLojaJaColetado, abrirBauLoja, coletarBauLoja, updateBauLoja, getMerchantInteractBox, updateMerchant } from '../world/loja.js';
+import { lojaScene, lojaColliders, lojaSaidaBox, getLojaHeight, tryMoveLoja, getBauLojaInteractBox, bauLojaJaAberto, bauLojaJaColetado, abrirBauLoja, coletarBauLoja, updateBauLoja, updateMerchant } from '../world/loja.js';
 import { abrirDialogoMercador, isDialogoMercadorAberto } from '../ui/merchant-dialog.js';
 import { caseloScene, caseloColliders, caseloSaidaBox, caseloMiniCam, bossCrystal, bossCrystalInteractBox, bossCrystalRestY, PEDESTAIS, pedestalProximoDe, colocarItemPedestal, todosPedestaisCheios, atualizarPedestais, atualizarAtmosferaCastelo } from '../world/castelo.js';
 import { mostrarPista, esconderPista, isPistaAberta } from '../ui/pista-popup.js';
@@ -15,6 +15,7 @@ import { quantidade as qtdInv, removerItem as removerInv } from '../systems/inve
 import { tavernScene, getTavernHeight, tryMoveTavern, tavernSaidaBox, tavernBarmanBox, quartoEnterBox, bartenderIntroBox, bartenderVendorBox, bartenderIntroFeita, marcarBartenderIntroFeita, updateTavernNPCs } from '../world/tavern.js';
 import { abrirIntroBartender, isIntroBartenderAberta } from '../ui/intro-bartender.js';
 import { abrirBartenderShop, isBartenderShopAberta } from '../ui/bartender-shop.js';
+import { abrirBruxaArcano, isBruxaArcanoAberto } from '../ui/bruxa-arcano.js';
 import { quartoScene, tryMoveQuarto, getQuartoHeight, quartoSaidaBox, updateQuarto, quartoSpawnPos, quartoBauBox, bauQuartoAberto, abrirBauQuarto, bauQuartoColetado, coletarBauQuarto, quartoCamaBox } from '../world/quarto.js';
 import { bossDebugScene, bossDebugCamera, updateBossDebug } from '../world/boss-debug-scene.js';
 import { curar } from '../systems/player-stats.js';
@@ -253,7 +254,7 @@ sunLight.shadow.camera.layers.enable(1); // shadow camera vê os objetos culled 
 // ---- spotlight do jogador (cor oposta ao roxo: amarelo/ouro) ----
 // Posicionado muito alto para evitar colisão com o cenário e simular luz orbital
 // Penumbra a 1.0 garante um desvanecimento suave do centro para as bordas
-const playerSpot = new THREE.SpotLight(0xfff500, 900, 30, 0.28, 1.0, 2.0);
+const playerSpot = new THREE.SpotLight(0xfff500, 280, 22, 0.32, 1.0, 2.0);
 playerSpot.castShadow = true;
 // Shadow map de 1024 para melhor precisão nas sombras do herói.
 playerSpot.shadow.mapSize.set(1024, 1024);
@@ -327,6 +328,12 @@ registarCallbackInput(
         // B — Códice de Encargos
         if (estadoJogo.emCombate || mapaAberto || isInventarioAberto() || isDialogoAberto() || isPauseAberto() || isLockpickAberto()) return;
         toggleQuestBook();
+    },
+    () => {
+        // N — Empunhar/guardar a Tocha do Viajante
+        if (estadoJogo.emCombate || isInventarioAberto() || isDialogoAberto() || isPauseAberto() || isLockpickAberto()) return;
+        if (!temItem('tocha')) return;
+        usarItem('tocha');
     }
 );
 
@@ -500,6 +507,9 @@ function animateMundo(deltaTime) {
         } else if (tavernEnterBox && pb.intersectsBox(tavernEnterBox)) {
             showPrompt('E — Entrar na Estalagem');
             if (keys.e) { keys.e = false; switchMusic('tavern', 1.0); entrarTavern(); }
+        } else if (bruxaInteractBox && pb.intersectsBox(bruxaInteractBox)) {
+            showPrompt('E — Parlamentar com a Bruxa');
+            if (keys.e) { keys.e = false; abrirBruxaArcano(); }
         } else if (getBauInteractBox() && pb.intersectsBox(getBauInteractBox())) {
             if (!bauJaColetado()) {
                 if (!bauJaAberto()) {
@@ -595,6 +605,7 @@ function animateMundo(deltaTime) {
     updateBauMascara(deltaTime);
     updateLostItems(deltaTime);
     updateGuardiao(deltaTime);
+    updateBruxaMapa(deltaTime, player.position);
     if (!moderator.lockY) {
         player.userData.baseY = getBridgeHeight(player.position.x, player.position.z);
     }
@@ -644,7 +655,8 @@ function animateMundo(deltaTime) {
     } else {
         // Actualizar spotlight (lanterna mágica do herói)
     // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
+    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
+    const luzNecessaria = (estado.cena !== 'mundo');
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
         playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
@@ -681,7 +693,7 @@ function animateMundo(deltaTime) {
 
 function animateLoja(deltaTime) {
     let isMoving = false, dirX = 0, dirZ = 0;
-    if (!isInventarioAberto() && !isDialogoMercadorAberto()) {
+    if (!isInventarioAberto() && !isDialogoMercadorAberto() && !isBruxaArcanoAberto()) {
         if (keys.w) dirZ -= 1; if (keys.s) dirZ += 1;
         if (keys.a) dirX -= 1; if (keys.d) dirX += 1;
     }
@@ -802,10 +814,12 @@ function animateLoja(deltaTime) {
     player.userData.baseY = lojaPlayer.y;
     player.rotation.y = lojaPlayer.rotY;
     updatePlayerAnimation(isMoving, deltaTime, 'wood');
+    updateCoroaAnimacao(deltaTime);
 
     // Actualizar spotlight (lanterna mágica do herói)
     // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
+    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
+    const luzNecessaria = (estado.cena !== 'mundo');
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
         playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
@@ -975,13 +989,15 @@ function animateCaselo(deltaTime) {
     if (!moderator.lockY) player.userData.baseY = caseloPlayer.y;
     player.rotation.y = caseloPlayer.rotY;
     updatePlayerAnimation(isMoving, deltaTime, 'stone');
+    updateCoroaAnimacao(deltaTime);
 
     // anima o shader de corrupção da abóbada do castelo
     matBattleSky.uniforms.uTime.value += deltaTime;
 
     // Actualizar spotlight (lanterna mágica do herói)
     // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
+    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
+    const luzNecessaria = (estado.cena !== 'mundo');
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
         playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
@@ -1133,6 +1149,7 @@ function animateTavern(deltaTime) {
     player.userData.baseY = tavernPlayer.y;
     player.rotation.y = tavernPlayer.rotY;
     updatePlayerAnimation(isMoving, deltaTime, 'stone');
+    updateCoroaAnimacao(deltaTime);
 
     updateMerchant(deltaTime, player.position);
 
@@ -1142,7 +1159,8 @@ function animateTavern(deltaTime) {
 
     // Actualizar spotlight (lanterna mágica do herói)
     // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
+    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
+    const luzNecessaria = (estado.cena !== 'mundo');
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
         playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
@@ -1284,6 +1302,7 @@ function animateQuarto(deltaTime) {
     player.userData.baseY = quartoPlayer.y;
     player.rotation.y = quartoPlayer.rotY;
     updatePlayerAnimation(isMoving, deltaTime, 'wood');
+    updateCoroaAnimacao(deltaTime);
 
     updateQuarto(deltaTime);
 
@@ -1293,7 +1312,8 @@ function animateQuarto(deltaTime) {
 
     // Actualizar spotlight (lanterna mágica do herói)
     // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
+    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
+    const luzNecessaria = (estado.cena !== 'mundo');
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
         playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
@@ -1319,6 +1339,7 @@ function animateCombate(deltaTime) {
     atualizarFaseDesvio(deltaTime);
     // animação dos passos só faz sentido quando o player se mexe activamente
     updatePlayerAnimation(false, deltaTime);
+    updateCoroaAnimacao(deltaTime);
     updateCombateScene(deltaTime);
 
     // esconde o minimapa enquanto se está em combate
@@ -1327,7 +1348,8 @@ function animateCombate(deltaTime) {
 
     // Actualizar spotlight (lanterna mágica do herói)
     // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
+    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
+    const luzNecessaria = (estado.cena !== 'mundo');
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
         playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
@@ -1386,7 +1408,8 @@ function animate() {
         renderer.clear();
         // Actualizar spotlight (lanterna mágica do herói)
     // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
+    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
+    const luzNecessaria = (estado.cena !== 'mundo');
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
         playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
@@ -1425,7 +1448,8 @@ function animate() {
         if (estado.cena === 'mundo') {
             // Actualizar spotlight (lanterna mágica do herói)
     // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
+    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
+    const luzNecessaria = (estado.cena !== 'mundo');
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
         playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
@@ -1437,7 +1461,8 @@ function animate() {
         } else if (estado.cena === 'loja') {
             // Actualizar spotlight (lanterna mágica do herói)
     // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
+    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
+    const luzNecessaria = (estado.cena !== 'mundo');
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
         playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
@@ -1449,7 +1474,8 @@ function animate() {
         } else if (estado.cena === 'caselo') {
             // Actualizar spotlight (lanterna mágica do herói)
     // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
+    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
+    const luzNecessaria = (estado.cena !== 'mundo');
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
         playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
@@ -1461,7 +1487,8 @@ function animate() {
         } else if (estado.cena === 'tavern') {
             // Actualizar spotlight (lanterna mágica do herói)
     // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
+    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
+    const luzNecessaria = (estado.cena !== 'mundo');
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
         playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
@@ -1473,7 +1500,8 @@ function animate() {
         } else if (estado.cena === 'quarto') {
             // Actualizar spotlight (lanterna mágica do herói)
     // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    const luzNecessaria = (estado.cena === 'mundo') ? settings.nightMode : true;
+    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
+    const luzNecessaria = (estado.cena !== 'mundo');
     playerSpot.visible = luzNecessaria;
     if (luzNecessaria) {
         playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);

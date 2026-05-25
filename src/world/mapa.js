@@ -6,9 +6,13 @@ import { Bau } from './bau.js';
 import { criarGuardiao as _criarGuardiao, removerGuardiao as _removerGuardiao } from '../entities/guardiao.js';
 import { renderer } from '../core/renderer.js';
 
+import { criarBruxa, updateBruxa } from '../entities/bruxa.js';
+
 export { matBattleGrass, matBattleSky, matWater, matContTrunk, matContLeaves, matContRock, matCorruptHalo } from './shaders.js';
 export { getBridgeHeight } from './rio.js';
 export { guardianInteractBox, isGuardiaoPassagemConcedida, updateGuardiao } from '../entities/guardiao.js';
+export let bruxaInteractBox = null;
+export function updateBruxaMapa(dt, playerPos) { updateBruxa(dt, playerPos); }
 
 export const mapBounds = { minX: -100, maxX: 100, minZ: -100, maxZ: 100 };
 
@@ -998,6 +1002,15 @@ export function criarMapa(scene) {
     // Gobble Inn na vila — norte da loja, dentro de VILLAGE_BOUNDS
     criarInn(scene, -45, 35, 0.01, 0, -2);
     criarPotionShop(scene, -18, -43);
+
+    // --- Bruxa na Potion Shop (Coord Mundo) ---
+    const BRUXA_WORLD_POS = new THREE.Vector3(-18, 0.81, -41);
+    criarBruxa(scene, BRUXA_WORLD_POS);
+    bruxaInteractBox = new THREE.Box3(
+        new THREE.Vector3(BRUXA_WORLD_POS.x - 3.5, 0, BRUXA_WORLD_POS.z - 3.5),
+        new THREE.Vector3(BRUXA_WORLD_POS.x + 3.5, 4, BRUXA_WORLD_POS.z + 3.5)
+    );
+
     criarCastelo(scene);
     // zona corrupta ao redor do castelo (z=-80) — visual roxo, sem encontros
     criarZonaCorrupta(scene, 0, -80, 28, 111);

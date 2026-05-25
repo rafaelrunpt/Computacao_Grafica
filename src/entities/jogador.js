@@ -361,7 +361,7 @@ export function setMascaraVisivel(v) { mascaraGroup.visible = !!v; }
 // Pose do braço direito ao empunhar — esticado para a frente.
 const RIGHT_ARM_TORCH = -1.5;
 // Intensidade base da luz (× nightT × flicker).
-const TOCHA_INTENSIDADE = 26;
+const TOCHA_INTENSIDADE = 2.6;
 
 export const tochaGroup = new THREE.Group();
 tochaGroup.name = 'tochaGroup';
@@ -383,41 +383,53 @@ const taca = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.035, 0.07, 8), ma
 taca.position.y = 0.39;
 tochaGroup.add(taca);
 
-// chama — cone interior pequeno; brilho moderado para o bloom não
-// rebentar quando a câmara olha de perto para a cara do herói.
-const matChamaInt = new THREE.MeshBasicMaterial();
-matChamaInt.color.setRGB(1.6, 1.0, 0.42);
-const chamaInt = new THREE.Mesh(new THREE.ConeGeometry(0.038, 0.15, 10), matChamaInt);
-chamaInt.position.y = 0.49;
-// chama exterior — halo aditivo subtil
-const matChamaExt = new THREE.MeshBasicMaterial({
-    color: 0xff7a18, transparent: true, opacity: 0.22,
-    blending: THREE.AdditiveBlending, depthWrite: false,
+// chama — mesmo estilo das tochas do castelo, mas com emissivo mais
+// contido para não rebentar no UnrealBloom do modo nocturno.
+const matChamaInt = new THREE.MeshStandardMaterial({
+    color: 0xff5a18, emissive: 0xaa3300, emissiveIntensity: 0.9,
+    roughness: 1.0, metalness: 0.0,
 });
-const chamaExt = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.22, 10), matChamaExt);
-chamaExt.position.y = 0.51;
-tochaGroup.add(chamaInt, chamaExt);
+const chamaInt = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.10, 6), matChamaInt);
+chamaInt.position.y = 0.44;
+// Sem halo aditivo externo — era ele que criava o "quadrado" de luz à frente da cara.
+const chamaExt = chamaInt; // referência simbólica usada nas animações
+tochaGroup.add(chamaInt);
 
-// luz da tocha — PointLight na chama; projecta sombras (cube shadow)
-const tochaLuz = new THREE.PointLight(0xffce7a, 0, 30, 2);
-tochaLuz.position.y = 0.55;
-tochaLuz.castShadow = true;
-tochaLuz.shadow.mapSize.set(1024, 1024);
-tochaLuz.shadow.bias = -0.003;
-tochaLuz.shadow.normalBias = 0.06;
-tochaLuz.shadow.camera.near = 0.2;
-tochaLuz.shadow.camera.far  = 32;
-tochaLuz.shadow.camera.layers.enable(1); // vê também objectos culled (layer 1)
+// luz da tocha — PointLight na chama; SEM sombras (cube-shadow custa 6
+// passes/frame e provocava stutter na primeira vez que se equipava).
+// Intensidade base baixa para não esbranquiçar a cara do herói.
+// decay sub-linear (0.5) — distribui a luz quase uniformemente: a mão
+// não fica mais brilhante quando aumentamos a intensidade, mas o
+// alcance ao longe ganha bastante.
+const tochaLuz = new THREE.PointLight(0xffce7a, 0.0001, 22, 0.5);
+tochaLuz.position.y = 0.38;
+tochaLuz.castShadow = false;
 tochaGroup.add(tochaLuz);
 
 rightArmGroup.add(tochaGroup);
+// Mantém o grupo presente no grafo (apenas as meshes ficam invisíveis)
+// para o renderer pré-compilar o shader com a PointLight extra. Isto
+// elimina o freeze de ~2s na primeira vez que a tocha é mostrada.
+tochaGroup.visible = true;
+for (const child of tochaGroup.children) {
+    if (child.isMesh) child.visible = false;
+}
 
 tochaGroup.userData.t = 0;
 tochaGroup.userData.luz = tochaLuz;
 tochaGroup.userData.chamaInt = chamaInt;
 tochaGroup.userData.chamaExt = chamaExt;
 
-export function setTochaVisivel(v) { tochaGroup.visible = !!v; }
+// Estado "tocha equipada" — controla as meshes e a contribuição da luz,
+// mas mantém o grupo+luz sempre no grafo para o shader não recompilar.
+let _tochaEquipada = false;
+export function isTochaEquipada() { return _tochaEquipada; }
+export function setTochaVisivel(v) {
+    _tochaEquipada = !!v;
+    for (const child of tochaGroup.children) {
+        if (child.isMesh) child.visible = _tochaEquipada;
+    }
+}
 
 // ---------------------------------------------------------
 // 5. JUNTAR TUDO NO BONECO
@@ -470,15 +482,18 @@ export function updateCoroaAnimacao(deltaTime) {
         const pulse = 0.5 + Math.sin(mascaraGroup.userData.t * 2.5) * 0.5;
         mascaraGroup.userData.runa.emissiveIntensity = 1.5 + 1.2 * pulse;
     }
-    if (tochaGroup.visible) {
+    if (_tochaEquipada) {
         tochaGroup.userData.t += deltaTime;
         const tt = tochaGroup.userData.t;
         // flicker irregular — duas frequências, como uma chama a tremer
         const flick = 0.80 + 0.13 * Math.sin(tt * 11) + 0.09 * Math.sin(tt * 23 + 1.3);
-        // a luz só ilumina de noite (getNightT→1); de dia fica só a chama visível
-        tochaGroup.userData.luz.intensity = TOCHA_INTENSIDADE * getNightT() * flick;
-        tochaGroup.userData.chamaInt.scale.set(1, 0.88 + 0.20 * Math.sin(tt * 13), 1);
-        tochaGroup.userData.chamaExt.scale.set(1, 0.80 + 0.30 * Math.sin(tt * 9 + 0.7), 1);
+        // Luz activa sempre que a tocha está equipada (mundo dia/noite e interiores)
+        tochaGroup.userData.luz.intensity = TOCHA_INTENSIDADE * flick;
+        const chama = tochaGroup.userData.chamaInt;
+        chama.scale.set(1, 0.88 + 0.20 * Math.sin(tt * 13), 1);
+        chama.material.emissiveIntensity = 0.85 + 0.25 * Math.sin(tt * 9 + 0.7);
+    } else {
+        tochaGroup.userData.luz.intensity = 0.0001;
     }
 }
 
@@ -533,7 +548,7 @@ export function updatePlayerAnimation(isMoving, deltaTime, surfaceType = 'grass'
     }
 
     // Tocha equipada → braço direito esticado a empunhá-la (sobrepõe o balanço do andar).
-    if (tochaGroup.visible) {
+    if (_tochaEquipada) {
         player.userData.rightArm.rotation.x = RIGHT_ARM_TORCH;
     }
 }

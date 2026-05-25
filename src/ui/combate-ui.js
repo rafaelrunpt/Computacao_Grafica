@@ -171,7 +171,7 @@ function makeActionBtn(label, sub, color, keyHint) {
 }
 
 const btnAtacar = makeActionBtn('⚔ ATAQUE', 'escolhei um golpe', '120,30,60', 'J');
-const btnItens  = makeActionBtn('🧪 ITENS', 'usai um objecto',   '60,30,120', 'K');
+const btnItens  = makeActionBtn('<img src="assets/icones/small_potion.png" style="width:22px;height:22px;vertical-align:middle;margin-right:4px;"> ITENS', 'usai um objecto', '60,30,120', 'K');
 const btnFugir  = makeActionBtn('💨 FUGIR', 'tentai escapar',    '40,40,80', 'L');
 actionsBar.append(btnAtacar, btnItens, btnFugir);
 
@@ -399,7 +399,13 @@ function renderSlotBtn(btn, info, podeMexer, idx) {
     const cd = info.cooldown | 0;
     const emCD = cd > 0;
     const sub = emCD ? `repouso: ${cd}` : a.desc;
-    btn.innerHTML = _slotContent(idx, `${a.icone || '⚔'} ${a.nome.toUpperCase()}`, sub);
+
+    const isImage = a.icone && (a.icone.endsWith('.png') || a.icone.endsWith('.jpg') || a.icone.includes('/'));
+    const iconHtml = isImage 
+        ? `<img src="${a.icone}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:4px;">`
+        : (a.icone || '⚔');
+
+    btn.innerHTML = _slotContent(idx, `${iconHtml} ${a.nome.toUpperCase()}`, sub);
     const ativo = podeMexer && !emCD;
     btn.disabled = !ativo;
     btn.style.opacity = ativo ? '1' : (emCD ? '0.55' : '0.45');
@@ -578,7 +584,12 @@ export function preencherItens(lista, onUse) {
         const keyHint = keyLabel
             ? `<span style="pointer-events:none;opacity:0.55;font-size:9px;color:#c8a8ff;margin-right:4px;">[${keyLabel}]</span>`
             : '';
-        row.innerHTML = `<span style="pointer-events:none;display:flex;align-items:center;">${keyHint}${item.icone || ''} ${item.nome}</span>${sufixo}`;
+        const isImage = item.icone && (item.icone.endsWith('.png') || item.icone.endsWith('.jpg') || item.icone.includes('/'));
+        const iconHtml = isImage 
+            ? `<img src="${item.icone}" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:4px;">`
+            : (item.icone || '');
+
+        row.innerHTML = `<span style="pointer-events:none;display:flex;align-items:center;">${keyHint}${iconHtml} ${item.nome}</span>${sufixo}`;
         row.onclick = () => {
             itemsPanel.style.display = 'none';
             onUse(item);
@@ -587,7 +598,7 @@ export function preencherItens(lista, onUse) {
     }
 
     if (pocoes.length > 0) {
-        header('🧪 Elixires');
+        header('<img src="assets/icones/small_potion.png" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;"> Elixires');
         for (const it of pocoes) linha(it, false);
     }
     if (outros.length > 0) {

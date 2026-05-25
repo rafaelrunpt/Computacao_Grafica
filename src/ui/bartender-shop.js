@@ -6,7 +6,7 @@ import { getCintilas, gastarCintilas, onCintilasChange } from '../systems/curren
 import { ATAQUES, ataqueState, desbloquearAtaque, equiparAtaque } from '../systems/ataques.js';
 
 const POCOES = [
-    { id: 'pocao',  preco: 25, nome: 'Poção de Cura', desc: 'Recupera 15 HP.',           icone: '🧪' },
+    { id: 'pocao',  preco: 25, nome: 'Poção de Cura', desc: 'Recupera 15 HP.',           icone: 'assets/icones/small_potion.png' },
     { id: 'mega',   preco: 60, nome: 'Poção Maior',   desc: 'Recupera 30 HP.',           icone: '🧴' },
     { id: 'elixir', preco: 140, nome: 'Elixir',       desc: 'Recupera totalmente o HP.', icone: '⚗' },
 ];
@@ -74,6 +74,11 @@ function build() {
 }
 
 function rowItem({ icone, nome, desc, precoLabel, btnLabel, btnDisabled, onBuy, badge }) {
+    const isImage = icone && (icone.endsWith('.png') || icone.endsWith('.jpg') || icone.includes('/'));
+    const iconHtml = isImage 
+        ? `<img src="${icone}" style="width:26px;height:26px;object-fit:contain;">`
+        : icone;
+
     const row = document.createElement('div');
     row.style.cssText = `
         display:flex; align-items:center; gap:12px;
@@ -82,7 +87,7 @@ function rowItem({ icone, nome, desc, precoLabel, btnLabel, btnDisabled, onBuy, 
         padding: 10px 14px;
     `;
     row.innerHTML = `
-        <div style="font-size:26px;width:34px;text-align:center;">${icone}</div>
+        <div style="font-size:26px;width:34px;text-align:center;display:flex;align-items:center;justify-content:center;">${iconHtml}</div>
         <div style="flex:1;">
             <div style="font-size:15px;color:#f0d9a8;">${nome} ${badge || ''}</div>
             <div style="font-size:12px;color:#a08060;">${desc}</div>

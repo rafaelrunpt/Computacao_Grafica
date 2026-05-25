@@ -217,7 +217,11 @@ function dispararFogos() {
 
 // --- API pública ---
 export function mostrarRecompensa({ icone: ic, nome: nm, descricao: desc, cintilas = 0, duracao = 3500 }) {
-    icone.textContent = ic || '🎁';
+    if (ic && (ic.endsWith('.png') || ic.endsWith('.jpg') || ic.includes('/'))) {
+        icone.innerHTML = `<img src="${ic}" style="width:130px;height:130px;object-fit:contain;filter:drop-shadow(0 0 15px #d4a830);transform:rotate(20deg);margin:10px 0;">`;
+    } else {
+        icone.textContent = ic || '🎁';
+    }
     nome.textContent = nm || 'Novo Item';
     descricao.textContent = desc || '';
 

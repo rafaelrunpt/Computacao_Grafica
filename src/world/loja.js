@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Bau } from './bau.js';
-import { criarMercador, getMercadorInteractBox, updateMercador } from '../entities/mercador.js';
+import { criarBruxa, updateBruxa } from '../entities/bruxa.js';
 
 export const lojaScene = new THREE.Scene();
 lojaScene.background = new THREE.Color(0x1a120a);
@@ -58,14 +58,11 @@ loader.load('assets/models/constructions/shop_interior.glb', (gltf) => {
     lojaScene.add(shopModel);
 }, undefined, e => console.error('Erro shop_interior GLB:', e));
 
-// ---- Mercador (entidade em src/entities/mercador.js) ----
-export const MERCHANT_POS = new THREE.Vector3(-2.21, 0.81, -0.76);
-criarMercador(lojaScene, MERCHANT_POS);
-export function getMerchantInteractBox() { return getMercadorInteractBox(); }
-export function updateMerchant(dt, playerPos) { updateMercador(dt, playerPos); }
-
 // ---- parâmetros de movimento ----
-export const LOJA_FLOOR_Y = 0.0;     
+export const LOJA_FLOOR_Y = 0.0;
+export function getMerchantInteractBox() { return null; }
+export function updateMerchant() {}
+     
 const RAY_START_Y = 10;              
 export const STEP_MAX = 0.30;        
 const DROP_MAX = 1.2;                

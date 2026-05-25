@@ -309,8 +309,8 @@ function _cullBelowGround(scene) {
 // (loja, taberna) com sombras locais nítidas.
 // ===========================================================
 const LANTERN_POINTS = [
-    { x: -15.0, y: 2.2, z: -39.0, color: 0xffcc00, intensity: 3.5, distance: 7, noSprite: true }, // Lanterna Direita
-    { x: -21.0, y: 2.2, z: -39.0, color: 0xffcc00, intensity: 3.5, distance: 7, noSprite: true }  // Lanterna Esquerda
+    { x: -15.0, y: 2.2, z: -39.0, color: 0xffcc00, intensity: 7.0, distance: 14, noSprite: true }, // Lanterna Direita
+    { x: -21.0, y: 2.2, z: -39.0, color: 0xffcc00, intensity: 7.0, distance: 14, noSprite: true }  // Lanterna Esquerda
 ];
 
 // SpotLights que projectam um cone de luz "da janela" para o chão.
@@ -319,20 +319,20 @@ const LANTERN_SPOTS_DIR = [
         pos: [-15.0, 2.2, -39.0],
         aim: [-15.0, 0, -39.0],
         color: 0xffaa00,
-        intensity: 3.0,
-        distance: 8,
-        angle: Math.PI / 4,
-        penumbra: 0.8,
+        intensity: 6.5,
+        distance: 14,
+        angle: Math.PI / 3,
+        penumbra: 0.7,
         noShadow: true
     },
     {
         pos: [-21.0, 2.2, -39.0],
         aim: [-21.0, 0, -39.0],
         color: 0xffaa00,
-        intensity: 3.0,
-        distance: 8,
-        angle: Math.PI / 4,
-        penumbra: 0.8,
+        intensity: 6.5,
+        distance: 14,
+        angle: Math.PI / 3,
+        penumbra: 0.7,
         noShadow: true
     }
 ];
@@ -442,7 +442,7 @@ function _createCrystals() {
         _crystals.push({
             mesh, mesh2,
             phase: i * 1.7,
-            baseEmissive: 1.4,
+            baseEmissive: 2.4,
             color: s.color,
             pos: new THREE.Vector3(s.x, s.h / 2, s.z),
             topY: s.h,
@@ -462,9 +462,16 @@ function _updateCrystals() {
 // (apenas as 2 do meio têm castShadow para manter o custo equilibrado).
 // ===========================================================
 const TORCH_POSITIONS = [
-    { x: -5, z: -15 }, { x:  5, z: -15 },
-    { x: -5, z: -40 }, { x:  5, z: -40 },
-    { x: -5, z: -65 }, { x:  5, z: -65 },
+    { x: -5, z: -10 }, { x:  5, z: -10 },
+    { x: -5, z: -22 }, { x:  5, z: -22 },
+    { x: -5, z: -34 }, { x:  5, z: -34 },
+    { x: -5, z: -46 }, { x:  5, z: -46 },
+    { x: -5, z: -58 }, { x:  5, z: -58 },
+    { x: -5, z: -70 }, { x:  5, z: -70 },
+    // pequenos braseiros junto à loja, taberna e bruxa para reforçar o ambiente
+    { x: -32, z:  18 }, { x: -32, z:  32 },
+    { x: -48, z:  28 }, { x: -42, z:  42 },
+    { x: -23, z: -38 }, { x: -13, z: -38 },
 ];
 
 function _createTorches() {
@@ -496,7 +503,7 @@ function _createTorches() {
             color: 0xffffff,
         }));
         flame.position.y = 2.45;
-        flame.scale.set(1.10, 1.55, 1);
+        flame.scale.set(1.45, 2.00, 1);
         group.add(flame);
 
         // Núcleo branco-azulado — pequeno sprite por cima do corpo da
@@ -507,13 +514,13 @@ function _createTorches() {
             color: 0xffffff,
         }));
         flameCore.position.y = 2.35;
-        flameCore.scale.set(0.55, 0.75, 1);
+        flameCore.scale.set(0.75, 1.00, 1);
         group.add(flameCore);
 
         // PointLight sem sombra — cube-shadow custa 6 passes/frame por
         // luz, e a iluminação dinâmica do chão já dá o efeito de tocha
         // sem precisar das silhuetas projectadas.
-        const light = new THREE.PointLight(0x4080ff, 0, 14, 2);
+        const light = new THREE.PointLight(0x4080ff, 0, 22, 1.8);
         light.position.y = 2.4;
         light.castShadow = false;
         group.add(light);
@@ -521,7 +528,7 @@ function _createTorches() {
         _nightGroup.add(group);
         _torches.push({
             flame, flameCore, light,
-            baseIntensity: 5.5,
+            baseIntensity: 9.5,
             phase: Math.random() * Math.PI * 2,
         });
     }

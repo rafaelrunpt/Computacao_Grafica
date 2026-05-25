@@ -4,7 +4,7 @@ import { playerStats, curar, recalcularMaxHp } from './player-stats.js';
 // CATÁLOGO DE OBJECTOS — definição estática (id → metadados + efeito)
 // ----------------------------------------------------------------------
 export const CATALOGO = {
-    pocao:    { id: 'pocao',  nome: 'Poção de Cura',    descricao: 'Restaura 15 pontos de vida.',  efeito: { tipo: 'curar', valor: 15 }, icone: '🧪' },
+    pocao:    { id: 'pocao',  nome: 'Poção de Cura',    descricao: 'Restaura 15 pontos de vida.',  efeito: { tipo: 'curar', valor: 15 }, icone: 'assets/icones/small_potion.png' },
     mega:     { id: 'mega',   nome: 'Poção de Grande Vigor', descricao: 'Restaura 30 pontos de vida.',  efeito: { tipo: 'curar', valor: 30 }, icone: '🧴' },
     elixir:   { id: 'elixir', nome: 'Elixir do Abismo',  descricao: 'Restaura a vossa vitalidade por completo.', efeito: { tipo: 'curarTotal' },    icone: '⚗' },
     coroa_magica: {

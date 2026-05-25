@@ -1,20 +1,22 @@
-export const keys = { w: false, a: false, s: false, d: false, e: false, i: false, m: false, l: false, p: false, b: false };
+export const keys = { w: false, a: false, s: false, d: false, e: false, i: false, m: false, l: false, p: false, b: false, n: false };
 
 let _onToggleMapa = null;
 let _onToggleInventario = null;
 let _onTogglePause = null;
 let _onToggleQuestBook = null;
-export function registarCallbackInput(onToggleMapa, onToggleInventario, onTogglePause, onToggleQuestBook) {
+let _onToggleTocha = null;
+export function registarCallbackInput(onToggleMapa, onToggleInventario, onTogglePause, onToggleQuestBook, onToggleTocha) {
     _onToggleMapa = onToggleMapa;
     _onToggleInventario = onToggleInventario;
     _onTogglePause = onTogglePause;
     _onToggleQuestBook = onToggleQuestBook;
+    _onToggleTocha = onToggleTocha;
 }
 
 // Teclas de acção (one-shot): ignorar auto-repeat do browser para que cada
 // `tap` no E corresponda a UM evento — evita que segurar a tecla dispare
 // dois passos consecutivos (ex.: abrir baú + coletar logo a seguir).
-const ACTION_KEYS = new Set(['e', 'b', 'i', 'm', 'p']);
+const ACTION_KEYS = new Set(['e', 'b', 'i', 'm', 'p', 'n']);
 
 window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
@@ -26,6 +28,7 @@ window.addEventListener('keydown', (e) => {
     if (key === 'm' && _onToggleMapa) _onToggleMapa();
     if (key === 'i' && _onToggleInventario) _onToggleInventario();
     if (key === 'b' && _onToggleQuestBook) _onToggleQuestBook();
+    if (key === 'n' && _onToggleTocha) _onToggleTocha();
     if ((key === 'p' || e.key === 'Escape') && _onTogglePause) _onTogglePause(e);
 });
 

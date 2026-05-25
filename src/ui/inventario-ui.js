@@ -124,6 +124,12 @@ function renderItens() {
     for (const item of usaveis) {
         const equipavel = item.efeito && item.efeito.tipo === 'equipar';
         const equipado  = equipavel && playerStats.equipped[item.efeito.slot] === item.id;
+        
+        const isImage = item.icone && (item.icone.endsWith('.png') || item.icone.endsWith('.jpg') || item.icone.includes('/'));
+        const iconHtml = isImage 
+            ? `<img src="${item.icone}" style="width:32px;height:32px;object-fit:contain;">`
+            : item.icone || '◆';
+
         const row = document.createElement('button');
         row.style.cssText = `
             display: flex; align-items: center; gap: 12px;
@@ -140,7 +146,7 @@ function renderItens() {
             box-shadow: inset 0 0 6px rgba(0,0,0,0.6);
         `;
         row.innerHTML = `
-            <span style="font-size:24px;line-height:1;">${item.icone || '◆'}</span>
+            <span style="font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center;width:32px;height:32px;">${iconHtml}</span>
             <span style="flex:1;">
                 <div style="font-weight:bold;letter-spacing:1px;">${item.nome}</div>
                 <div style="font-size:11px;color:#c8a96e;font-style:italic;">${item.descricao || ''}</div>

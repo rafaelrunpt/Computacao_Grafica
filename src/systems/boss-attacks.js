@@ -376,6 +376,17 @@ function criarVarredura() {
 }
 
 const FACTORIES = [criarAereo, criarRasante, criarLateral, criarVarredura];
+const FACTORY_TYPES = ['aereo', 'rasante', 'lateral', 'varredura'];
+
+// Tipos que SÓ se evitam saltando (W) ou agachando (S). Em rage mode o boss
+// dispara 2 projécteis ao mesmo tempo — não podemos parear estes dois,
+// senão o jogador era obrigado a saltar E agachar em simultâneo.
+const TYPES_NEED_JUMP = new Set(['rasante']);
+const TYPES_NEED_DUCK = new Set(['varredura']);
+function _paresIncompativeis(a, b) {
+    return (TYPES_NEED_JUMP.has(a) && TYPES_NEED_DUCK.has(b))
+        || (TYPES_NEED_DUCK.has(a) && TYPES_NEED_JUMP.has(b));
+}
 
 // ----------------------------------------------------------------------
 // UPDATE DE CADA PROJÉCTIL
@@ -519,6 +530,10 @@ export function isFaseDesvioActiva() { return _active; }
 /** Update por frame — chamar de dentro do animateCombate. */
 export function atualizarFaseDesvio(deltaTime) {
     if (!_active) return;
+    // Cap do delta time: se uma transição/lag spike der um frame de 200ms+,
+    // os projécteis avançavam 200ms do telegraph numa única atualização e o
+    // jogador ficava sem tempo de reagir. Limita-se a ~50ms (≈20 fps min).
+    if (deltaTime > 0.05) deltaTime = 0.05;
 
     _processarInput();
     _atualizarY(deltaTime);
@@ -527,8 +542,8 @@ export function atualizarFaseDesvio(deltaTime) {
     // spawn de projécteis — fica mais frequente à medida que o boss perde vida
     _spawnTimer -= deltaTime;
     if (_spawnTimer <= 0) {
-        const factory = FACTORIES[Math.floor(Math.random() * FACTORIES.length)];
-        const pr = factory();
+        const idx1 = Math.floor(Math.random() * FACTORIES.length);
+        const pr = FACTORIES[idx1]();
         _projectiles.push(pr);
 
         // Gatilho de animação no boss sincronizado com o tempo de aviso (telegraph)
@@ -536,6 +551,20 @@ export function atualizarFaseDesvio(deltaTime) {
         const opts = {};
         if (pr.type === 'lateral') opts.side = pr.fromLeft ? -1 : 1;
         triggerBossAttackAnim(pr.type, pr.teleDur, opts);
+
+        // Fase 2 (rage mode, abaixo de 25% HP): dispara um segundo projéctil
+        // simultaneamente, evitando o par saltar+agachar.
+        if (_isRageMode()) {
+            const candidatos = FACTORY_TYPES
+                .map((_, i) => i)
+                .filter(i => !_paresIncompativeis(pr.type, FACTORY_TYPES[i]));
+            const idx2 = candidatos[Math.floor(Math.random() * candidatos.length)];
+            const pr2 = FACTORIES[idx2]();
+            _projectiles.push(pr2);
+            const opts2 = {};
+            if (pr2.type === 'lateral') opts2.side = pr2.fromLeft ? -1 : 1;
+            triggerBossAttackAnim(pr2.type, pr2.teleDur, opts2);
+        }
 
         const base = SPAWN_MIN + Math.random() * (SPAWN_MAX - SPAWN_MIN);
         _spawnTimer = base / _speedMult();

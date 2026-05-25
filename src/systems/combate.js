@@ -238,11 +238,21 @@ function pickAtaqueInimigo() {
 let _proximoAtaqueInimigo = pickAtaqueInimigo();
 // Debuff activo: o próximo golpe do jogador sai enfraquecido (Sopro Corrompido).
 let _playerEnfraquecido = false;
+// Escudo místico (Véu Arcano): reduz dano recebido em _escudoValor enquanto _escudoTurnos > 0.
+let _escudoTurnos = 0;
+let _escudoValor = 0;
 
 // Define o debuff de enfraquecer e actualiza o indicador de estado na placa.
 function _setEnfraquecido(on) {
     _playerEnfraquecido = on;
-    setStatusPlayer(on ? '⚠ Enfraquecido' : null);
+    _atualizarStatusPlayer();
+}
+
+function _atualizarStatusPlayer() {
+    const partes = [];
+    if (_playerEnfraquecido) partes.push('⚠ Enfraquecido');
+    if (_escudoTurnos > 0) partes.push(`🛡 Véu (${_escudoTurnos})`);
+    setStatusPlayer(partes.length ? partes.join('  ') : null);
 }
 
 // Mostra/esconde o presságio (Óculos do Vidente) conforme o equipamento.
@@ -280,6 +290,8 @@ function novoInimigo() {
     setNivelInimigo(nivelDificuldade());
     const base = _tipoEncontro === 'nucleo' ? nucleoBase : inimigoBase;
     inimigoAtual = escalarStats(base);
+    _escudoTurnos = 0;
+    _escudoValor = 0;
     _setEnfraquecido(false);
     _proximoAtaqueInimigo = pickAtaqueInimigo();
 }
@@ -318,6 +330,26 @@ function acaoAtacarSlot(idx) {
         setLog(`${at.nome} ainda em recarga.`);
         return;
     }
+
+    // BUFF (Véu Arcano e afins) — não causa dano, aplica estado e consome turno.
+    if (at.buff) {
+        aplicarCooldown(idx);
+        atualizarSlotsUI();
+        if (at.buff.tipo === 'reducao_dano') {
+            _escudoTurnos = at.buff.duracao;
+            _escudoValor = at.buff.valor;
+            _atualizarStatusPlayer();
+            const ancP = _ancoraCombatente('player');
+            mostrarDanoFlutuante(ancP.x, ancP.y, '🛡 VÉU', '#c4a0ff');
+            pulsarPlayer('180,130,255');
+            setLog(`Invocaste ${at.nome}! Dano reduzido em ${Math.round(at.buff.valor * 100)}% por ${at.buff.duracao} rondas.`);
+        }
+        const animDur = (at.anim && at.anim.dur) || 700;
+        tocarSomAtaquePlayer(at.id);
+        bloquearTurno(animDur + 100, turnoInimigo);
+        return;
+    }
+
     // NÃO paramos a fase de desvio — o boss continua a atacar enquanto o
     // jogador executa o seu ataque (assim os projécteis não dão pausa).
 
@@ -448,6 +480,15 @@ function turnoInimigo() {
     for (let h = 0; h < hits; h++) {
         dano += Math.max(1, Math.round(inimigoAtual.atk * at.multATK) + Math.floor(Math.random() * 3));
     }
+    // Véu Arcano: reduz dano recebido enquanto _escudoTurnos > 0.
+    let escudoExtra = '';
+    if (_escudoTurnos > 0 && _escudoValor > 0) {
+        const danoOriginal = dano;
+        dano = Math.max(1, Math.round(dano * (1 - _escudoValor)));
+        escudoExtra = ` 🛡 Véu Arcano absorveu ${danoOriginal - dano}.`;
+        _escudoTurnos--;
+        _atualizarStatusPlayer();
+    }
     receberDano(dano);
     tocarSomAtaqueInimigo(at.som);
     pulsarPlayer(at.cor);
@@ -466,7 +507,7 @@ function turnoInimigo() {
         mostrarDanoFlutuante(ancI.x, ancI.y, `+${drenado}`, '#88ff99');
         extra = ` Drenou ${drenado} HP para si.`;
     }
-    setLog(`${inimigoAtual.nome} usa ${at.nome}! Sofreste ${dano} de dano.${extra}`);
+    setLog(`${inimigoAtual.nome} usa ${at.nome}! Sofreste ${dano} de dano.${escudoExtra}${extra}`);
     refreshHpUI();
 
     if (playerStats.hp <= 0) {

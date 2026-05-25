@@ -82,6 +82,23 @@ export const ATAQUES = {
         hits: 3,
         anim: { tipo: 'danca', cor: '#ffd86a', lunge: 1.3, dur: 940, impacto: 260, impacto2: 540, impacto3: 820, shake: 7 },
     },
+    // BUFF DEFENSIVO — vendido pela Bruxa das Poções.
+    // Não causa dano: aplica véu místico que reduz o dano recebido em 35%
+    // durante 5 rondas. Consome o turno do jogador.
+    escudo_mistico: {
+        id: 'escudo_mistico',
+        nome: 'Véu Arcano',
+        desc: 'Reduz o dano sofrido em 35% durante 5 rondas.',
+        icone: '🛡',
+        cooldown: 6,
+        multATK: 0,
+        bonusMin: 0, bonusMax: 0,
+        precisao: 1.0,
+        hits: 0,
+        magico: true,
+        buff: { tipo: 'reducao_dano', valor: 0.35, duracao: 5 },
+        anim: { tipo: 'talho', cor: '#b385ff', lunge: 0, dur: 700, impacto: 320, shake: 0 },
+    },
     // Ataque MÁGICO — vendido pelo mercador na loja.
     // Golpe único e devastador com energia arcana.
     relampago_arcano: {
