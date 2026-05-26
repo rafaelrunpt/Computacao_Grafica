@@ -17,7 +17,7 @@ setOnPlayerDerrotado(() => {
 import { getItens, usarItem, adicionarItem, CATALOGO, quantidade as qtdItem } from './inventario.js';
 import { playSFX, switchMusic, stopMusic, tocarFanfarraVitoria, tocarSomAtaquePlayer, tocarSomAtaqueInimigo } from './audio.js';
 import { mostrarRecompensa } from '../ui/popup-recompensa.js';
-import { player } from '../entities/jogador.js';
+import { player, setEspadaMaoVisivel } from '../entities/jogador.js';
 import {
     mostrarCombateUI, esconderCombateUI, setCombateHandlers,
     setHpInimigo, setHpPlayer, setLog, setBotoesAtivos, preencherItens,
@@ -27,7 +27,10 @@ import {
     getSlotAtaque, getCooldownSlot, podeUsarSlot,
     aplicarCooldown, tickCooldowns, resetCooldowns, resolverAtaque,
 } from './ataques.js';
-import { lancarAnimacaoAtaque } from '../ui/combate-anims.js';
+import { lancarAnimacaoAtaque, lancarEfeitoBuff, dispararProjetilSprite, playFramesFX } from '../ui/combate-anims.js';
+import { animarAtaqueWraith } from '../entities/inimigo-wraith.js';
+import { combateCamera } from '../core/renderer.js';
+import * as THREE from 'three';
 
 export const estadoJogo = { emCombate: false, combateX: 0, combateZ: 0 };
 
@@ -154,6 +157,7 @@ export function iniciarCombateEm(x, z, tipo = 'wraith') {
     if (estadoJogo.emCombate || playerStats.derrotado) return;
     estadoJogo.combateX = x;
     estadoJogo.combateZ = z;
+    _resetItemCooldowns();
     _tipoEncontro = (tipo === 'nucleo') ? 'nucleo' : 'wraith';
     setTipoInimigo(_tipoEncontro);
     iniciarCombate();
@@ -219,11 +223,11 @@ function nivelDificuldade() {
 //   efeito  — null | 'enfraquecer' | 'roubo'    som — chave em audio.js
 //   cor     — tinta (rgb) do flash    perigo — 1..3, mostrado pelos Óculos
 const ATAQUES_WRAITH = [
-    { nome: 'Toque do Vazio',     multATK: 1.00,          efeito: null,          som: 'toque',     cor: '130,70,200',  perigo: 1 },
-    { nome: 'Garra Dilacerante',  multATK: 1.65,          efeito: null,          som: 'garra',     cor: '255,60,90',   perigo: 3 },
-    { nome: 'Sopro Corrompido',   multATK: 0.85,          efeito: 'enfraquecer', som: 'sopro',     cor: '100,200,130', perigo: 2 },
-    { nome: 'Dreno Espectral',    multATK: 1.00,          efeito: 'roubo',       som: 'dreno',     cor: '200,90,255',  perigo: 2 },
-    { nome: 'Estilhaço do Vazio', multATK: 0.60, hits: 2, efeito: null,          som: 'estilhaco', cor: '90,140,255',  perigo: 2 },
+    { nome: 'Foice do Vazio',         multATK: 1.30,          efeito: null,          som: 'garra',     cor: '180,80,255', perigo: 3 },
+    { nome: 'Lua Cárdena',            multATK: 1.10,          efeito: 'roubo',       som: 'dreno',     cor: '200,90,255', perigo: 2 },
+    { nome: 'Verberação Fantasmal',   multATK: 0.70, hits: 2, efeito: null,          som: 'estilhaco', cor: '170,70,230', perigo: 2 },
+    { nome: 'Espinho Rúnico',         multATK: 0.85,          efeito: 'enfraquecer', som: 'sopro',     cor: '150,60,220', perigo: 2 },
+    { nome: 'Talho Profano',          multATK: 1.45,          efeito: null,          som: 'toque',     cor: '190,70,255', perigo: 3 },
 ];
 const ATAQUES_NUCLEO = [
     { nome: 'Lascas do Vazio',   multATK: 1.00, efeito: null,          som: 'cuspo',  cor: '170,90,235',  perigo: 1 },
@@ -340,8 +344,9 @@ function acaoAtacarSlot(idx) {
             _escudoValor = at.buff.valor;
             _atualizarStatusPlayer();
             const ancP = _ancoraCombatente('player');
-            mostrarDanoFlutuante(ancP.x, ancP.y, '🛡 VÉU', '#c4a0ff');
+            mostrarDanoFlutuante(ancP.x, ancP.y, 'VÉU', '#c4a0ff');
             pulsarPlayer('180,130,255');
+            lancarEfeitoBuff(at, ancP);
             setLog(`Invocaste ${at.nome}! Dano reduzido em ${Math.round(at.buff.valor * 100)}% por ${at.buff.duracao} rondas.`);
         }
         const animDur = (at.anim && at.anim.dur) || 700;
@@ -409,19 +414,64 @@ function acaoAtacarSlot(idx) {
     bloquearTurno(animDur + 100, vaiVencer ? finalizarVitoria : turnoInimigo);
 }
 
+// ----------------------------------------------------------------------
+// COOLDOWNS DE ITENS (específico do combate actual)
+// ----------------------------------------------------------------------
+const _itemCooldowns = {}; // { id: turnos }
+
+function _tickItemCooldowns() {
+    for (const id in _itemCooldowns) {
+        if (_itemCooldowns[id] > 0) _itemCooldowns[id]--;
+    }
+}
+
+function _resetItemCooldowns() {
+    for (const id in _itemCooldowns) delete _itemCooldowns[id];
+}
+
+function _podeUsarItem(id) {
+    return (_itemCooldowns[id] || 0) <= 0;
+}
+
+function _aplicarCooldownItem(id, turnos = 3) {
+    _itemCooldowns[id] = turnos;
+}
+
+function _getItensComCD() {
+    return getItens().map(it => ({
+        ...it,
+        cooldown: _itemCooldowns[it.id] || 0
+    }));
+}
+
 function acaoItem(item) {
     if (turnoBloqueado) return;
     if (item.quantidade <= 0) return;
+    
+    // Verifica cooldown
+    if (!_podeUsarItem(item.id)) {
+        setLog(`Ainda não podes usar ${item.nome} novamente (aguarda ${_itemCooldowns[item.id]} rondas).`);
+        return;
+    }
+
     const r = usarItem(item.id);
     setLog(r.mensagem);
     refreshHpUI();
-    // refresca o painel para mostrar nova quantidade
-    preencherItens(getItens(), acaoItem);
+
     if (!r.ok) {
-        // tentativa inválida não consome turno
+        preencherItens(_getItensComCD(), acaoItem);
         setBotoesAtivos(true);
         return;
     }
+
+    // Aplica cooldown se for consumível (poção)
+    if (item.efeito && (item.efeito.tipo === 'curar' || item.efeito.tipo === 'curarTotal')) {
+        _aplicarCooldownItem(item.id, 3);
+    }
+
+    // refresca o painel para mostrar nova quantidade e cooldown
+    preencherItens(_getItensComCD(), acaoItem);
+
     // Igual ao ataque: a fase de desvio mantém-se a correr enquanto o item
     // é usado — o jogador tem de continuar a esquivar.
     bloquearTurno(800, turnoInimigo);
@@ -440,11 +490,14 @@ function acaoFugir() {
 }
 
 function _devolverTurnoAoPlayer() {
+    _tickItemCooldowns();
     setBotoesAtivos(true);
     _atualizarPresagio();
     if (isBossMode() && !playerStats.derrotado && inimigoAtual.hp > 0) {
         iniciarFaseDesvio();
     }
+    // actualiza a UI do alforge se estiver aberto para mostrar novos CDs
+    preencherItens(_getItensComCD(), acaoItem);
 }
 
 function turnoInimigo() {
@@ -489,35 +542,156 @@ function turnoInimigo() {
         _escudoTurnos--;
         _atualizarStatusPlayer();
     }
-    receberDano(dano);
-    tocarSomAtaqueInimigo(at.som);
-    pulsarPlayer(at.cor);
-    const ancP = _ancoraCombatente('player');
-    mostrarDanoFlutuante(ancP.x, ancP.y, `-${dano}`, '#ff5060');
 
-    // efeito do golpe
-    let extra = '';
-    if (at.efeito === 'enfraquecer') {
-        _setEnfraquecido(true);
-        extra = ' O teu próximo golpe sairá enfraquecido!';
-    } else if (at.efeito === 'roubo') {
-        const drenado = Math.max(1, Math.round(dano * 0.5));
-        inimigoAtual.hp = Math.min(inimigoAtual.maxHp, inimigoAtual.hp + drenado);
-        const ancI = _ancoraCombatente('inimigo');
-        mostrarDanoFlutuante(ancI.x, ancI.y, `+${drenado}`, '#88ff99');
-        extra = ` Drenou ${drenado} HP para si.`;
-    }
-    setLog(`${inimigoAtual.nome} usa ${at.nome}! Sofreste ${dano} de dano.${escudoExtra}${extra}`);
-    refreshHpUI();
+    const aplicarDano = () => {
+        receberDano(dano);
+        tocarSomAtaqueInimigo(at.som);
+        pulsarPlayer(at.cor);
+        const ancP = _ancoraCombatente('player');
+        mostrarDanoFlutuante(ancP.x, ancP.y, `-${dano}`, '#ff5060');
 
-    if (playerStats.hp <= 0) {
-        bloquearTurno(900, finalizarDerrota);
+        let extra = '';
+        if (at.efeito === 'enfraquecer') {
+            _setEnfraquecido(true);
+            extra = ' O teu próximo golpe sairá enfraquecido!';
+        } else if (at.efeito === 'roubo') {
+            const drenado = Math.max(1, Math.round(dano * 0.5));
+            inimigoAtual.hp = Math.min(inimigoAtual.maxHp, inimigoAtual.hp + drenado);
+            const ancI = _ancoraCombatente('inimigo');
+            mostrarDanoFlutuante(ancI.x, ancI.y, `+${drenado}`, '#88ff99');
+            extra = ` Drenou ${drenado} HP para si.`;
+        }
+        setLog(`${inimigoAtual.nome} usa ${at.nome}! Sofreste ${dano} de dano.${escudoExtra}${extra}`);
+        refreshHpUI();
+
+        if (playerStats.hp <= 0) {
+            bloquearTurno(900, finalizarDerrota);
+            return;
+        }
+        _proximoAtaqueInimigo = pickAtaqueInimigo();
+        tickCooldowns();
+        atualizarSlotsUI();
+        _devolverTurnoAoPlayer();
+    };
+
+    // Wraith: tocar sequência de PNGs do ataque na posição do player.
+    if (_tipoEncontro === 'wraith') {
+        const _frames = (folder, start) => {
+            const arr = [];
+            for (let i = 0; i < 6; i++) {
+                arr.push(`assets/vfx/wraith/${folder}/Alternative_1_${String(start + i).padStart(2, '0')}.png`);
+            }
+            return arr;
+        };
+        const WRAITH_VFX = {
+            'Foice do Vazio':       _frames('foice',      1),
+            'Lua Cárdena':          _frames('lua',        7),
+            'Verberação Fantasmal': _frames('verberacao', 13),
+            'Espinho Rúnico':       _frames('espinho',    19),
+            'Talho Profano':        _frames('talho',      25),
+        };
+        const WRAITH_SOM = {
+            'Foice do Vazio':       'slash3.mp3',
+            'Lua Cárdena':          'slash4.mp3',
+            'Verberação Fantasmal': 'slash4.mp3',
+            'Espinho Rúnico':       'slash3.mp3',
+            'Talho Profano':        'slash3.mp3',
+        };
+        const WRAITH_MOVE = {
+            'Foice do Vazio':       'foice',
+            'Lua Cárdena':          'lua',
+            'Verberação Fantasmal': 'verberacao',
+            'Espinho Rúnico':       'espinho',
+            'Talho Profano':        'talho', // ataque mais pesado — usa as 2 mãos + asas
+        };
+        const frames = WRAITH_VFX[at.nome];
+        if (frames) {
+            // Animação das mãos do wraith — começa imediatamente
+            animarAtaqueWraith(getInimigoActivo(), WRAITH_MOVE[at.nome] || 'foice', 600);
+
+            // O slash aparece quando as mãos chicoteiam para a frente (~300ms depois)
+            const SLASH_DELAY = 300;
+            const somFile = WRAITH_SOM[at.nome];
+            setTimeout(() => {
+                if (somFile) {
+                    const a = new Audio(`assets/sounds/Attacks/wraith/${somFile}`);
+                    a.volume = 0.75;
+                    a.play().catch(() => {});
+                }
+            }, SLASH_DELAY);
+            // Slash sobre a cabeça/peito do player, ligeiramente para o lado do wraith.
+            const _v = new THREE.Vector3(-2.0, 2.8, 0).project(combateCamera);
+            const px = (_v.x * 0.5 + 0.5) * 100;
+            const py = (-_v.y * 0.5 + 0.5) * 100;
+
+            const animDur = 1000 / 18 * frames.length; // ~333ms a 18fps
+            setTimeout(() => {
+                // flash roxo do ecrã
+                const flash = document.createElement('div');
+                flash.style.cssText = `position:fixed;inset:0;pointer-events:none;z-index:244;background:rgba(180,80,255,0);transition:background 90ms;`;
+                document.body.appendChild(flash);
+                let flashOn = false;
+                const flashId = setInterval(() => {
+                    flashOn = !flashOn;
+                    flash.style.background = `rgba(180,80,255,${flashOn ? 0.28 : 0.05})`;
+                }, 110);
+
+                playFramesFX({
+                    frames, fps: 18, x: px, y: py, size: 60,
+                    onLastFrame: () => {
+                        clearInterval(flashId);
+                        flash.remove();
+                        aplicarDano();
+                    },
+                });
+            }, SLASH_DELAY);
+            bloquearTurno(SLASH_DELAY + animDur + 50, () => {});
+            return;
+        }
+        aplicarDano();
         return;
     }
-    _proximoAtaqueInimigo = pickAtaqueInimigo();   // telegrafa o golpe seguinte
-    tickCooldowns();
-    atualizarSlotsUI();
-    _devolverTurnoAoPlayer();
+
+    // Núcleo Corrompido dispara projéctil sprite-sheet do inimigo até ao player; dano no impacto.
+    if (_tipoEncontro === 'nucleo') {
+        const from = _ancoraCombatente('inimigo');
+        // alvo: projecta a posição 3D real do player no combate para vw/vh
+        const _v = new THREE.Vector3(-2.6, 0, 0).project(combateCamera);
+        const to = { x: (_v.x * 0.5 + 0.5) * 100, y: (-_v.y * 0.5 + 0.5) * 100 };
+        const flightMs = 700;
+
+        // Overlay que pisca enquanto o projéctil voa (cor do ataque).
+        const flash = document.createElement('div');
+        flash.style.cssText = `
+            position: fixed; inset: 0; pointer-events: none; z-index: 244;
+            background: rgba(${'180,80,255'},0); transition: background 90ms;
+        `;
+        document.body.appendChild(flash);
+
+        const shockAudio = new Audio('assets/sounds/Attacks/shock.mp3');
+        shockAudio.volume = 0.7;
+        shockAudio.play().catch(() => {});
+
+        let flashOn = false;
+        const flashId = setInterval(() => {
+            flashOn = !flashOn;
+            flash.style.background = `rgba(${'180,80,255'},${flashOn ? 0.28 : 0.05})`;
+        }, 110);
+
+        dispararProjetilSprite({
+            url: 'assets/vfx/projetilie_enim1.png',
+            cols: 4, rows: 4, frames: 16,
+            from, to, dur: flightMs, size: 105,
+            onImpact: () => {
+                clearInterval(flashId);
+                flash.remove();
+                aplicarDano();
+            },
+        });
+        bloquearTurno(flightMs + 50, () => {});
+    } else {
+        aplicarDano();
+    }
 }
 
 // ---- micro-animações (flash) ----
@@ -627,6 +801,7 @@ function finalizarFuga() {
 function sairDaArena() {
     esconderCombateUI();
     estadoJogo.emCombate = false;
+    setEspadaMaoVisivel(false);  // guarda a espada nas costas
     const eraBoss = isBossMode();
     if (eraBoss) {
         pararFaseDesvio();
@@ -654,6 +829,7 @@ function sairDaArena() {
 // ----------------------------------------------------------------------
 function iniciarCombate() {
     estadoJogo.emCombate = true;
+    setEspadaMaoVisivel(true);   // empunha a espada (esconde a das costas)
     novoInimigo();
 
     // Toca o som de transição

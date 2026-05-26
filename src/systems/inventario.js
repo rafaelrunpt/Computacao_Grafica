@@ -5,14 +5,14 @@ import { playerStats, curar, recalcularMaxHp } from './player-stats.js';
 // ----------------------------------------------------------------------
 export const CATALOGO = {
     pocao:    { id: 'pocao',  nome: 'Poção de Cura',    descricao: 'Restaura 15 pontos de vida.',  efeito: { tipo: 'curar', valor: 15 }, icone: 'assets/icones/small_potion.png' },
-    mega:     { id: 'mega',   nome: 'Poção de Grande Vigor', descricao: 'Restaura 30 pontos de vida.',  efeito: { tipo: 'curar', valor: 30 }, icone: '🧴' },
-    elixir:   { id: 'elixir', nome: 'Elixir do Abismo',  descricao: 'Restaura a vossa vitalidade por completo.', efeito: { tipo: 'curarTotal' },    icone: '⚗' },
+    mega:     { id: 'mega',   nome: 'Poção Lunar',          descricao: 'Restaura 30 pontos de vida.',  efeito: { tipo: 'curar', valor: 30 }, icone: 'assets/icones/big_potion.png' },
+    elixir:   { id: 'elixir', nome: 'Elixir do Abismo',  descricao: 'Restaura a vossa vitalidade por completo.', efeito: { tipo: 'curarTotal' },    icone: 'assets/icones/elixir_corrupto.png' },
     coroa_magica: {
         id: 'coroa_magica',
         nome: 'Coroa da Pedra Mágica',
         descricao: 'Artefacto. Aumenta a vossa força de ataque em 10%.',
         efeito: { tipo: 'equipar', slot: 'acessorio' },
-        icone: '👑',
+        icone: 'assets/icones/magic_stone_crown.png',
         equipMsg: 'Cingistes a Coroa. O vosso ataque flui com mais 10% de vigor!',
     },
     brincos_vida: {
@@ -20,7 +20,7 @@ export const CATALOGO = {
         nome: 'Brincos da Aurora',
         descricao: 'Artefacto. Concede-vos mais 10 pontos de vida máxima.',
         efeito: { tipo: 'equipar', slot: 'acessorio' },
-        icone: '💎',
+        icone: 'assets/icones/aurora_earrings.png',
         equipMsg: 'Usais agora os Brincos. A vossa vitalidade máxima aumentou!',
     },
     oculos_carga: {
@@ -28,7 +28,7 @@ export const CATALOGO = {
         nome: 'Óculos do Vidente',
         descricao: 'Artefacto. Permitem-vos prever o próximo golpe do adversário.',
         efeito: { tipo: 'equipar', slot: 'acessorio' },
-        icone: '🕶',
+        icone: 'assets/icones/oculos.png',
         equipMsg: 'Colocastes os Óculos. O futuro dos vossos inimigos é-vos agora revelado.',
     },
     aureola_caidos: {
@@ -36,7 +36,7 @@ export const CATALOGO = {
         nome: 'Auréola dos Caídos',
         descricao: 'Artefacto. Restaura 5 pontos de vida após cada triunfo em batalha.',
         efeito: { tipo: 'equipar', slot: 'acessorio' },
-        icone: '😇',
+        icone: 'assets/icones/halo_of_the_fallen.png',
         equipMsg: 'A Auréola brilha sobre vós. Recuperareis fôlego após cada vitória.',
     },
     mascara_eclipse: {
@@ -44,7 +44,7 @@ export const CATALOGO = {
         nome: 'Máscara do Eclipse',
         descricao: 'Artefacto. Concede 25% de probabilidade de evitar golpes inimigos.',
         efeito: { tipo: 'equipar', slot: 'acessorio' },
-        icone: '🌑',
+        icone: 'assets/icones/mascara_eclipse.png',
         equipMsg: 'Envergastes a Máscara. Moveis-vos agora como uma sombra, com 25% de esquiva.',
     },
     tocha: {
