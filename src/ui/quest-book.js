@@ -3,6 +3,7 @@
 // `completed`, anima um risco a atravessar o título + sumário.
 
 import { getQuestsVisiveis, onQuestChange, getQuest } from '../systems/quests.js';
+import { keyGlyph as _keyGlyph } from './glyphs.js';
 
 const STYLE_ID = 'quest-book-styles';
 if (!document.getElementById(STYLE_ID)) {
@@ -445,7 +446,7 @@ function mostrarToast(tipo, qid) {
         <div class="qbt-seal">${seal}</div>
         <div class="qbt-kicker">Códice de Encargos</div>
         <div class="qbt-title">${kicker} — ${escapeHtml(q.title)}</div>
-        <div class="qbt-sub">Premi B para consultar o vosso Códice.</div>
+        <div class="qbt-sub">Premi ${_keyGlyph('B')} para consultar o vosso Códice.</div>
     `;
     stackEl.appendChild(toast);
     const dur = 4200;

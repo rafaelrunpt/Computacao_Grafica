@@ -434,7 +434,7 @@ function mostrarEscolhas() {
     lista.forEach((escolha) => {
         const btn = document.createElement('button');
         btn.className = 'choice-btn-pixel';
-        
+
         const isAcao = escolha.id === 'atravessar_ponte' || escolha.id === 'fetch_entregar';
         if (isAcao) btn.style.borderLeftColor = currentTheme.accent;
 
@@ -448,6 +448,10 @@ function mostrarEscolhas() {
         btn.onclick = () => tratarEscolha(escolha);
         escolhasDiv.appendChild(btn);
     });
+
+    // Reset do foco do gamepad para a primeira escolha disponível.
+    _focusedChoiceIdx = 0;
+    _applyChoiceFocus();
 }
 
 function _stripHtml(s) {
@@ -833,3 +837,65 @@ export function fecharDialogo() {
 export function isDialogoAberto() {
     return dialogoAberto;
 }
+
+// --------------------------------------------------------
+// GAMEPAD — navegação por D-pad/stick + A/B
+// --------------------------------------------------------
+import { pushNavContext, popNavContext } from '../core/gamepad.js';
+import { settings as _settings } from '../systems/settings.js';
+
+let _focusedChoiceIdx = 0;
+let _navCtx = null;
+
+function _applyChoiceFocus() {
+    const btns = Array.from(escolhasDiv.children);
+    for (const b of btns) b.classList.remove('gp-focus');
+    if (_settings.inputMethod !== 'gamepad') return;
+    if (btns.length === 0) return;
+    if (_focusedChoiceIdx >= btns.length) _focusedChoiceIdx = btns.length - 1;
+    if (_focusedChoiceIdx < 0) _focusedChoiceIdx = 0;
+    const target = btns[_focusedChoiceIdx];
+    if (target) target.classList.add('gp-focus');
+}
+
+function _navChoices(dir) {
+    const btns = Array.from(escolhasDiv.children);
+    if (btns.length === 0) return;
+    if (dir === 'up')   _focusedChoiceIdx = (_focusedChoiceIdx - 1 + btns.length) % btns.length;
+    if (dir === 'down') _focusedChoiceIdx = (_focusedChoiceIdx + 1) % btns.length;
+    _applyChoiceFocus();
+}
+
+function _confirmChoice() {
+    const btns = Array.from(escolhasDiv.children);
+    const b = btns[_focusedChoiceIdx];
+    if (b) b.click();
+}
+
+function _entrarNavDialogo() {
+    if (_navCtx) return;
+    _focusedChoiceIdx = 0;
+    _navCtx = {
+        onNav: _navChoices,
+        onConfirm: _confirmChoice,
+        onCancel: () => fecharDialogo(),
+    };
+    pushNavContext(_navCtx);
+    _applyChoiceFocus();
+}
+function _sairNavDialogo() {
+    if (!_navCtx) return;
+    popNavContext(_navCtx);
+    _navCtx = null;
+    for (const b of escolhasDiv.children) b.classList.remove('gp-focus');
+}
+
+// Hooks: monitoriza overlay.style.display para registar/desregistar contexto.
+// Em vez de mexer em todas as funções export, usamos um MutationObserver
+// que segue o atributo `style` do overlay.
+const _dialogObserver = new MutationObserver(() => {
+    const visivel = overlay.style.display === 'flex';
+    if (visivel && _settings.inputMethod === 'gamepad') _entrarNavDialogo();
+    else if (!visivel) _sairNavDialogo();
+});
+_dialogObserver.observe(overlay, { attributes: true, attributeFilter: ['style'] });

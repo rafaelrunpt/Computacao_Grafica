@@ -44,6 +44,39 @@ export function registarCallbacksGamepad(cbs) {
 // de acções "one-shot" como abrir baú).
 const _prevPressed = new Array(20).fill(false);
 
+// Stack de contextos de navegação UI. Quando uma UI (combate, diálogo)
+// quer apanhar o gamepad para si, faz pushNavContext({...}) e libera com
+// popNavContext. Enquanto há um contexto activo, A/B/D-pad/sticks vão para
+// callbacks de UI em vez do mapeamento de mundo.
+//   onNav(dir)   — dir = 'up' | 'down' | 'left' | 'right'
+//   onConfirm()  — botão A (Cross)
+//   onCancel()   — botão B (Circle)
+//   onAlt()      — botão Y (Triangle), opcional
+const _navStack = [];
+export function pushNavContext(ctx) { _navStack.push(ctx); }
+export function popNavContext(ctx) {
+    const i = _navStack.lastIndexOf(ctx);
+    if (i !== -1) _navStack.splice(i, 1);
+}
+
+// Expõe globalmente para módulos não-ESM (e.g. arcano-dialogue.js IIFE).
+window.__inputNav = {
+    push: pushNavContext,
+    pop: popNavContext,
+    isGamepadMode: () => settings.inputMethod === 'gamepad',
+};
+function _activeNav() { return _navStack.length > 0 ? _navStack[_navStack.length - 1] : null; }
+
+// Debounce do stick para evitar repetições rápidas demais quando segurar.
+// Primeira "tecla" dispara imediatamente; repetições só depois de cooldown.
+const _STICK_REPEAT_INITIAL_MS = 380;
+const _STICK_REPEAT_MS = 110;
+const _navAxisState = {
+    lastDir: null,    // 'up'|'down'|'left'|'right'|null
+    lastTime: 0,
+    initial: true,
+};
+
 let _connected = false;
 let _connectedIndex = -1;
 
@@ -82,22 +115,53 @@ export function pollGamepad() {
 
     const ax = gp.axes[0] || 0;
     const ay = gp.axes[1] || 0;
-
-    // Movimento — combinação de stick + D-pad (whichever pressed wins).
     const dpadUp    = gp.buttons[12]?.pressed;
     const dpadDown  = gp.buttons[13]?.pressed;
     const dpadLeft  = gp.buttons[14]?.pressed;
     const dpadRight = gp.buttons[15]?.pressed;
 
+    const nav = _activeNav();
+
+    if (nav) {
+        // Há um contexto UI activo — gamepad alimenta a UI, não o mundo.
+        // Movimento do jogador é congelado: WASD = false.
+        keys.w = keys.a = keys.s = keys.d = false;
+
+        // D-pad: edge-triggered, dispara imediatamente.
+        _edge(12, dpadUp,    () => nav.onNav?.('up'));
+        _edge(13, dpadDown,  () => nav.onNav?.('down'));
+        _edge(14, dpadLeft,  () => nav.onNav?.('left'));
+        _edge(15, dpadRight, () => nav.onNav?.('right'));
+
+        // Stick esquerdo: com debounce/repetição (segurar dá pulsos).
+        _navStickStep(ax, ay, nav);
+
+        // Botões UI:
+        _edge(0, gp.buttons[0]?.pressed, () => nav.onConfirm?.());        // A
+        _edge(1, gp.buttons[1]?.pressed, () => nav.onCancel?.());         // B
+        _edge(3, gp.buttons[3]?.pressed, () => nav.onAlt?.());            // Y
+        _edge(2, gp.buttons[2]?.pressed, () => nav.onAux?.());            // X
+
+        // Botões "globais" que continuam mesmo em UI (pausa). Cancelam o
+        // contexto implicitamente via Esc.
+        _edge(9, gp.buttons[9]?.pressed, () => {
+            if (_onTogglePause) _onTogglePause({ preventDefault() {}, key: 'Escape' });
+        });
+        return;
+    }
+
+    // Sem contexto UI: comportamento normal de mundo.
+    // Reset de estado do stick (para a próxima vez que entrar em UI começar
+    // sem disparo "preso").
+    _navAxisState.lastDir = null;
+    _navAxisState.initial = true;
+
+    // Movimento — stick + D-pad.
     keys.w = (ay < -DEADZONE) || !!dpadUp;
     keys.s = (ay >  DEADZONE) || !!dpadDown;
     keys.a = (ax < -DEADZONE) || !!dpadLeft;
     keys.d = (ax >  DEADZONE) || !!dpadRight;
 
-    // Acções one-shot (edge-triggered). Setam a flag em `keys` que o jogo
-    // já consome (o consumer faz keys.e = false após usar). Em paralelo,
-    // disparamos os toggles registados — espelha exactamente o que o
-    // listener de keydown do teclado faz.
     _edge(0, gp.buttons[0]?.pressed, () => { keys.e = true; });           // A → E
     _edge(1, gp.buttons[1]?.pressed, () => {
         if (_onTogglePause) _onTogglePause({ preventDefault() {}, key: 'Escape' });
@@ -125,6 +189,38 @@ export function pollGamepad() {
         keys.n = true;
         if (_onToggleTocha) _onToggleTocha();
     });                                                                    // Back → N
+}
+
+// Stick em UI: usa magnitude para determinar direcção dominante (4 vias) com
+// deadzone, depois aplica repetição (primeiro pulso imediato, depois 110ms).
+function _navStickStep(ax, ay, nav) {
+    const mag = Math.hypot(ax, ay);
+    if (mag < 0.45) {
+        // Em zona morta — não dispara nada. Reset para próxima inclinação.
+        _navAxisState.lastDir = null;
+        _navAxisState.initial = true;
+        return;
+    }
+    let dir;
+    if (Math.abs(ax) > Math.abs(ay)) dir = ax > 0 ? 'right' : 'left';
+    else                              dir = ay > 0 ? 'down'  : 'up';
+
+    const now = performance.now();
+    if (dir !== _navAxisState.lastDir) {
+        // Nova direcção — pulso imediato.
+        _navAxisState.lastDir = dir;
+        _navAxisState.lastTime = now;
+        _navAxisState.initial = true;
+        nav.onNav?.(dir);
+        return;
+    }
+    // Mantém a mesma direcção — repete após cooldown progressivo.
+    const cd = _navAxisState.initial ? _STICK_REPEAT_INITIAL_MS : _STICK_REPEAT_MS;
+    if (now - _navAxisState.lastTime >= cd) {
+        _navAxisState.lastTime = now;
+        _navAxisState.initial = false;
+        nav.onNav?.(dir);
+    }
 }
 
 // Quando o jogador desliga gamepad nas definições, queremos zerar o

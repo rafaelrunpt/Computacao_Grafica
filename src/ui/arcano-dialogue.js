@@ -292,6 +292,8 @@
       this._done = false;
       this._typingTimer = null;
       this._historyOpen = false;
+      this._gpFocused = 0;
+      this._gpNavCtx = null;
 
       this._buildDOM();
       this._bindKeys();
@@ -315,6 +317,7 @@
       this._renderNameplate(npc);
       this._renderPortrait(npc);
       this._goto(startNodeId || npc.start);
+      this._gpEnterNav();
       this.opts.onOpen && this.opts.onOpen({ npcId });
       this._emit('open', { npcId });
     }
@@ -328,8 +331,56 @@
       this._currentNode = null;
       this._stopTyping();
       this._setHistoryOpen(false);
+      this._gpExitNav();
       this.opts.onClose && this.opts.onClose({ npcId: id });
       this._emit('close', { npcId: id });
+    }
+
+    // -------- Gamepad navigation --------
+    _gpApplyFocus() {
+      const btns = this.choicesEl.querySelectorAll('.arc-choice');
+      btns.forEach(b => b.classList.remove('gp-focus'));
+      if (!window.__inputNav || !window.__inputNav.isGamepadMode()) return;
+      if (btns.length === 0) return;
+      if (this._gpFocused >= btns.length) this._gpFocused = btns.length - 1;
+      if (this._gpFocused < 0) this._gpFocused = 0;
+      const t = btns[this._gpFocused];
+      if (t) t.classList.add('gp-focus');
+    }
+    _gpNav(dir) {
+      const btns = this.choicesEl.querySelectorAll('.arc-choice');
+      if (btns.length === 0) {
+        // Sem escolhas: A avança o texto.
+        if (dir === 'down' || dir === 'right') this._advance();
+        return;
+      }
+      if (dir === 'up')   this._gpFocused = (this._gpFocused - 1 + btns.length) % btns.length;
+      if (dir === 'down') this._gpFocused = (this._gpFocused + 1) % btns.length;
+      this._gpApplyFocus();
+    }
+    _gpConfirm() {
+      const btns = this.choicesEl.querySelectorAll('.arc-choice');
+      if (btns.length === 0) { this._advance(); return; }
+      const b = btns[this._gpFocused];
+      if (b) b.click();
+    }
+    _gpEnterNav() {
+      if (this._gpNavCtx || !window.__inputNav) return;
+      this._gpFocused = 0;
+      this._gpNavCtx = {
+        onNav: (d) => this._gpNav(d),
+        onConfirm: () => this._gpConfirm(),
+        onCancel: () => this.close(),
+      };
+      window.__inputNav.push(this._gpNavCtx);
+      this._gpApplyFocus();
+    }
+    _gpExitNav() {
+      if (!this._gpNavCtx || !window.__inputNav) return;
+      window.__inputNav.pop(this._gpNavCtx);
+      this._gpNavCtx = null;
+      const btns = this.choicesEl.querySelectorAll('.arc-choice');
+      btns.forEach(b => b.classList.remove('gp-focus'));
     }
 
     on(event, handler) {
@@ -537,6 +588,9 @@
         this.choicesEl.appendChild(btn);
       });
       requestAnimationFrame(() => this.choicesEl.classList.add('on'));
+      // Reset do foco do gamepad para a primeira escolha.
+      this._gpFocused = 0;
+      this._gpApplyFocus();
     }
 
     _advance() {

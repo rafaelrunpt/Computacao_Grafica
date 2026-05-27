@@ -533,11 +533,11 @@ function animateMundo(deltaTime) {
         } else if (shopDoorInteract && pb.intersectsBox(shopDoorInteract)) {
             if (isShopDesbloqueada() || zonasSulLimpas()) {
                 showPrompt('E — Adentrar a Loja');
-                if (keys.e) { switchMusic('shop', 1.0); entrarLoja(); }
+                if (keys.e) { keys.e = false; switchMusic('shop', 1.0); entrarLoja(); }
             } else { showPrompt('Purificai as zonas fustigadas do sul para adentrar'); }
         } else if (castleEnterBox && pb.intersectsBox(castleEnterBox)) {
             showPrompt('E — Adentrar o Castelo');
-            if (keys.e) { playSFX('trovao'); entrarCaselo(); }
+            if (keys.e) { keys.e = false; playSFX('trovao'); entrarCaselo(); }
         } else if (tavernEnterBox && pb.intersectsBox(tavernEnterBox)) {
             showPrompt('E — Entrar na Estalagem');
             if (keys.e) { keys.e = false; switchMusic('tavern', 1.0); entrarTavern(); }
@@ -1603,6 +1603,21 @@ function animate() {
     // está visível. Antes era um render WebGL completo por frame, mesmo com
     // o avatar idêntico ou a HUD escondida em combate/menu.
     renderAvatarIfDirty();
+
+    // Auto-clear defensivo das teclas de ACÇÃO (não as de movimento).
+    // Padrão `if (keys.e) { keys.e = false; ... }` está espalhado por toda
+    // a base; se algum bloco esquecer o reset, a flag fica "pegajosa" e o
+    // próximo frame consome-a outra vez — visível como "E sempre clicado".
+    // Limpar aqui garante semântica one-shot mesmo se o consumidor falhar:
+    // teclado volta a setar true no próximo keydown, gamepad só na próxima
+    // transição de botão (edge), e WASD/movimento ficam intactos.
+    keys.e = false;
+    keys.i = false;
+    keys.b = false;
+    keys.m = false;
+    keys.n = false;
+    keys.v = false;
+    keys.p = false;
 }
 
 criarMapa(scene);

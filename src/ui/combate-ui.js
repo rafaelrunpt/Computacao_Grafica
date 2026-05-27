@@ -573,6 +573,10 @@ export function mostrarCombateUI(nomeInimigo = 'INIMIGO CORROMPIDO') {
     actionsBar.style.display = 'grid';
     document.body.style.transform = '';
     setBotoesAtivos(true);
+    // Em modo comando, regista contexto de navegação UI para que D-pad/A/B
+    // movam o foco e activem botões em vez de cair no mundo.
+    if (settings.inputMethod === 'gamepad') _entrarNavCombate();
+    _refrescarModoCombate();
 }
 export function esconderCombateUI() {
     root.style.display = 'none';
@@ -580,6 +584,8 @@ export function esconderCombateUI() {
     playerPlate.style.display = 'none';
     logBox.style.display = 'none';
     actionsBar.style.display = 'none';
+    _sairNavCombate();
+    _refrescarModoCombate();
 }
 
 // --------------------------------------------------------
@@ -587,6 +593,182 @@ export function esconderCombateUI() {
 // --------------------------------------------------------
 export const KEY_LABELS_ACCAO = ['J', 'K', 'L'];
 export const KEY_LABELS_SLOT  = ['1', '2', '3', '4'];
+
+// --------------------------------------------------------
+// GAMEPAD — navegação por D-pad/stick + A/B
+// --------------------------------------------------------
+import { pushNavContext, popNavContext } from '../core/gamepad.js';
+import { settings, onSettingChange } from '../systems/settings.js';
+import { keyGlyph as _keyGlyph, psGlyph as _psGlyph } from './glyphs.js';
+
+let _navCtx = null;          // contexto registado em pushNavContext
+let _focusedAction = 0;      // 0..2 → btnAtacar/Itens/Fugir
+let _focusedSlot   = 0;      // 0..3 → ataques (2×2)
+let _focusedItem   = 0;      // 0..N → linhas do alforge
+
+// Estado actual: 'actions' | 'attacks' | 'items'
+function _currentPanel() {
+    if (ataquesPanel.style.display !== 'none') return 'attacks';
+    if (itemsPanel.style.display   !== 'none') return 'items';
+    return 'actions';
+}
+
+function _actionBtns() { return [btnAtacar, btnItens, btnFugir]; }
+function _itemBtns()   { return Array.from(itemsPanel.querySelectorAll('.item-row')); }
+
+function _applyFocusCss() {
+    if (settings.inputMethod !== 'gamepad') {
+        // Limpa todos os focos visuais quando o gamepad não está activo.
+        for (const el of document.querySelectorAll('.gp-focus')) el.classList.remove('gp-focus');
+        return;
+    }
+    const panel = _currentPanel();
+    const all = [..._actionBtns(), ...btnSlots, ..._itemBtns()];
+    for (const el of all) el.classList.remove('gp-focus');
+    let target = null;
+    if (panel === 'actions') target = _actionBtns()[_focusedAction];
+    else if (panel === 'attacks') target = btnSlots[_focusedSlot];
+    else if (panel === 'items') target = _itemBtns()[_focusedItem];
+    if (target) target.classList.add('gp-focus');
+}
+
+function _moveFocus(dir) {
+    const panel = _currentPanel();
+    if (panel === 'actions') {
+        // 3 botões horizontais
+        if (dir === 'left')  _focusedAction = (_focusedAction + 2) % 3;
+        if (dir === 'right') _focusedAction = (_focusedAction + 1) % 3;
+        // up/down: ignorado
+    } else if (panel === 'attacks') {
+        // 2×2 grid: 0 1 / 2 3
+        const row = Math.floor(_focusedSlot / 2);
+        const col = _focusedSlot % 2;
+        if (dir === 'left')  _focusedSlot = row * 2 + ((col + 1) % 2);
+        if (dir === 'right') _focusedSlot = row * 2 + ((col + 1) % 2);
+        if (dir === 'up' || dir === 'down') _focusedSlot = (_focusedSlot + 2) % 4;
+    } else if (panel === 'items') {
+        const n = _itemBtns().length;
+        if (n === 0) return;
+        if (dir === 'up')   _focusedItem = (_focusedItem - 1 + n) % n;
+        if (dir === 'down') _focusedItem = (_focusedItem + 1) % n;
+    }
+    _applyFocusCss();
+}
+
+function _confirm() {
+    const panel = _currentPanel();
+    if (panel === 'actions') {
+        const b = _actionBtns()[_focusedAction];
+        if (b) b.click();
+        // Após abrir ataques/itens, fixa o foco no primeiro elemento.
+        if (_currentPanel() === 'attacks') _focusedSlot = _firstEnabled(btnSlots);
+        if (_currentPanel() === 'items')   _focusedItem = 0;
+    } else if (panel === 'attacks') {
+        const b = btnSlots[_focusedSlot];
+        if (b && !b.disabled) b.click();
+        // O slot fecha o painel ao executar — refrescamos no fim.
+    } else if (panel === 'items') {
+        const rows = _itemBtns();
+        const r = rows[_focusedItem];
+        if (r) r.click();
+    }
+    _applyFocusCss();
+}
+
+function _cancel() {
+    const panel = _currentPanel();
+    if (panel === 'attacks') { ataquesPanel.style.display = 'none'; _applyFocusCss(); return; }
+    if (panel === 'items')   { itemsPanel.style.display = 'none';   _applyFocusCss(); return; }
+    // Em 'actions' não há para onde fechar; ignora.
+}
+
+function _firstEnabled(btns) {
+    for (let i = 0; i < btns.length; i++) if (!btns[i].disabled) return i;
+    return 0;
+}
+
+// Hook: quando o painel actions volta a abrir (por exemplo após esconder
+// ataques/itens), garantir que o foco visual está actualizado.
+const _origMostrarCombate = mostrarCombateUI;
+// (sem alteração; registamos o nav context dentro de mostrarCombateUI)
+
+// Em modo comando, esconde os hints de teclado [J/U] [1] etc. e dá-lhes
+// um sinal visual mais subtil. O .gp-focus em si vem do glyphs.js.
+(function _injectCombateGamepadCss() {
+    if (document.getElementById('combate-gp-css')) return;
+    const s = document.createElement('style');
+    s.id = 'combate-gp-css';
+    s.textContent = `
+        body.input-gamepad .pix-btn .key,
+        body.input-gamepad .tech-slot .key,
+        body.input-gamepad .item-row .key { display: none !important; }
+    `;
+    document.head.appendChild(s);
+})();
+
+// Legenda flutuante: "✕ Confirmar  ○ Voltar  D-pad/Stick navegar".
+// Aparece sempre que estamos em modo comando e a UI de combate está visível.
+const _gpHintBar = document.createElement('div');
+_gpHintBar.id = 'combate-gp-hint';
+_gpHintBar.style.cssText = `
+    position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+    z-index: 110; pointer-events: none;
+    background: rgba(10,5,18,0.85);
+    border: 1px solid rgba(212,168,48,0.5);
+    border-radius: 8px;
+    padding: 6px 14px;
+    color: #ffe9a0;
+    font-family: 'Pixelify Sans', monospace;
+    font-size: 12px; letter-spacing: 1px;
+    display: none; gap: 14px;
+    align-items: center;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+`;
+_gpHintBar.innerHTML = `
+    <span>${_psGlyph('cross')} <span style="margin-left:4px;">Confirmar</span></span>
+    <span>${_psGlyph('circle')} <span style="margin-left:4px;">Voltar</span></span>
+    <span>${_psGlyph('dpad')} <span style="margin-left:4px;">Navegar</span></span>
+`;
+document.body.appendChild(_gpHintBar);
+
+function _refrescarModoCombate() {
+    const gp = settings.inputMethod === 'gamepad';
+    document.body.classList.toggle('input-gamepad', gp);
+    const visivel = root.style.display !== 'none';
+    _gpHintBar.style.display = (gp && visivel) ? 'flex' : 'none';
+}
+
+function _entrarNavCombate() {
+    if (_navCtx) return; // já activo
+    _focusedAction = 0;
+    _focusedSlot   = _firstEnabled(btnSlots);
+    _focusedItem   = 0;
+    _navCtx = {
+        onNav: _moveFocus,
+        onConfirm: _confirm,
+        onCancel: _cancel,
+    };
+    pushNavContext(_navCtx);
+    _applyFocusCss();
+}
+function _sairNavCombate() {
+    if (!_navCtx) return;
+    popNavContext(_navCtx);
+    _navCtx = null;
+    // limpa o foco visual
+    for (const el of document.querySelectorAll('.gp-focus')) el.classList.remove('gp-focus');
+}
+
+// Re-aplica/limpa o foco quando o jogador troca de input em runtime.
+onSettingChange('inputMethod', (v) => {
+    _refrescarModoCombate();
+    if (root.style.display === 'none') return;
+    if (v === 'gamepad') _entrarNavCombate();
+    else                  _sairNavCombate();
+});
+
+// Sincroniza a classe `input-gamepad` no body assim que o módulo carrega.
+_refrescarModoCombate();
 export const KEY_LABELS_ITEM  = ['Q', 'W', 'E', 'R'];
 
 // --------------------------------------------------------

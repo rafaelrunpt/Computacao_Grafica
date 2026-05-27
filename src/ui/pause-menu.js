@@ -1,11 +1,12 @@
 // --------------------------------------------------------
 // MENU DE TRÉGUA — abre/fecha com ESC ou P
 // --------------------------------------------------------
-import { settings, setSetting, resetSettings } from '../systems/settings.js';
+import { settings, setSetting, resetSettings, onSettingChange } from '../systems/settings.js';
 import { playerStats, getAtkEfetivo } from '../systems/player-stats.js';
 import { CATALOGO as CATALOGO_INV } from '../systems/inventario.js';
 import { estado, lojaPlayer } from '../core/transicoes.js';
 import { lojaSpawnPos } from '../world/loja.js';
+import { kbGlyph, psGlyph } from './glyphs.js';
 
 let _aberto = false;
 let _bloqueado = false;
@@ -175,8 +176,56 @@ function renderAudio() {
     conteudo.appendChild(r4);
 }
 
+// Seletor "Teclado vs Comando" — dois botões grandes, igual ao modal inicial.
+function _inputMethodChoice(selectedIdx, onChange) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = `display:flex;gap:8px;`;
+    const opts = [
+        { icon: '⌨',  label: 'TECLADO', val: 'keyboard' },
+        { icon: '🎮', label: 'COMANDO', val: 'gamepad'  },
+    ];
+    const btns = [];
+    const paint = (i) => {
+        btns.forEach((b, j) => {
+            const sel = j === i;
+            b.style.background  = sel ? 'rgba(212,168,48,0.18)' : 'rgba(40,28,12,0.5)';
+            b.style.borderColor = sel ? '#d4a830' : 'rgba(176,120,64,0.5)';
+            b.style.color       = sel ? '#ffe9a0' : '#a08060';
+            b.style.boxShadow   = sel ? '0 0 12px rgba(212,168,48,0.3), inset 0 0 10px rgba(212,168,48,0.12)' : 'none';
+        });
+    };
+    opts.forEach((opt, i) => {
+        const b = document.createElement('button');
+        b.style.cssText = `
+            flex:1; padding: 9px 10px;
+            border: 1.5px solid rgba(176,120,64,0.5);
+            border-radius: 6px;
+            background: rgba(40,28,12,0.5);
+            color: #a08060;
+            font-family: inherit; cursor: pointer;
+            display:flex; align-items:center; justify-content:center; gap:8px;
+            transition: all .15s ease;
+        `;
+        b.innerHTML = `<span style="font-size:18px;">${opt.icon}</span><span style="font-size:11px;letter-spacing:2px;">${opt.label}</span>`;
+        b.onclick = () => { paint(i); onChange(opts[i].val); };
+        btns.push(b);
+        wrap.appendChild(b);
+    });
+    paint(selectedIdx);
+    return wrap;
+}
+
 function renderJogabilidade() {
     conteudo.innerHTML = '';
+
+    const rInput = row();
+    rInput.appendChild(labelLine('Método de Comando'));
+    rInput.appendChild(_inputMethodChoice(
+        settings.inputMethod === 'gamepad' ? 1 : 0,
+        (v) => setSetting('inputMethod', v),
+    ));
+    conteudo.appendChild(rInput);
+
     const r1 = row(); r1.appendChild(labelLine('Agilidade da Mão (Rato)'));
     r1.appendChild(slider(0.1, 3.0, 0.05, settings.mouseSensitivity, v => setSetting('mouseSensitivity', v), 'x'));
     conteudo.appendChild(r1);
@@ -276,19 +325,61 @@ function renderIluminacao() {
 }
 
 function renderControlos() {
+    // Cada linha mostra Acção | Teclado | Comando (PlayStation). A coluna do
+    // método de input activo (settings.inputMethod) é destacada — o resto
+    // fica esbatido para guiar o jogador sem esconder o outro mapeamento.
+    const wasdKb = `${kbGlyph('W')} ${kbGlyph('A')} ${kbGlyph('S')} ${kbGlyph('D')}`;
+    const wasdGp = `${psGlyph('lstick')} <span style="opacity:.55;margin:0 4px;">ou</span> ${psGlyph('dpad')}`;
+    const escKb  = `${kbGlyph('Esc')} <span style="opacity:.55;">/</span> ${kbGlyph('P')}`;
+    const escGp  = `${psGlyph('circle')} <span style="opacity:.55;">/</span> ${psGlyph('options')}`;
+
+    const linhas = [
+        { acao: 'Deslocamento',   kb: wasdKb,         gp: wasdGp },
+        { acao: 'Interagir / Falar / Entrar', kb: kbGlyph('E'), gp: psGlyph('cross') },
+        { acao: 'Inventário',     kb: kbGlyph('I'),   gp: psGlyph('triangle') },
+        { acao: 'Códice de Encargos', kb: kbGlyph('B'), gp: psGlyph('square') },
+        { acao: 'Arsenal de Batalha', kb: kbGlyph('V'), gp: psGlyph('l1') },
+        { acao: 'Mapa',           kb: kbGlyph('M'),   gp: psGlyph('r1') },
+        { acao: 'Tocha do Viajante', kb: kbGlyph('N'), gp: psGlyph('share') },
+        { acao: 'Trégua / Ajustes',  kb: escKb,       gp: escGp },
+    ];
+
+    const isGp = settings.inputMethod === 'gamepad';
+    const colHi  = 'color:#ffe9a0;';
+    const colDim = 'color:#a08560;opacity:0.55;';
+
+    const linhasHtml = linhas.map(l => `
+        <tr style="border-bottom:1px dashed rgba(200,169,110,0.12);">
+            <td style="padding:7px 10px;color:#c8a96e;letter-spacing:0.5px;">${l.acao}</td>
+            <td style="padding:7px 10px;text-align:center;${isGp ? colDim : colHi}">${l.kb}</td>
+            <td style="padding:7px 10px;text-align:center;${isGp ? colHi : colDim}">${l.gp}</td>
+        </tr>
+    `).join('');
+
     conteudo.innerHTML = `
-        <div style="font-size:14px;line-height:1.8;">
+        <div style="font-size:14px;line-height:1.6;">
             <div style="font-size:13px;color:#c8a96e;letter-spacing:1px;margin-bottom:8px;">MANEJO</div>
+
+            <div style="font-size:11px;color:${isGp ? '#a08050' : '#ffe9a0'};margin-bottom:6px;letter-spacing:1px;">
+                Em uso: <b style="color:${isGp ? '#ff9090' : '#a0ffc8'};">${isGp ? 'COMANDO' : 'TECLADO'}</b>
+                <span style="opacity:.6;">— podeis trocar em Ajustes (Manejo).</span>
+            </div>
+
             <table style="width:100%;border-collapse:collapse;font-family:'Courier New',monospace;font-size:13px;">
-                <tr><td style="padding:4px 8px;color:#ffe0a0;width:120px;">W A S D</td><td>Deslocamento</td></tr>
-                <tr><td style="padding:4px 8px;color:#ffe0a0;">E</td><td>Interagir / Dialogar / Entrar</td></tr>
-                <tr><td style="padding:4px 8px;color:#ffe0a0;">I</td><td>Inventário</td></tr>
-                <tr><td style="padding:4px 8px;color:#ffe0a0;">M</td><td>Mapa / Minimapa</td></tr>
-                <tr><td style="padding:4px 8px;color:#ffe0a0;">L</td><td>Pergaminhos de Alquimia (Debug)</td></tr>
-                <tr><td style="padding:4px 8px;color:#ffe0a0;">ESC / P</td><td>Trégua</td></tr>
+                <thead>
+                    <tr style="text-align:center;font-size:11px;color:#8a6a30;letter-spacing:2px;">
+                        <th style="padding:6px;text-align:left;">ACÇÃO</th>
+                        <th style="padding:6px;${isGp ? 'opacity:.5;' : ''}">TECLADO</th>
+                        <th style="padding:6px;${isGp ? '' : 'opacity:.5;'}">COMANDO</th>
+                    </tr>
+                </thead>
+                <tbody>${linhasHtml}</tbody>
             </table>
+
             <div style="font-size:11px;color:#a08050;margin-top:12px;font-style:italic;">
-                Reajuste de manejo — em preparo
+                ${isGp
+                    ? 'Em combate por comando ainda vem por aí — por agora a parte de jogo no mundo está suportada.'
+                    : 'Reajuste de manejo — em preparo.'}
             </div>
         </div>
     `;
@@ -378,6 +469,15 @@ const tabs = [
 ];
 
 let _abaActiva = 'audio';
+
+// Quando o método de input muda, re-renderiza o painel aberto (Controles
+// muda os destaques, Manejo actualiza a sua selecção). Só age se o pause
+// estiver visível e a aba afectada estiver activa.
+onSettingChange('inputMethod', () => {
+    if (!_aberto) return;
+    if (_abaActiva !== 'ctrl' && _abaActiva !== 'jog' && _abaActiva !== 'tut') return;
+    const t = tabs.find(t => t.id === _abaActiva); if (t) t.render();
+});
 
 function renderTabsBar() {
     tabsBar.innerHTML = '';

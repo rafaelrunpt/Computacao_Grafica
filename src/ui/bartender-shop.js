@@ -4,6 +4,8 @@
 import { adicionarItem, CATALOGO } from '../systems/inventario.js';
 import { getCintilas, gastarCintilas, onCintilasChange } from '../systems/currency.js';
 import { ATAQUES, ataqueState, desbloquearAtaque, equiparAtaque } from '../systems/ataques.js';
+import { pushNavContext, popNavContext } from '../core/gamepad.js';
+import { settings } from '../systems/settings.js';
 
 const POCOES = [
     { id: 'pocao',  preco: 25, nome: 'Poção de Cura', desc: 'Recupera 15 HP.',           icone: 'assets/icones/small_potion.png' },
@@ -157,6 +159,40 @@ function renderListas() {
 }
 
 let _onKey = null;
+let _navCtx = null;
+let _focusedRow = 0;
+
+function _allBuyButtons() {
+    return Array.from(_root.querySelectorAll('#bs-pocoes button, #bs-ataques button'));
+}
+function _applyShopFocus() {
+    const btns = _allBuyButtons();
+    for (const b of btns) b.classList.remove('gp-focus');
+    if (settings.inputMethod !== 'gamepad') return;
+    if (btns.length === 0) return;
+    if (_focusedRow >= btns.length) _focusedRow = btns.length - 1;
+    if (_focusedRow < 0) _focusedRow = 0;
+    const t = btns[_focusedRow];
+    if (t) {
+        t.classList.add('gp-focus');
+        t.scrollIntoView({ block: 'nearest' });
+    }
+}
+function _shopNav(dir) {
+    const btns = _allBuyButtons();
+    if (btns.length === 0) return;
+    if (dir === 'up')   _focusedRow = (_focusedRow - 1 + btns.length) % btns.length;
+    if (dir === 'down') _focusedRow = (_focusedRow + 1) % btns.length;
+    _applyShopFocus();
+}
+function _shopConfirm() {
+    const btns = _allBuyButtons();
+    const b = btns[_focusedRow];
+    if (b && !b.disabled) b.click();
+    // Após comprar, a lista é re-renderizada — reaplica foco.
+    setTimeout(_applyShopFocus, 0);
+}
+
 export function abrirBartenderShop(onClose) {
     build();
     _onClose = onClose || null;
@@ -167,6 +203,18 @@ export function abrirBartenderShop(onClose) {
         if (e.code === 'Escape') { e.preventDefault(); fechar(); }
     };
     window.addEventListener('keydown', _onKey);
+
+    if (settings.inputMethod === 'gamepad') {
+        _focusedRow = 0;
+        _navCtx = {
+            onNav: _shopNav,
+            onConfirm: _shopConfirm,
+            onCancel: () => fechar(),
+        };
+        pushNavContext(_navCtx);
+        // Próximo frame: lista já renderizada → aplica foco.
+        requestAnimationFrame(_applyShopFocus);
+    }
 }
 
 function fechar() {
@@ -174,6 +222,7 @@ function fechar() {
     _aberto = false;
     _root.style.display = 'none';
     if (_onKey) { window.removeEventListener('keydown', _onKey); _onKey = null; }
+    if (_navCtx) { popNavContext(_navCtx); _navCtx = null; }
     if (_onClose) _onClose();
 }
 

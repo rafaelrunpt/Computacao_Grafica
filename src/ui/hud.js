@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { player, coroaGroup, brincosGroup, oculosGroup, aureolaGroup, mascaraGroup } from '../entities/jogador.js';
 import { playerStats, registarCallbacksStats } from '../systems/player-stats.js';
+import { formatPrompt as _formatPromptForInput } from './glyphs.js';
 
 // ---- fontes pixel (uma só vez) ----
 (function carregarFontesHUD() {
@@ -146,8 +147,32 @@ const promptEl = document.createElement('div');
 promptEl.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.65);color:#fff;padding:8px 18px;border-radius:8px;font-family:sans-serif;font-size:16px;display:none;pointer-events:none;z-index:50;';
 document.body.appendChild(promptEl);
 
-export function showPrompt(msg) { promptEl.textContent = msg; promptEl.style.display = 'block'; }
-export function hidePrompt()    { promptEl.style.display = 'none'; }
+// showPrompt é chamada todos os frames perto de um interactor — fazemos
+// cache da última mensagem para evitar reescrever innerHTML sempre.
+let _lastPromptMsg = null;
+export function showPrompt(msg) {
+    if (msg !== _lastPromptMsg) {
+        _lastPromptMsg = msg;
+        promptEl.innerHTML = _formatPromptForInput(msg);
+    }
+    if (promptEl.style.display !== 'block') promptEl.style.display = 'block';
+}
+export function hidePrompt() {
+    if (promptEl.style.display !== 'none') promptEl.style.display = 'none';
+    _lastPromptMsg = null;
+}
+
+// Re-renderiza prompt quando o método de input troca em runtime (settings),
+// para que o glyph reflicta o modo escolhido.
+import('../systems/settings.js').then(({ onSettingChange }) => {
+    onSettingChange('inputMethod', () => {
+        if (_lastPromptMsg !== null) {
+            const m = _lastPromptMsg;
+            _lastPromptMsg = null;
+            showPrompt(m);
+        }
+    });
+});
 
 let _hudVisivel = true;
 export function isHudVisivel() { return _hudVisivel; }
