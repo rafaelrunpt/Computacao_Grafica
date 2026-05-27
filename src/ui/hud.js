@@ -260,11 +260,29 @@ export function buildAvatarScene() {
     clone.traverse(c => { if (c.isMesh) cloneMeshes.push(c); });
     _avatarOriginalMeshes = origMeshes.map((o, i) => ({ orig: o, clone: cloneMeshes[i] }));
 
-    const s = 0.65;
-    avatarCam.left = -s; avatarCam.right = s;
-    avatarCam.top  =  s + 0.1; avatarCam.bottom = -s + 0.1;
-    avatarCam.position.set(0, 0.1, 2);
-    avatarCam.lookAt(0, 0.1, 0);
+    // Enquadrar a câmara com o bounding box real do clone — assim a cabeça
+    // preenche a janela octogonal em vez de ficar um quadrado pequeno no meio.
+    // Forçamos todos os acessórios visíveis durante a medição para que o
+    // enquadramento permaneça estável (não muda se um acessório aparecer).
+    const _origVis = [];
+    clone.traverse(c => { _origVis.push([c, c.visible]); c.visible = true; });
+    clone.updateMatrixWorld(true);
+    const bbox = new THREE.Box3().setFromObject(clone);
+    for (const [c, v] of _origVis) c.visible = v;
+
+    const halfW = (bbox.max.x - bbox.min.x) * 0.5;
+    const halfH = (bbox.max.y - bbox.min.y) * 0.5;
+    // Pega no maior eixo + pequena margem (10%) para o modelo encostar à
+    // borda interior da moldura sem chocar com a clip-path do canvas.
+    const half = Math.max(halfW, halfH) * 1.1;
+    const cy = (bbox.max.y + bbox.min.y) * 0.5;
+
+    avatarCam.left   = -half;
+    avatarCam.right  =  half;
+    avatarCam.top    =  half;
+    avatarCam.bottom = -half;
+    avatarCam.position.set(0, cy, 2);
+    avatarCam.lookAt(0, cy, 0);
     avatarCam.updateProjectionMatrix();
     _avatarBuilt = true;
     markAvatarDirty();

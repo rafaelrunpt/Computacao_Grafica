@@ -20,8 +20,18 @@ export function registarCallbackInput(onToggleMapa, onToggleInventario, onToggle
 // dois passos consecutivos (ex.: abrir baú + coletar logo a seguir).
 const ACTION_KEYS = new Set(['e', 'b', 'i', 'm', 'p', 'n', 'v']);
 
+// Setas mapeiam para WASD — útil em combate boss (esquiva nas lanes,
+// salto, agachamento) sem obrigar a mão direita a abandonar J/K/L.
+const ARROW_TO_WASD = {
+    'arrowup':    'w',
+    'arrowdown':  's',
+    'arrowleft':  'a',
+    'arrowright': 'd',
+};
+
 window.addEventListener('keydown', (e) => {
-    const key = e.key.toLowerCase();
+    let key = e.key.toLowerCase();
+    if (ARROW_TO_WASD[key]) key = ARROW_TO_WASD[key];
     if (Object.prototype.hasOwnProperty.call(keys, key)) {
         if (ACTION_KEYS.has(key) && e.repeat) return; // ignora auto-repeat para acções
         keys[key] = true;
@@ -36,6 +46,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => {
-    const key = e.key.toLowerCase();
+    let key = e.key.toLowerCase();
+    if (ARROW_TO_WASD[key]) key = ARROW_TO_WASD[key];
     if (Object.prototype.hasOwnProperty.call(keys, key)) keys[key] = false;
 });

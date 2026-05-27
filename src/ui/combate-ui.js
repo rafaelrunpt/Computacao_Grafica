@@ -595,105 +595,85 @@ export const KEY_LABELS_ACCAO = ['J', 'K', 'L'];
 export const KEY_LABELS_SLOT  = ['1', '2', '3', '4'];
 
 // --------------------------------------------------------
-// GAMEPAD — navegação por D-pad/stick + A/B
+// GAMEPAD — bindings DIRECTOS por botão (✕/○/□/△)
 // --------------------------------------------------------
+// Cada acção/ataque/item é executado pela tecla PS correspondente, sem
+// passar por foco/confirmação. No painel principal:
+//   ✕ → Ataque    □ → Itens    ○ → Fugir (abre confirmação)
+// No painel de ataques (2×2):
+//   slot 0 (TL) → △    slot 1 (TR) → ○
+//   slot 2 (BL) → ✕    slot 3 (BR) → □
+// No painel de poções (mesmo grid):
+//   poção 0 → △    poção 1 → ○    poção 2 → ✕    poção 3 → □
+// Na confirmação de fuga:
+//   ✕ → Sim, fugir    ○ → Voltar
+// Stick / D-pad / setas continuam a alimentar WASD (esquiva no boss).
 import { pushNavContext, popNavContext } from '../core/gamepad.js';
 import { settings, onSettingChange } from '../systems/settings.js';
 import { keyGlyph as _keyGlyph, psGlyph as _psGlyph } from './glyphs.js';
 
-let _navCtx = null;          // contexto registado em pushNavContext
-let _focusedAction = 0;      // 0..2 → btnAtacar/Itens/Fugir
-let _focusedSlot   = 0;      // 0..3 → ataques (2×2)
-let _focusedItem   = 0;      // 0..N → linhas do alforge
+let _navCtx = null;
+let _fleeConfirmOpen = false;
 
-// Estado actual: 'actions' | 'attacks' | 'items'
+// Mapeamento botão → índice de slot/poção dentro do grid 2×2.
+const _SLOT_FOR_BTN = { triangle: 0, circle: 1, cross: 2, square: 3 };
+// Botão correspondente a cada slot/poção, para mostrar o glyph na UI.
+const _BTN_FOR_SLOT = ['triangle', 'circle', 'cross', 'square'];
+
 function _currentPanel() {
-    if (ataquesPanel.style.display !== 'none') return 'attacks';
-    if (itemsPanel.style.display   !== 'none') return 'items';
+    if (_fleeConfirmOpen)                       return 'flee-confirm';
+    if (ataquesPanel.style.display !== 'none')  return 'attacks';
+    if (itemsPanel.style.display   !== 'none')  return 'items';
     return 'actions';
 }
+function _potionRows() {
+    return Array.from(itemsPanel.querySelectorAll('.item-row[data-potion="1"]'));
+}
 
-function _actionBtns() { return [btnAtacar, btnItens, btnFugir]; }
-function _itemBtns()   { return Array.from(itemsPanel.querySelectorAll('.item-row')); }
+function _dispatchButton(btn) {
+    // btn = 'cross' | 'circle' | 'square' | 'triangle'
+    // Se os botões estão desactivos (fase de esquiva do boss, animação),
+    // ignoramos — o jogador está só a olhar.
+    if (btnAtacar.disabled && !_fleeConfirmOpen) return;
 
-function _applyFocusCss() {
-    if (settings.inputMethod !== 'gamepad') {
-        // Limpa todos os focos visuais quando o gamepad não está activo.
-        for (const el of document.querySelectorAll('.gp-focus')) el.classList.remove('gp-focus');
+    const panel = _currentPanel();
+    if (panel === 'flee-confirm') {
+        if (btn === 'cross')  _confirmarFuga();
+        if (btn === 'circle') _cancelarFuga();
         return;
     }
-    const panel = _currentPanel();
-    const all = [..._actionBtns(), ...btnSlots, ..._itemBtns()];
-    for (const el of all) el.classList.remove('gp-focus');
-    let target = null;
-    if (panel === 'actions') target = _actionBtns()[_focusedAction];
-    else if (panel === 'attacks') target = btnSlots[_focusedSlot];
-    else if (panel === 'items') target = _itemBtns()[_focusedItem];
-    if (target) target.classList.add('gp-focus');
-}
-
-function _moveFocus(dir) {
-    const panel = _currentPanel();
     if (panel === 'actions') {
-        // 3 botões horizontais
-        if (dir === 'left')  _focusedAction = (_focusedAction + 2) % 3;
-        if (dir === 'right') _focusedAction = (_focusedAction + 1) % 3;
-        // up/down: ignorado
-    } else if (panel === 'attacks') {
-        // 2×2 grid: 0 1 / 2 3
-        const row = Math.floor(_focusedSlot / 2);
-        const col = _focusedSlot % 2;
-        if (dir === 'left')  _focusedSlot = row * 2 + ((col + 1) % 2);
-        if (dir === 'right') _focusedSlot = row * 2 + ((col + 1) % 2);
-        if (dir === 'up' || dir === 'down') _focusedSlot = (_focusedSlot + 2) % 4;
-    } else if (panel === 'items') {
-        const n = _itemBtns().length;
-        if (n === 0) return;
-        if (dir === 'up')   _focusedItem = (_focusedItem - 1 + n) % n;
-        if (dir === 'down') _focusedItem = (_focusedItem + 1) % n;
+        if (btn === 'cross')  btnAtacar.click();
+        if (btn === 'square') btnItens.click();
+        if (btn === 'circle') _abrirConfirmacaoFuga();
+        return;
     }
-    _applyFocusCss();
-}
-
-function _confirm() {
-    const panel = _currentPanel();
-    if (panel === 'actions') {
-        const b = _actionBtns()[_focusedAction];
-        if (b) b.click();
-        // Após abrir ataques/itens, fixa o foco no primeiro elemento.
-        if (_currentPanel() === 'attacks') _focusedSlot = _firstEnabled(btnSlots);
-        if (_currentPanel() === 'items')   _focusedItem = 0;
-    } else if (panel === 'attacks') {
-        const b = btnSlots[_focusedSlot];
+    if (panel === 'attacks') {
+        const i = _SLOT_FOR_BTN[btn];
+        if (i == null) return;
+        const b = btnSlots[i];
         if (b && !b.disabled) b.click();
-        // O slot fecha o painel ao executar — refrescamos no fim.
-    } else if (panel === 'items') {
-        const rows = _itemBtns();
-        const r = rows[_focusedItem];
-        if (r) r.click();
+        return;
     }
-    _applyFocusCss();
+    if (panel === 'items') {
+        const i = _SLOT_FOR_BTN[btn];
+        if (i == null) return;
+        const rows = _potionRows();
+        const r = rows[i];
+        if (r) r.click();
+        return;
+    }
 }
 
-function _cancel() {
-    const panel = _currentPanel();
-    if (panel === 'attacks') { ataquesPanel.style.display = 'none'; _applyFocusCss(); return; }
-    if (panel === 'items')   { itemsPanel.style.display = 'none';   _applyFocusCss(); return; }
-    // Em 'actions' não há para onde fechar; ignora.
+function _shoulderBack() {
+    // L1/R1 fecham qualquer subpainel — não há binding directo para "back"
+    // (○ está reservado para Fugir no painel principal).
+    if (_fleeConfirmOpen)                       { _cancelarFuga(); return; }
+    if (ataquesPanel.style.display !== 'none')  { ataquesPanel.style.display = 'none'; return; }
+    if (itemsPanel.style.display   !== 'none')  { itemsPanel.style.display   = 'none'; return; }
 }
 
-function _firstEnabled(btns) {
-    for (let i = 0; i < btns.length; i++) if (!btns[i].disabled) return i;
-    return 0;
-}
-
-// Hook: quando o painel actions volta a abrir (por exemplo após esconder
-// ataques/itens), garantir que o foco visual está actualizado.
-const _origMostrarCombate = mostrarCombateUI;
-// (sem alteração; registamos o nav context dentro de mostrarCombateUI)
-
-// Em modo comando, esconde os hints de teclado [J/U] [1] etc. e dá-lhes
-// um sinal visual mais subtil. O .gp-focus em si vem do glyphs.js.
+// CSS para esconder hints de teclado em modo comando.
 (function _injectCombateGamepadCss() {
     if (document.getElementById('combate-gp-css')) return;
     const s = document.createElement('style');
@@ -702,12 +682,59 @@ const _origMostrarCombate = mostrarCombateUI;
         body.input-gamepad .pix-btn .key,
         body.input-gamepad .tech-slot .key,
         body.input-gamepad .item-row .key { display: none !important; }
+        /* Glyph PS sobreposto a cada botão accionável em modo comando */
+        body.input-gamepad .gp-glyph-overlay {
+            position: absolute; top: 4px; right: 6px;
+            z-index: 3; pointer-events: none;
+        }
+        body:not(.input-gamepad) .gp-glyph-overlay { display: none; }
     `;
     document.head.appendChild(s);
 })();
 
-// Legenda flutuante: "✕ Confirmar  ○ Voltar  D-pad/Stick navegar".
-// Aparece sempre que estamos em modo comando e a UI de combate está visível.
+// Aplica overlays de glyph PS aos botões de combate (top-level + ataques +
+// poções). Idempotente — apaga antes de re-adicionar.
+function _aplicarGlyphsBotoes() {
+    // Top-level
+    const map = [
+        [btnAtacar, 'cross'],
+        [btnItens,  'square'],
+        [btnFugir,  'circle'],
+    ];
+    for (const [btn, g] of map) {
+        btn.style.position = 'relative';
+        btn.querySelector('.gp-glyph-overlay')?.remove();
+        const ov = document.createElement('span');
+        ov.className = 'gp-glyph-overlay';
+        ov.innerHTML = _psGlyph(g);
+        btn.appendChild(ov);
+    }
+    // Slots de ataque
+    btnSlots.forEach((b, i) => {
+        b.style.position = 'relative';
+        b.querySelector('.gp-glyph-overlay')?.remove();
+        const ov = document.createElement('span');
+        ov.className = 'gp-glyph-overlay';
+        ov.innerHTML = _psGlyph(_BTN_FOR_SLOT[i]);
+        b.appendChild(ov);
+    });
+    _aplicarGlyphsPocoes();
+}
+function _aplicarGlyphsPocoes() {
+    const rows = _potionRows();
+    rows.forEach((r, i) => {
+        r.style.position = 'relative';
+        r.querySelector('.gp-glyph-overlay')?.remove();
+        if (i >= 4) return;
+        const ov = document.createElement('span');
+        ov.className = 'gp-glyph-overlay';
+        ov.innerHTML = _psGlyph(_BTN_FOR_SLOT[i]);
+        r.appendChild(ov);
+    });
+}
+
+// Legenda flutuante no fundo do ecrã durante o combate em modo comando.
+// Reflecte o painel actual.
 const _gpHintBar = document.createElement('div');
 _gpHintBar.id = 'combate-gp-hint';
 _gpHintBar.style.cssText = `
@@ -724,42 +751,146 @@ _gpHintBar.style.cssText = `
     align-items: center;
     box-shadow: 0 4px 14px rgba(0,0,0,0.5);
 `;
-_gpHintBar.innerHTML = `
-    <span>${_psGlyph('cross')} <span style="margin-left:4px;">Confirmar</span></span>
-    <span>${_psGlyph('circle')} <span style="margin-left:4px;">Voltar</span></span>
-    <span>${_psGlyph('dpad')} <span style="margin-left:4px;">Navegar</span></span>
-`;
 document.body.appendChild(_gpHintBar);
+
+function _refrescarHintBar() {
+    const panel = _currentPanel();
+    let html = '';
+    if (panel === 'actions') {
+        html = `
+            <span>${_psGlyph('cross')} <span style="margin-left:4px;">Ataque</span></span>
+            <span>${_psGlyph('square')} <span style="margin-left:4px;">Itens</span></span>
+            <span>${_psGlyph('circle')} <span style="margin-left:4px;">Fugir</span></span>
+        `;
+    } else if (panel === 'attacks' || panel === 'items') {
+        html = `
+            <span style="opacity:.85;">${_psGlyph('triangle')}${_psGlyph('circle')}${_psGlyph('cross')}${_psGlyph('square')} usar</span>
+            <span>${_psGlyph('l1')} <span style="margin-left:4px;">Voltar</span></span>
+        `;
+    } else if (panel === 'flee-confirm') {
+        html = `
+            <span>${_psGlyph('cross')} <span style="margin-left:4px;">Fugir</span></span>
+            <span>${_psGlyph('circle')} <span style="margin-left:4px;">Voltar</span></span>
+        `;
+    }
+    _gpHintBar.innerHTML = html;
+}
 
 function _refrescarModoCombate() {
     const gp = settings.inputMethod === 'gamepad';
     document.body.classList.toggle('input-gamepad', gp);
     const visivel = root.style.display !== 'none';
     _gpHintBar.style.display = (gp && visivel) ? 'flex' : 'none';
+    if (gp && visivel) {
+        _aplicarGlyphsBotoes();
+        _refrescarHintBar();
+    }
+}
+
+// Observa mudanças de display dos painéis para refrescar a hint bar.
+new MutationObserver(() => _refrescarHintBar()).observe(ataquesPanel, { attributes: true, attributeFilter: ['style'] });
+new MutationObserver(() => { _aplicarGlyphsPocoes(); _refrescarHintBar(); }).observe(itemsPanel, { attributes: true, attributeFilter: ['style'] });
+
+// --------- Modal de confirmação de fuga ---------
+const _fleeModal = document.createElement('div');
+_fleeModal.id = 'combate-flee-confirm';
+_fleeModal.style.cssText = `
+    position: fixed; inset: 0;
+    z-index: 130;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(8,4,14,0.62);
+    backdrop-filter: blur(3px);
+    font-family: 'Pixelify Sans', 'Courier New', monospace;
+`;
+_fleeModal.innerHTML = `
+    <div style="
+        background: linear-gradient(180deg, #1c0e22 0%, #0b0612 100%);
+        border: 2px solid #d4a830;
+        border-radius: 10px;
+        padding: 22px 30px;
+        box-shadow: 0 0 32px rgba(212,168,48,0.4), inset 0 0 18px rgba(80,30,90,0.35);
+        max-width: 360px; text-align: center;
+        animation: combate-flee-pop 280ms cubic-bezier(.2,.9,.3,1.1) both;
+    ">
+        <div style="font-size:13px;color:#d4a830;letter-spacing:4px;margin-bottom:6px;">⚠ FUGIR ⚠</div>
+        <div style="font-size:13px;color:#e9d6a8;line-height:1.5;margin:8px 0 18px;">
+            Pretendeis abandonar o confronto?<br>
+            A coragem perdida há-de pesar.
+        </div>
+        <div style="display:flex;gap:12px;justify-content:center;">
+            <button class="flee-yes" style="
+                background: rgba(70,30,20,0.85);
+                border: 1.5px solid #c95040;
+                color: #ffd8b8;
+                padding: 9px 16px; border-radius: 7px;
+                cursor: pointer; font-family: inherit;
+                font-size: 12px; letter-spacing: 2px;
+                display:flex;align-items:center;gap:8px;
+            ">${_psGlyph('cross')} <span>SIM, FUGIR</span></button>
+            <button class="flee-no" style="
+                background: rgba(40,28,60,0.85);
+                border: 1.5px solid #8576d8;
+                color: #dccfff;
+                padding: 9px 16px; border-radius: 7px;
+                cursor: pointer; font-family: inherit;
+                font-size: 12px; letter-spacing: 2px;
+                display:flex;align-items:center;gap:8px;
+            ">${_psGlyph('circle')} <span>VOLTAR</span></button>
+        </div>
+    </div>
+`;
+document.body.appendChild(_fleeModal);
+const _fleeAnimStyle = document.createElement('style');
+_fleeAnimStyle.textContent = `
+    @keyframes combate-flee-pop {
+        0%   { transform: translateY(18px) scale(.96); opacity: 0; }
+        100% { transform: translateY(0)    scale(1);   opacity: 1; }
+    }
+`;
+document.head.appendChild(_fleeAnimStyle);
+_fleeModal.querySelector('.flee-yes').onclick = () => _confirmarFuga();
+_fleeModal.querySelector('.flee-no').onclick  = () => _cancelarFuga();
+
+function _abrirConfirmacaoFuga() {
+    _fleeConfirmOpen = true;
+    _fleeModal.style.display = 'flex';
+    _refrescarHintBar();
+}
+function _cancelarFuga() {
+    _fleeConfirmOpen = false;
+    _fleeModal.style.display = 'none';
+    _refrescarHintBar();
+}
+function _confirmarFuga() {
+    _fleeConfirmOpen = false;
+    _fleeModal.style.display = 'none';
+    if (_handlers.onFugir) _handlers.onFugir();
+    _refrescarHintBar();
 }
 
 function _entrarNavCombate() {
-    if (_navCtx) return; // já activo
-    _focusedAction = 0;
-    _focusedSlot   = _firstEnabled(btnSlots);
-    _focusedItem   = 0;
+    if (_navCtx) return;
     _navCtx = {
-        onNav: _moveFocus,
-        onConfirm: _confirm,
-        onCancel: _cancel,
+        movementPassthrough: true, // WASD continua a vir do stick/D-pad → esquiva boss
+        onCross:    () => _dispatchButton('cross'),
+        onCircle:   () => _dispatchButton('circle'),
+        onSquare:   () => _dispatchButton('square'),
+        onTriangle: () => _dispatchButton('triangle'),
+        onShoulder1: _shoulderBack,
+        onShoulder2: _shoulderBack,
     };
     pushNavContext(_navCtx);
-    _applyFocusCss();
+    _aplicarGlyphsBotoes();
+    _refrescarHintBar();
 }
 function _sairNavCombate() {
     if (!_navCtx) return;
     popNavContext(_navCtx);
     _navCtx = null;
-    // limpa o foco visual
-    for (const el of document.querySelectorAll('.gp-focus')) el.classList.remove('gp-focus');
+    _fleeConfirmOpen = false;
+    _fleeModal.style.display = 'none';
 }
 
-// Re-aplica/limpa o foco quando o jogador troca de input em runtime.
 onSettingChange('inputMethod', (v) => {
     _refrescarModoCombate();
     if (root.style.display === 'none') return;
@@ -767,7 +898,6 @@ onSettingChange('inputMethod', (v) => {
     else                  _sairNavCombate();
 });
 
-// Sincroniza a classe `input-gamepad` no body assim que o módulo carrega.
 _refrescarModoCombate();
 export const KEY_LABELS_ITEM  = ['Q', 'W', 'E', 'R'];
 
@@ -965,13 +1095,14 @@ export function preencherItens(lista, onUse) {
     const cont = document.getElementById('combate-itens-lista');
     cont.innerHTML = '';
     if (lista.length === 0) {
-        cont.innerHTML = '<div style="opacity:0.7;text-align:center;font-size:12px;color:#c8a8e0;letter-spacing:2px;padding:6px 0;">— sem objectos —</div>';
+        cont.innerHTML = '<div style="opacity:0.7;text-align:center;font-size:12px;color:#c8a8e0;letter-spacing:2px;padding:6px 0;">— sem poções —</div>';
         return;
     }
 
-    const pocoes     = lista.filter(it => it.efeito && (it.efeito.tipo === 'curar' || it.efeito.tipo === 'curarTotal'));
-    const acessorios = lista.filter(it => it.efeito && it.efeito.tipo === 'equipar');
-    const outros     = lista.filter(it => !it.efeito || (it.efeito.tipo !== 'curar' && it.efeito.tipo !== 'curarTotal' && it.efeito.tipo !== 'equipar'));
+    // O alforge de combate só apresenta poções — acessórios e diversos
+    // foram retirados do painel a pedido (equipar continua a fazer-se no
+    // inventário do mundo).
+    const pocoes = lista.filter(it => it.efeito && (it.efeito.tipo === 'curar' || it.efeito.tipo === 'curarTotal'));
 
     function header(texto) {
         const h = document.createElement('div');
@@ -984,6 +1115,9 @@ export function preencherItens(lista, onUse) {
         const idx = _idxRender++;
         const row = document.createElement('button');
         row.className = 'item-row';
+        // Marca explicitamente como poção (todas as linhas aqui são) — o
+        // sistema de gamepad filtra por este atributo para mapear os 4 botões.
+        if (!equipavel) row.dataset.potion = '1';
         
         const cd = item.cooldown || 0;
         const emCD = cd > 0;
@@ -1017,18 +1151,12 @@ export function preencherItens(lista, onUse) {
         cont.appendChild(row);
     }
 
-    if (pocoes.length > 0) {
-        header('<img src="assets/icones/big_potion.png" style="width:16px;height:16px;vertical-align:middle;margin-right:4px;image-rendering:pixelated;"> Elixires');
-        for (const it of pocoes) linha(it, false);
+    if (pocoes.length === 0) {
+        cont.innerHTML = '<div style="opacity:0.7;text-align:center;font-size:12px;color:#c8a8e0;letter-spacing:2px;padding:6px 0;">— sem poções —</div>';
+        return;
     }
-    if (acessorios.length > 0) {
-        header('◆ Acessórios');
-        for (const it of acessorios) linha(it, true);
-    }
-    if (outros.length > 0) {
-        header('◇ Diversos');
-        for (const it of outros) linha(it, false);
-    }
+    header('<img src="assets/icones/big_potion.png" style="width:16px;height:16px;vertical-align:middle;margin-right:4px;image-rendering:pixelated;"> Elixires');
+    for (const it of pocoes) linha(it, false);
 }
 
 // --------------------------------------------------------

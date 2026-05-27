@@ -124,26 +124,40 @@ export function pollGamepad() {
 
     if (nav) {
         // Há um contexto UI activo — gamepad alimenta a UI, não o mundo.
-        // Movimento do jogador é congelado: WASD = false.
-        keys.w = keys.a = keys.s = keys.d = false;
+        // Por defeito o movimento congela; mas alguns contextos (combate)
+        // pedem `movementPassthrough` para que o stick continue a alimentar
+        // WASD (ex.: fase de esquiva do boss).
+        if (nav.movementPassthrough) {
+            keys.w = (ay < -DEADZONE) || !!dpadUp;
+            keys.s = (ay >  DEADZONE) || !!dpadDown;
+            keys.a = (ax < -DEADZONE) || !!dpadLeft;
+            keys.d = (ax >  DEADZONE) || !!dpadRight;
+        } else {
+            keys.w = keys.a = keys.s = keys.d = false;
+        }
 
-        // D-pad: edge-triggered, dispara imediatamente.
+        // D-pad: edge-triggered. Em modo passthrough também dispara onNav
+        // (alguns contextos podem usar para navegação adicional).
         _edge(12, dpadUp,    () => nav.onNav?.('up'));
         _edge(13, dpadDown,  () => nav.onNav?.('down'));
         _edge(14, dpadLeft,  () => nav.onNav?.('left'));
         _edge(15, dpadRight, () => nav.onNav?.('right'));
 
-        // Stick esquerdo: com debounce/repetição (segurar dá pulsos).
-        _navStickStep(ax, ay, nav);
+        // Stick esquerdo só dispara onNav quando NÃO há passthrough — caso
+        // contrário o stick é input contínuo de movimento e não devia
+        // emitir pulsos discretos.
+        if (!nav.movementPassthrough) _navStickStep(ax, ay, nav);
 
-        // Botões UI:
-        _edge(0, gp.buttons[0]?.pressed, () => nav.onConfirm?.());        // A
-        _edge(1, gp.buttons[1]?.pressed, () => nav.onCancel?.());         // B
-        _edge(3, gp.buttons[3]?.pressed, () => nav.onAlt?.());            // Y
-        _edge(2, gp.buttons[2]?.pressed, () => nav.onAux?.());            // X
+        // Bindings directos por botão (X/O/△/□) — usado pelo combate.
+        // Caem para onConfirm/onCancel se não definidos.
+        _edge(0, gp.buttons[0]?.pressed, () => (nav.onCross    ?? nav.onConfirm)?.()); // A → ✕
+        _edge(1, gp.buttons[1]?.pressed, () => (nav.onCircle   ?? nav.onCancel )?.()); // B → ○
+        _edge(2, gp.buttons[2]?.pressed, () => (nav.onSquare   ?? nav.onAux   )?.()); // X → □
+        _edge(3, gp.buttons[3]?.pressed, () => (nav.onTriangle ?? nav.onAlt   )?.()); // Y → △
+        _edge(4, gp.buttons[4]?.pressed, () => nav.onShoulder1?.());                    // LB → L1
+        _edge(5, gp.buttons[5]?.pressed, () => nav.onShoulder2?.());                    // RB → R1
 
-        // Botões "globais" que continuam mesmo em UI (pausa). Cancelam o
-        // contexto implicitamente via Esc.
+        // Botões "globais" que continuam mesmo em UI (pausa).
         _edge(9, gp.buttons[9]?.pressed, () => {
             if (_onTogglePause) _onTogglePause({ preventDefault() {}, key: 'Escape' });
         });
