@@ -7,6 +7,11 @@ import { criarGuardiao as _criarGuardiao, removerGuardiao as _removerGuardiao } 
 import { renderer } from '../core/renderer.js';
 
 import { criarBruxa, updateBruxa } from '../entities/bruxa.js';
+import { criarSantuarios } from './santuarios.js';
+import { criarCogumelos } from './cogumelos.js';
+
+export { getSantuarios, ativarSantuario, updateSantuarios } from './santuarios.js';
+export { updateCogumelos } from './cogumelos.js';
 
 export { matBattleGrass, matBattleSky, matWater, matContTrunk, matContLeaves, matContRock, matCorruptHalo } from './shaders.js';
 export { getBridgeHeight } from './rio.js';
@@ -52,30 +57,68 @@ const _pbMax = new THREE.Vector3();
 const _bridgePt = new THREE.Vector3();
 export const grassZones = [];       // Box3[] — zonas onde há encontros
 export const battleZoneObjects = []; // [{box, meshes[], scene}] — para limpar após vitória
-export const worldParticles = [];    // THREE.Points[] para animar no loop
+export const worldParticles = [];    // THREE.Points[] — mantido por compat. (cleanup)
 
-// ---- Partículas Corrompidas (Estilo Combate) ----
+// ---- Partículas Corrompidas (vertex-shader, sem upload CPU) ----
+// Antes: 40 verts × N zonas × pos.needsUpdate=true a 30Hz = upload contínuo.
+// Agora: posição base + fase animadas no vertex shader; só uTime é actualizado.
+const _zoneParticlesMat = new THREE.ShaderMaterial({
+    uniforms: {
+        uTime:       { value: 0 },
+        uMaxY:       { value: 4.0 },
+        uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 1.5) },
+    },
+    vertexShader: `
+        attribute float aPhase;
+        attribute float aSpeed;
+        uniform float uTime;
+        uniform float uMaxY;
+        uniform float uPixelRatio;
+        void main() {
+            vec3 p = position;
+            p.y = mod(position.y + uTime * aSpeed + aPhase, uMaxY);
+            vec4 mv = modelViewMatrix * vec4(p, 1.0);
+            gl_Position = projectionMatrix * mv;
+            gl_PointSize = uPixelRatio * 6.0 * (35.0 / max(-mv.z, 1.0));
+        }
+    `,
+    fragmentShader: `
+        void main() {
+            vec2 c = gl_PointCoord - 0.5;
+            float d = length(c);
+            if (d > 0.5) discard;
+            float a = smoothstep(0.5, 0.0, d);
+            gl_FragColor = vec4(0.75, 0.56, 1.0, a * 0.7);
+        }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+});
+
+export function updateZoneParticles(dt) {
+    _zoneParticlesMat.uniforms.uTime.value += dt * 0.35;
+}
+
 function criarParticulasZona(scene, cx, cz, raio) {
     const partCount = 40;
     const geo = new THREE.BufferGeometry();
-    const pos = new Float32Array(partCount * 3);
+    const pos    = new Float32Array(partCount * 3);
+    const phase  = new Float32Array(partCount);
+    const speed  = new Float32Array(partCount);
     for (let i = 0; i < partCount; i++) {
         const a = Math.random() * Math.PI * 2;
         const rd = Math.random() * raio;
         pos[i * 3 + 0] = Math.cos(a) * rd;
         pos[i * 3 + 1] = Math.random() * 4.0;
         pos[i * 3 + 2] = Math.sin(a) * rd;
+        phase[i] = Math.random() * 4.0;
+        speed[i] = 0.8 + Math.random() * 0.6;
     }
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const mat = new THREE.PointsMaterial({
-        color: 0xc090ff,
-        size: 0.08,
-        transparent: true,
-        opacity: 0.7,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-    });
-    const pts = new THREE.Points(geo, mat);
+    geo.setAttribute('aPhase',   new THREE.BufferAttribute(phase, 1));
+    geo.setAttribute('aSpeed',   new THREE.BufferAttribute(speed, 1));
+    const pts = new THREE.Points(geo, _zoneParticlesMat);
     pts.position.set(cx, 0, cz);
     scene.add(pts);
     worldParticles.push(pts);
@@ -399,16 +442,64 @@ function _buildInstancedForest() {
 }
 
 // ---- rocha ----
+// Antes: 1 Mesh + 1 DodecahedronGeometry por rocha (~100 draw-calls + outro
+// tanto no shadow pass). Agora: enfileiramos os spawns e construimos
+// InstancedMesh por (chunk N/S, clean/contaminated). Geometria partilhada
+// (raio = 1), a escala vai na matriz da instância.
+const _rockSpawnList = []; // { scene, x, z, r, contaminada, chunk }
+const _rockGeoBase = new THREE.DodecahedronGeometry(1, 0);
+
 function criarRocha(scene, x, z, r = 0.6, contaminada = false) {
-    const mat = contaminada ? matContRock : matRock;
-    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), mat);
-    rock.position.set(x, r * 0.5, z);
-    rock.rotation.y = Math.random() * Math.PI;
-    rock.castShadow = true;
-    scene.add(rock);
-    fadeables.push(rock);
-    cullables.push(rock);
-    addCollider(new THREE.Box3().setFromObject(rock));
+    _rockSpawnList.push({ scene, x, z, r, contaminada, chunk: z >= 0 ? 'N' : 'S' });
+    // Collider individual (a hitbox usa o raio real)
+    addCollider(new THREE.Box3(
+        new THREE.Vector3(x - r * 0.75, 0, z - r * 0.75),
+        new THREE.Vector3(x + r * 0.75, r, z + r * 0.75)
+    ));
+}
+
+function _buildInstancedRocks() {
+    if (_rockSpawnList.length === 0) return;
+    // key = chunk + "_" + (contaminada ? 'c' : 'n')
+    const groups = new Map();
+    for (const s of _rockSpawnList) {
+        const key = s.chunk + (s.contaminada ? '_c' : '_n');
+        let g = groups.get(key);
+        if (!g) {
+            g = { items: [], contaminada: s.contaminada, scene: s.scene, cx: 0, cz: 0 };
+            groups.set(key, g);
+        }
+        g.items.push(s);
+        g.cx += s.x; g.cz += s.z;
+    }
+    const _yAxis = new THREE.Vector3(0, 1, 0);
+    const quat = new THREE.Quaternion();
+    const pos  = new THREE.Vector3();
+    const scl  = new THREE.Vector3();
+    const m4   = new THREE.Matrix4();
+    for (const g of groups.values()) {
+        const mat = g.contaminada ? matContRock : matRock;
+        const im = new THREE.InstancedMesh(_rockGeoBase, mat, g.items.length);
+        for (let i = 0; i < g.items.length; i++) {
+            const it = g.items[i];
+            quat.setFromAxisAngle(_yAxis, _hash2(it.x, it.z) * Math.PI * 2);
+            pos.set(it.x, it.r * 0.5, it.z);
+            scl.set(it.r, it.r, it.r);
+            m4.compose(pos, quat, scl);
+            im.setMatrixAt(i, m4);
+        }
+        im.instanceMatrix.needsUpdate = true;
+        im.castShadow = true;
+        im.receiveShadow = true;
+        im.computeBoundingSphere?.();
+        // NÃO entra em cullables: o frontal-cull à granularidade do chunk
+        // estava a fazer o chunk inteiro piscar quando o seu centróide
+        // (a meio do mapa) cruzava o limiar do dot-product. Com 4 InstancedMesh
+        // no total o ganho de cull manual é negligível; o three.js continua a
+        // aplicar frustum culling pela bounding sphere do InstancedMesh.
+        g.scene.add(im);
+    }
+    _rockSpawnList.length = 0;
 }
 
 // ---- zona de batalha ----
@@ -902,7 +993,9 @@ function naFaixaCaminho(x, z) {
 
 // banda do rio + ponte (rio horizontal em z≈0): nenhuma árvore nasce na
 // água, na ponte, nas bocas do rio nem na margem imediata — só relva.
-const RIO_BANDA = 7;
+// 10 cobre o sandBlend do shader do terreno (2.8 → 6.5+2.5 de noise ≈ 9.0),
+// evitando árvores plantadas na faixa de areia da margem.
+const RIO_BANDA = 10;
 function naFaixaRio(z) {
     return Math.abs(z) < RIO_BANDA;
 }
@@ -969,10 +1062,15 @@ const _estruturas = [
     { x: SHOP_CX, z: SHOP_CZ, r: 9 },   // loja
     { x: -44.9,   z: 33.5,    r: 12 },  // Gobble Inn (taverna)
     { x: 0,       z: -80,     r: 16 },  // castelo + muralhas
-    { x: -18,     z: -43,     r: 3 },   // Potion Shop (nova posição)
+    { x: -18,     z: -42.5,   r: 7 },   // Potion Shop (6×7 em x:-21..-15, z:-46..-39)
     { x: 0,       z: 4.5,     r: 4 },   // guardião / saída da ponte
     { x: 70,      z: 70,      r: 4 },   // baú da coroa
     { x: -78,     z: 78,      r: 4 },   // baú da máscara
+    // Santuários — sincronizados com src/world/santuarios.js
+    { x:  62,     z:  52,     r: 3 },
+    { x:  54,     z: -72,     r: 3 },
+    { x: -68,     z: -64,     r: 3 },
+    { x: -68,     z:  58,     r: 3 },
     ];const _propsColocadas = []; // {x,z,r}
 const MIN_DIST_ARVORES   = 3.2; // distância mínima entre árvores
 const MIN_DIST_ROCHA_ARV = 2.2; // árvore→rocha
@@ -1063,6 +1161,21 @@ export function criarMapa(scene) {
         placed++;
     }
 
+    // Remove uma árvore duplicada perto de (-15, -12): havia duas demasiado
+    // próximas que o filtro de distância não apanhou. Mantém só a primeira.
+    {
+        const ALVO_X = -15, ALVO_Z = -12, R2 = 2.5 * 2.5;
+        let mantida = false;
+        for (let i = _treeSpawnList.length - 1; i >= 0; i--) {
+            const t = _treeSpawnList[i];
+            const dx = t.x - ALVO_X, dz = t.z - ALVO_Z;
+            if (dx * dx + dz * dz < R2) {
+                if (mantida) _treeSpawnList.splice(i, 1);
+                else mantida = true;
+            }
+        }
+    }
+
     // rochas norte
     placed = 0;
     for (let i = 0; i < 400 && placed < 50; i++) {
@@ -1095,6 +1208,11 @@ export function criarMapa(scene) {
 
     criarMontanhas(scene);
 
+    // Santuários e cogumelos brilhantes — decoração + buff permanente.
+    // Os santuários têm colisão (pedestal sólido).
+    criarSantuarios(scene, addCollider);
+    criarCogumelos(scene);
+
     // baú escondido (canto do mapa, longe dos caminhos e da zona corrupta)
     _bau = new Bau(scene, 70, 0, 70, 'coroa_magica');
     colliders.push({ box: _bau.getColliderBox(), isRiver: false }); _gridDirty = true;
@@ -1107,6 +1225,7 @@ export function criarMapa(scene) {
     // já carregou) ou marcar para construir assim que o load terminar.
     _criarMapaDone = true;
     _tryBuildForest();
+    _buildInstancedRocks();
 
     console.log('Mapa criado.');
 }
@@ -1172,6 +1291,7 @@ export function resetZonasBatalha() {
         battleZoneObjects.push(zoneObj);
         restored++;
     }
+    // Santuários NÃO resetam ao dormir — bênção é permanente.
     return restored;
 }
 

@@ -64,7 +64,7 @@ function mostrarToastCintilas(qtd) {
         opacity: 0; transform: translateX(20px);
         transition: opacity 0.25s ease-out, transform 0.3s cubic-bezier(.2,.7,.3,1);
     `;
-    t.innerHTML = `<span style="color:#a0c8ff">✦</span> +${qtd} Cintilas`;
+    t.innerHTML = `<img src="assets/icones/cintilas.png" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;"> +${qtd} Cintilas`;
     stack.appendChild(t);
     requestAnimationFrame(() => {
         t.style.opacity = '1';

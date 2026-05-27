@@ -612,12 +612,15 @@ export function setLog(texto) {
         // Cores do dano nas crónicas:
         //   • dano do jogador no inimigo  → AMARELO (#ffe080)
         //   • dano do inimigo no jogador  → AZUL    (#8ab8ff)
-        // Heurística: linhas com "causaste" = jogador a atacar; o resto
-        // (sofreste / inimigo usa / drenou / …) = dano contra o jogador.
-        if (lowT.includes('causaste')) {
-            displayT = displayT.replace(/(\d+\s*(?:de\s+)?dano)/gi, '<span style="color:#ffe080;font-weight:700;">$1</span>');
+        // Heurística pelas mensagens reais do combate.js:
+        //   • Jogador ataca: "Lâmina Veloz! 7 de dano." (sem palavras-chave)
+        //   • Inimigo ataca: "<Nome> usa <ataque>! Sofreste X de dano."
+        // → detectamos dano sofrido por "sofreste"/"sofreu"; o resto é dano causado.
+        const danoSofrido = lowT.includes('sofreste') || lowT.includes('sofreu') || lowT.includes('drenou');
+        if (danoSofrido) {
+            displayT = displayT.replace(/(\d+\s*(?:de\s+)?dano)/gi, '<span style="color:#ff5060;font-weight:700;text-shadow:0 0 4px rgba(255,80,80,0.5);">$1</span>');
         } else {
-            displayT = displayT.replace(/(\d+\s*(?:de\s+)?dano)/gi, '<span style="color:#8ab8ff;font-weight:700;text-shadow:0 0 4px rgba(100,160,255,0.45);">$1</span>');
+            displayT = displayT.replace(/(\d+\s*(?:de\s+)?dano)/gi, '<span style="color:#ffe080;font-weight:700;">$1</span>');
         }
 
         // Cura do jogador → VERDE (não tinge a cura do inimigo)

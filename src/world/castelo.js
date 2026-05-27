@@ -80,6 +80,9 @@ const _texLoader = new THREE.TextureLoader();
 const _lazyQueue = []; // { tex, url }
 let _texturasCarregadas = false;
 function _lazyTex(url) {
+    // Texturas do castelo convertidas para WebP (-90% no disco/download).
+    // Redirecciona qualquer .png para .webp transparentemente.
+    url = url.replace(/\.png$/, '.webp');
     const tex = new THREE.Texture();
     _lazyQueue.push({ tex, url });
     return tex;

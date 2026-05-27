@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { matWater, madeiraTex, madeira2Tex } from './shaders.js';
+import { matWater, madeiraTex, madeira2Tex, areiaTex } from './shaders.js';
 
 // As texturas de madeira carregam-se assincronamente. Antes clonávamos a
 // textura por peça (76 clones) para variar o `repeat` — isso disparava 76×
@@ -28,6 +28,25 @@ export function criarRio(scene, colliders, fadeables, cullables) {
     function addCol(box, isRiver = false) { colliders.push({ box, isRiver }); }
 
     const RW = 6, RL = 210, RZ = BRIDGE_Z;
+
+    // Leito de areia por baixo da água. Clone da textura partilhada porque
+    // precisamos de um repeat denso e dedicado ao rio (a partilhada está
+    // calibrada para o shader do terreno).
+    const sandTex = areiaTex.clone();
+    sandTex.needsUpdate = true;
+    sandTex.wrapS = sandTex.wrapT = THREE.RepeatWrapping;
+    sandTex.repeat.set(RL / 4, RW / 4);   // ~4 m por tile, anisotropia razoável
+    const matSandBed = new THREE.MeshStandardMaterial({
+        map: sandTex,
+        color: 0xb8a682,        // areia molhada — mais escura/ocre que a margem
+        roughness: 1.0,
+    });
+    const sandBed = new THREE.Mesh(new THREE.PlaneGeometry(RL, RW + 0.4, 1, 1), matSandBed);
+    sandBed.rotation.x = -Math.PI / 2;
+    sandBed.position.set(0, 0.02, RZ);    // logo abaixo da água (y=0.05)
+    sandBed.receiveShadow = true;
+    scene.add(sandBed);
+
     const riverMesh = new THREE.Mesh(new THREE.PlaneGeometry(RL, RW, 1, 1), matWater);
     riverMesh.rotation.x = -Math.PI / 2;
     riverMesh.position.set(0, 0.05, RZ);

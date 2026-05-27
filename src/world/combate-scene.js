@@ -68,8 +68,8 @@ combateScene.add(arenaPulse);
 // textura reaproveitada (sem assets novos): a obsidiana dá o detalhe de
 // superfície e a corrupção roxa irrompe/brilha pelas fendas.
 const _arenaTexLoader = new THREE.TextureLoader();
-const arenaRochaTex = _arenaTexLoader.load('assets/textures/boss/skin/Rock035_1K-PNG_Color.png');
-const arenaRochaNrm = _arenaTexLoader.load('assets/textures/boss/skin/Rock035_1K-PNG_NormalGL.png');
+const arenaRochaTex = _arenaTexLoader.load('assets/textures/boss/skin/Rock035_1K-PNG_Color.webp');
+const arenaRochaNrm = _arenaTexLoader.load('assets/textures/boss/skin/Rock035_1K-PNG_NormalGL.webp');
 for (const t of [arenaRochaTex, arenaRochaNrm]) t.wrapS = t.wrapT = THREE.RepeatWrapping;
 
 export const matCombateChao = new THREE.ShaderMaterial({

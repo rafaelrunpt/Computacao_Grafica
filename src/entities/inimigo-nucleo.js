@@ -30,9 +30,10 @@ const _Y = new THREE.Vector3(0, 1, 0);
 
 // Carrega o trio Color/Normal/Roughness de um set de textura existente.
 function _carregarSet(base, repeat = [1, 1]) {
-    const map          = _texLoader.load(base + 'Color.png');
-    const normalMap    = _texLoader.load(base + 'NormalGL.png');
-    const roughnessMap = _texLoader.load(base + 'Roughness.png');
+    // Texturas do castelo e do boss estão em WebP (-90% no disco).
+    const map          = _texLoader.load(base + 'Color.webp');
+    const normalMap    = _texLoader.load(base + 'NormalGL.webp');
+    const roughnessMap = _texLoader.load(base + 'Roughness.webp');
     map.colorSpace = THREE.SRGBColorSpace;
     for (const t of [map, normalMap, roughnessMap]) {
         t.wrapS = t.wrapT = THREE.RepeatWrapping;

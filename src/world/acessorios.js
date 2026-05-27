@@ -3,7 +3,7 @@
 // Cada função devolve um THREE.Group em escala "troféu" (~0.18 raio
 // para coroa). Para colocar no boss, basta scale para ~1.0–1.6.
 // ----------------------------------------------------------------------
-import * as THREE from 'three';
+import * as THREE from 'three';2
 
 export function criarAcessorioCoroa() {
     const g = new THREE.Group();
@@ -45,8 +45,8 @@ export function criarAcessorioBrincos() {
 
 export function criarAcessorioAureola() {
     const g = new THREE.Group();
-    const matOuro = new THREE.MeshStandardMaterial({ color: 0xfff0a0, emissive: 0xffd040, emissiveIntensity: 1.8, roughness: 0.15, metalness: 0.95 });
-    const matGlow = new THREE.MeshBasicMaterial({ color: 0xfff0a8, transparent: true, opacity: 0.22 });
+    const matOuro = new THREE.MeshStandardMaterial({ color: 0xa0c8ff, emissive: 0x4080ff, emissiveIntensity: 1.8, roughness: 0.15, metalness: 0.95 });
+    const matGlow = new THREE.MeshBasicMaterial({ color: 0xa8d0ff, transparent: true, opacity: 0.22 });
     const anel = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.018, 12, 36), matOuro);
     anel.rotation.x = Math.PI / 2;
     g.add(anel);

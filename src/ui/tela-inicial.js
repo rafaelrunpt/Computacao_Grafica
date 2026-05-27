@@ -11,6 +11,82 @@ import { settings, setSetting } from '../systems/settings.js';
 let _ativa = true;
 let _onIniciar = null;
 
+// garante que as fontes pixel estão carregadas (também usadas no loadout/HUD)
+if (!document.querySelector('link[data-anidia-pixel-fonts]')) {
+    const _lnk = document.createElement('link');
+    _lnk.rel = 'stylesheet';
+    _lnk.dataset.anidiaPixelFonts = '1';
+    _lnk.href = 'https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap';
+    document.head.appendChild(_lnk);
+}
+
+// ---- SVG pixel art (sol / lua) e padrões dither para os fundos ----
+const _svgToUri = (svg) => `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
+
+const SUN_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' shape-rendering='crispEdges'>
+<rect x='5' y='0' width='2' height='1' fill='#fff4a0'/>
+<rect x='5' y='11' width='2' height='1' fill='#fff4a0'/>
+<rect x='0' y='5' width='1' height='2' fill='#fff4a0'/>
+<rect x='11' y='5' width='1' height='2' fill='#fff4a0'/>
+<rect x='1' y='1' width='1' height='1' fill='#ffe87a'/>
+<rect x='10' y='1' width='1' height='1' fill='#ffe87a'/>
+<rect x='1' y='10' width='1' height='1' fill='#ffe87a'/>
+<rect x='10' y='10' width='1' height='1' fill='#ffe87a'/>
+<rect x='4' y='2' width='4' height='1' fill='#ffd86b'/>
+<rect x='3' y='3' width='6' height='1' fill='#ffd86b'/>
+<rect x='2' y='4' width='8' height='1' fill='#ffd86b'/>
+<rect x='2' y='5' width='8' height='2' fill='#ffc858'/>
+<rect x='2' y='7' width='8' height='1' fill='#ffb84a'/>
+<rect x='3' y='8' width='6' height='1' fill='#ffb84a'/>
+<rect x='4' y='9' width='4' height='1' fill='#f0a838'/>
+<rect x='4' y='4' width='2' height='2' fill='#fff4a0'/>
+</svg>`;
+const MOON_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' shape-rendering='crispEdges'>
+<rect x='4' y='1' width='3' height='1' fill='#e8d4ff'/>
+<rect x='2' y='2' width='5' height='1' fill='#d8b8ff'/>
+<rect x='1' y='3' width='5' height='1' fill='#d8b8ff'/>
+<rect x='1' y='4' width='4' height='1' fill='#a878d0'/>
+<rect x='1' y='5' width='4' height='2' fill='#a878d0'/>
+<rect x='1' y='7' width='4' height='1' fill='#7a4dc0'/>
+<rect x='1' y='8' width='5' height='1' fill='#7a4dc0'/>
+<rect x='2' y='9' width='5' height='1' fill='#5a1f8c'/>
+<rect x='4' y='10' width='3' height='1' fill='#5a1f8c'/>
+<rect x='2' y='3' width='1' height='1' fill='#fff'/>
+<rect x='2' y='6' width='1' height='1' fill='#e8d4ff'/>
+</svg>`;
+const SUN_URL  = _svgToUri(SUN_SVG);
+const MOON_URL = _svgToUri(MOON_SVG);
+
+// Padrões dither 8×8 (tiling) — fundo pixel para os botões/pills
+const DITHER_GOLD = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'>
+<rect width='8' height='8' fill='#2a1808'/>
+<rect x='0' y='0' width='1' height='1' fill='#3a2410'/>
+<rect x='4' y='0' width='1' height='1' fill='#3a2410'/>
+<rect x='2' y='2' width='1' height='1' fill='#3a2410'/>
+<rect x='6' y='2' width='1' height='1' fill='#3a2410'/>
+<rect x='1' y='4' width='1' height='1' fill='#1a0e04'/>
+<rect x='5' y='4' width='1' height='1' fill='#1a0e04'/>
+<rect x='3' y='6' width='1' height='1' fill='#3a2410'/>
+<rect x='7' y='6' width='1' height='1' fill='#1a0e04'/>
+</svg>`;
+const DITHER_PURPLE = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'>
+<rect width='8' height='8' fill='#1c0a30'/>
+<rect x='0' y='0' width='1' height='1' fill='#2a1248'/>
+<rect x='4' y='0' width='1' height='1' fill='#2a1248'/>
+<rect x='2' y='2' width='1' height='1' fill='#3a1a60'/>
+<rect x='6' y='2' width='1' height='1' fill='#2a1248'/>
+<rect x='1' y='4' width='1' height='1' fill='#10041c'/>
+<rect x='5' y='4' width='1' height='1' fill='#10041c'/>
+<rect x='3' y='6' width='1' height='1' fill='#2a1248'/>
+<rect x='7' y='6' width='1' height='1' fill='#10041c'/>
+</svg>`;
+const DITHER_GOLD_URL   = _svgToUri(DITHER_GOLD);
+const DITHER_PURPLE_URL = _svgToUri(DITHER_PURPLE);
+
+// fundos compostos: dither pixel + leve gradiente vertical para profundidade
+const BTN_BG_DAY   = `${DITHER_GOLD_URL}, linear-gradient(180deg, rgba(60,30,8,0.92) 0%, rgba(30,18,8,0.95) 100%)`;
+const BTN_BG_NIGHT = `${DITHER_PURPLE_URL}, linear-gradient(180deg, rgba(60,30,90,0.92) 0%, rgba(28,10,48,0.96) 100%)`;
+
 // --------------------------------------------------------
 // CÂMARA — órbita lenta com leve dolly + bobbing
 // --------------------------------------------------------
@@ -108,12 +184,12 @@ center.appendChild(ornaTop);
 
 // pequena marca acima do título (símbolo mágico estilizado)
 const marca = document.createElement('div');
-marca.textContent = '✦';
 marca.style.cssText = `
-    font-size: clamp(14px, 1.6vw, 22px);
-    color: #d4a830;
-    text-shadow: 0 0 12px #d4a830;
-    margin: 6px 0 -4px 0;
+    width: clamp(20px, 2.4vw, 32px);
+    height: clamp(20px, 2.4vw, 32px);
+    margin: 6px auto -4px;
+    background: ${SUN_URL} center/contain no-repeat;
+    image-rendering: pixelated;
     animation: anidiaMarcaSpin 8s linear infinite;
 `;
 center.appendChild(marca);
@@ -123,24 +199,31 @@ const titulo = document.createElement('h1');
 titulo.textContent = 'ANIDIA';
 titulo.style.cssText = `
     margin: 14px 0 8px 0;
-    font-size: clamp(64px, 12vw, 148px);
-    font-weight: bold;
-    letter-spacing: clamp(8px, 2.2vw, 26px);
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(36px, 7vw, 86px);
+    font-weight: normal;
+    letter-spacing: clamp(4px, 1vw, 12px);
+    /* Gradiente em tiras duras (pixel-band) — amarelo → laranja → vermelho → roxo escorrido */
     background: linear-gradient(180deg,
-        #fffbe0 0%,
-        #ffe87a 25%,
-        #ffb84a 55%,
-        #ff7a3a 80%,
-        #c84020 100%);
+        #ffeb8a 0%,    #ffeb8a 18%,
+        #f0a838 18%,   #f0a838 38%,
+        #c8682a 38%,   #c8682a 55%,
+        #8a2848 55%,   #8a2848 72%,
+        #5a1f8c 72%,   #5a1f8c 88%,
+        #2a0a48 88%,   #2a0a48 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     color: transparent;
-    filter: drop-shadow(0 0 24px rgba(255,200,80,0.75))
-            drop-shadow(0 0 50px rgba(255,150,60,0.45))
-            drop-shadow(0 5px 0 rgba(0,0,0,0.85));
-    animation: anidiaShimmer 4s ease-in-out infinite,
-               anidiaTituloIn 1.6s ease-out;
+    /* outline pixel chunky preto à volta + sombra dura */
+    filter:
+        drop-shadow( 3px  0   0 #000) drop-shadow(-3px  0   0 #000)
+        drop-shadow( 0    3px 0 #000) drop-shadow( 0   -3px 0 #000)
+        drop-shadow( 3px  3px 0 #000) drop-shadow(-3px  3px 0 #000)
+        drop-shadow( 0    8px 0 rgba(0,0,0,0.85));
+    animation: anidiaShimmer 4s steps(4, end) infinite,
+               anidiaTituloIn 1.6s ease-out,
+               anidiaTituloBob 2.6s ease-in-out infinite 1.6s;
 `;
 center.appendChild(titulo);
 
@@ -152,16 +235,11 @@ sub.style.cssText = `
     font-style: italic;
     font-weight: 300;
     letter-spacing: clamp(3px, 0.8vw, 8px);
-    color: #b8a8c8;
-    -webkit-text-stroke: 1.5px #5a1f8c;
+    color: #d878e8;
+    font-family: 'VT323', monospace;
     text-shadow:
-        -1px -1px 0 #5a1f8c,
-         1px -1px 0 #5a1f8c,
-        -1px  1px 0 #5a1f8c,
-         1px  1px 0 #5a1f8c,
-         0    0   8px #7a2fc0,
-         0    0   18px rgba(120,40,200,0.75),
-         0    0   32px rgba(60,10,90,0.6);
+        1px 1px 0 #3a1050,
+        2px 2px 0 #1a0428;
     margin-top: -2px;
     opacity: 0.92;
     animation:
@@ -196,25 +274,24 @@ function _menuBtn(label, delay) {
         position: relative;
         width: clamp(280px, 32vw, 420px);
         padding: 14px 20px;
-        font-family: 'Georgia', serif;
-        font-size: clamp(14px, 1.6vw, 19px);
-        letter-spacing: 4px;
-        color: #ffe0a0;
-        background: linear-gradient(180deg,
-            rgba(60,30,8,0.92) 0%,
-            rgba(30,18,8,0.95) 100%);
-        border: 1.5px solid #c8a96e;
-        border-radius: 4px;
+        font-family: 'Press Start 2P', monospace;
+        font-size: clamp(10px, 1.1vw, 13px);
+        letter-spacing: 3px;
+        color: #e8d8a8;
+        background: ${BTN_BG_DAY};
+        background-size: 8px 8px, cover;
+        background-repeat: repeat, no-repeat;
+        image-rendering: pixelated;
+        border: 2px solid #7a6a48;
         cursor: pointer;
         text-align: center;
-        text-shadow: 0 0 10px rgba(255,210,80,0.45), 0 2px 3px #000;
+        text-shadow: 1px 1px 0 #000;
         box-shadow:
-            inset 0 0 12px rgba(212,168,48,0.18),
-            0 4px 14px rgba(0,0,0,0.55),
-            0 0 0 1px rgba(255,210,80,0.05);
-        transition: transform 0.25s ease, box-shadow 0.25s ease,
-                    background 0.25s ease, letter-spacing 0.25s ease,
-                    border-color 0.25s ease;
+            inset 0 0 0 1px rgba(15,8,24,0.6),
+            0 3px 0 #000;
+        transition: color 0.12s ease, letter-spacing 0.15s ease,
+                    border-color 0.15s ease, background 0.2s ease,
+                    transform 0.05s ease;
         opacity: 0;
         animation: anidiaBtnIn 0.9s ease-out ${delay}s forwards;
         overflow: hidden;
@@ -236,26 +313,35 @@ function _menuBtn(label, delay) {
     b.appendChild(shine);
 
     b.addEventListener('mouseenter', () => {
-        b.style.transform = 'translateY(-2px) scale(1.04)';
-        b.style.letterSpacing = '6px';
-        b.style.borderColor = '#ffe0a0';
-        b.style.boxShadow = `
-            inset 0 0 20px rgba(212,168,48,0.35),
-            0 8px 26px rgba(0,0,0,0.7),
-            0 0 28px rgba(255,210,80,0.45)`;
+        const noite = !!window.__anidiaNoite;
+        b.style.color = noite ? '#fff' : '#fff4a0';
+        b.style.letterSpacing = '4px';
+        b.style.borderColor = noite ? '#d8b8ff' : '#ffd86b';
         shine.style.left = '120%';
     });
     b.addEventListener('mouseleave', () => {
+        const noite = !!window.__anidiaNoite;
+        b.style.color = noite ? '#e8d4ff' : '#e8d8a8';
+        b.style.letterSpacing = '3px';
+        b.style.borderColor = noite ? '#7a4dc0' : '#7a6a48';
         b.style.transform = '';
-        b.style.letterSpacing = '4px';
-        b.style.borderColor = '#c8a96e';
         b.style.boxShadow = `
-            inset 0 0 12px rgba(212,168,48,0.18),
-            0 4px 14px rgba(0,0,0,0.55),
-            0 0 0 1px rgba(255,210,80,0.05)`;
+            inset 0 0 0 1px rgba(15,8,24,0.6),
+            0 3px 0 #000`;
         shine.style.left = '-60%';
     });
-    b.addEventListener('mousedown', () => { b.style.transform = 'translateY(0) scale(0.98)'; });
+    b.addEventListener('mousedown', () => {
+        const noite = !!window.__anidiaNoite;
+        b.style.color = noite ? '#d8b8ff' : '#ffd86b';
+        b.style.transform = 'translateY(3px)';
+        b.style.boxShadow = `inset 0 0 0 1px rgba(15,8,24,0.6), 0 0 0 #000`;
+    });
+    b.addEventListener('mouseup',   () => {
+        b.style.transform = '';
+        b.style.boxShadow = `
+            inset 0 0 0 1px rgba(15,8,24,0.6),
+            0 3px 0 #000`;
+    });
     return b;
 }
 
@@ -284,10 +370,11 @@ menu.appendChild(modoBox);
 
 const modoTitulo = document.createElement('div');
 modoTitulo.style.cssText = `
-    font-size: 11px; letter-spacing: 4px; color: #a08050;
-    text-align: center; font-family: 'Courier New', monospace;
+    font-size: 9px; letter-spacing: 4px; color: #a08050;
+    text-align: center; font-family: 'Press Start 2P', monospace;
+    text-shadow: 1px 1px 0 #000;
 `;
-modoTitulo.textContent = '☀  HORA DO MUNDO  🌙';
+modoTitulo.innerHTML = `<span style="display:inline-block;width:10px;height:10px;vertical-align:-1px;margin-right:6px;background:${SUN_URL} center/contain no-repeat;image-rendering:pixelated;"></span>HORA DO MUNDO<span style="display:inline-block;width:10px;height:10px;vertical-align:-1px;margin-left:6px;background:${MOON_URL} center/contain no-repeat;image-rendering:pixelated;"></span>`;
 modoBox.appendChild(modoTitulo);
 
 const modoRow = document.createElement('div');
@@ -298,24 +385,32 @@ modoBox.appendChild(modoRow);
 
 function _modoPill(label, hint, ativo) {
     const p = document.createElement('div');
+    const isNoite = label.includes('NOITE');
+    const iconUrl = isNoite ? MOON_URL : SUN_URL;
+    const ditherUrl = isNoite ? DITHER_PURPLE_URL : DITHER_GOLD_URL;
     p.style.cssText = `
         flex: 1; padding: 10px 8px; cursor: pointer;
         text-align: center;
-        font-family: 'Georgia', serif; font-size: 13px; letter-spacing: 2px;
-        border: 1px solid ${ativo ? '#ffe0a0' : '#6a5020'};
-        background: ${ativo
-            ? 'linear-gradient(180deg, rgba(80,50,20,0.85), rgba(40,25,10,0.95))'
-            : 'rgba(15,8,4,0.75)'};
-        color: ${ativo ? '#ffe0a0' : '#8a7a4a'};
-        text-shadow: ${ativo ? '0 0 8px rgba(255,210,80,0.4)' : 'none'};
-        box-shadow: ${ativo ? 'inset 0 0 12px rgba(212,168,48,0.25)' : 'none'};
-        border-radius: 4px;
-        transition: all 0.2s ease;
+        font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 2px;
+        border: 2px solid ${ativo ? (isNoite ? '#d8b8ff' : '#ffd86b') : '#6a5020'};
+        background-image: ${ditherUrl};
+        background-size: 8px 8px;
+        background-repeat: repeat;
+        image-rendering: pixelated;
+        color: ${ativo ? (isNoite ? '#d8b8ff' : '#ffd86b') : '#caa463'};
+        text-shadow: 1px 1px 0 #000;
+        transition: color 0.12s ease, border-color 0.15s ease, opacity 0.2s ease;
+        opacity: ${ativo ? '0.6' : '1'};
+        filter: ${ativo ? 'brightness(0.7) saturate(0.7)' : 'none'};
         user-select: none;
     `;
-    p.innerHTML = `<div>${label}</div>
-        <div style="font-size:9px;letter-spacing:1px;color:${ativo ? '#c8a96e' : '#5a4a30'};
-            margin-top:2px;font-family:'Courier New',monospace;">${hint}</div>`;
+    const labelText = label.replace(/^[^A-Z]+/, '');
+    p.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+        <span style="display:inline-block;width:12px;height:12px;background:${iconUrl} center/contain no-repeat;image-rendering:pixelated;"></span>
+        <span>${labelText}</span>
+    </div>
+    <div style="font-size:13px;letter-spacing:1px;color:${ativo ? '#c8a85a' : '#7a6850'};
+        margin-top:3px;font-family:'VT323',monospace;text-shadow:none;">${hint}</div>`;
     return p;
 }
 
@@ -327,38 +422,58 @@ modoRow.appendChild(pillDia);
 modoRow.appendChild(pillNoite);
 
 function _refrescarPills() {
-    const cssAtivo = (ativo) => {
+    window.__anidiaNoite = _modoNocturno;
+    // Ambos os pills usam o dither do MODO ACTUAL (não do próprio pill) para consistência:
+    // se NOITE está activo → ambos têm fundo roxo; se DIA está activo → ambos dourado.
+    const ditherUrl = _modoNocturno ? DITHER_PURPLE_URL : DITHER_GOLD_URL;
+    const cssAtivo = (ativo, modoNoite) => {
+        const accentOn = modoNoite ? '#d8b8ff' : '#ffd86b';
         return `
             flex: 1; padding: 10px 8px; cursor: pointer;
             text-align: center;
-            font-family: 'Georgia', serif; font-size: 13px; letter-spacing: 2px;
-            border: 1px solid ${ativo ? '#ffe0a0' : '#6a5020'};
-            background: ${ativo
-                ? 'linear-gradient(180deg, rgba(80,50,20,0.85), rgba(40,25,10,0.95))'
-                : 'rgba(15,8,4,0.75)'};
-            color: ${ativo ? '#ffe0a0' : '#8a7a4a'};
-            text-shadow: ${ativo ? '0 0 8px rgba(255,210,80,0.4)' : 'none'};
-            box-shadow: ${ativo ? 'inset 0 0 12px rgba(212,168,48,0.25)' : 'none'};
-            border-radius: 4px;
-            transition: all 0.2s ease;
+            font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 2px;
+            border: 2px solid ${ativo ? accentOn : '#6a5020'};
+            background-image: ${ditherUrl};
+            background-size: 8px 8px;
+            background-repeat: repeat;
+            image-rendering: pixelated;
+            color: ${ativo ? accentOn : '#caa463'};
+            text-shadow: 1px 1px 0 #000;
+            transition: color 0.12s ease, border-color 0.15s ease, opacity 0.2s ease;
+            opacity: ${ativo ? '0.6' : '1'};
+        filter: ${ativo ? 'brightness(0.7) saturate(0.7)' : 'none'};
             user-select: none;
         `;
     };
-    pillDia.style.cssText = cssAtivo(!_modoNocturno);
-    pillDia.innerHTML = `<div>☀ DIA</div>
-        <div style="font-size:9px;letter-spacing:1px;color:${!_modoNocturno ? '#c8a96e' : '#5a4a30'};
-            margin-top:2px;font-family:'Courier New',monospace;">Rápido</div>`;
-    pillNoite.style.cssText = cssAtivo(_modoNocturno);
-    pillNoite.innerHTML = `<div>🌙 NOITE</div>
-        <div style="font-size:9px;letter-spacing:1px;color:${_modoNocturno ? '#c8a96e' : '#5a4a30'};
-            margin-top:2px;font-family:'Courier New',monospace;">Benchmark</div>`;
+    const _icone = (url) => `<span style="display:inline-block;width:12px;height:12px;background:${url} center/contain no-repeat;image-rendering:pixelated;"></span>`;
+    pillDia.style.cssText = cssAtivo(!_modoNocturno, false);
+    pillDia.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:6px;">${_icone(SUN_URL)}<span>DIA</span></div>
+        <div style="font-size:13px;letter-spacing:1px;color:${!_modoNocturno ? '#c8a85a' : '#7a6850'};
+            margin-top:3px;font-family:'VT323',monospace;text-shadow:none;">Rápido</div>`;
+    pillNoite.style.cssText = cssAtivo(_modoNocturno, true);
+    pillNoite.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:6px;">${_icone(MOON_URL)}<span>NOITE</span></div>
+        <div style="font-size:13px;letter-spacing:1px;color:${_modoNocturno ? '#c8a85a' : '#7a6850'};
+            margin-top:3px;font-family:'VT323',monospace;text-shadow:none;">Benchmark</div>`;
 
-    // Atualizar os emojis do título do seletor
-    modoTitulo.textContent = _modoNocturno ? '🌙  HORA DO MUNDO  🌙' : '☀  HORA DO MUNDO  ☀';
+    // Atualizar os emojis do título do seletor (pixel SVG)
+    const _ic = (url) => `<span style="display:inline-block;width:10px;height:10px;vertical-align:-1px;background:${url} center/contain no-repeat;image-rendering:pixelated;"></span>`;
+    modoTitulo.innerHTML = _modoNocturno
+        ? `${_ic(MOON_URL)}<span style="margin:0 6px;">HORA DO MUNDO</span>${_ic(MOON_URL)}`
+        : `${_ic(SUN_URL)}<span style="margin:0 6px;">HORA DO MUNDO</span>${_ic(SUN_URL)}`;
 
-    // Atualizar símbolo no topo do título (Sol / Lua)
-    marca.textContent = _modoNocturno ? '🌙' : '☀';
-    marca.style.textShadow = _modoNocturno ? '0 0 12px #7a2fc0' : '0 0 12px #d4a830';
+    // Símbolo no topo do título — sol pixel (dia) ou lua pixel (noite)
+    marca.style.background = (_modoNocturno ? MOON_URL : SUN_URL) + ' center/contain no-repeat';
+
+    // Fundo dos 3 botões — dourado de dia, roxo de noite
+    const _bg = _modoNocturno ? BTN_BG_NIGHT : BTN_BG_DAY;
+    const _bord = _modoNocturno ? '#7a4dc0' : '#7a6a48';
+    [btnNovoJogo, btnConfig, btnCreditos].forEach(b => {
+        b.style.background = _bg;
+        b.style.backgroundSize = '8px 8px, cover';
+        b.style.backgroundRepeat = 'repeat, no-repeat';
+        b.style.borderColor = _bord;
+        b.style.color = _modoNocturno ? '#e8d4ff' : '#e8d8a8';
+    });
 
     // Atualizar subtítulo e tema visual do topo
     sub.textContent = _modoNocturno ? 'O Desvanecer da Magia' : 'O Despertar da Magia';
@@ -370,7 +485,22 @@ function _refrescarPills() {
             -1px -1px 0 #5a1f8c, 1px -1px 0 #5a1f8c,
             -1px 1px 0 #5a1f8c, 1px 1px 0 #5a1f8c,
             0 0 8px #7a2fc0, 0 0 18px rgba(120,40,200,0.75)`;
-        titulo.style.filter = 'drop-shadow(0 0 24px rgba(120,40,200,0.6))';
+        // Título corrompido — full concept art: amarelo no topo a escorrer para roxo profundo
+        titulo.style.background = `linear-gradient(180deg,
+            #ffeb8a 0%,   #ffeb8a 16%,
+            #f0a838 16%,  #f0a838 34%,
+            #c8682a 34%,  #c8682a 50%,
+            #8a2848 50%,  #8a2848 66%,
+            #5a1f8c 66%,  #5a1f8c 84%,
+            #2a0a48 84%,  #2a0a48 100%)`;
+        titulo.style.webkitBackgroundClip = 'text';
+        titulo.style.backgroundClip = 'text';
+        titulo.style.filter = `
+            drop-shadow( 3px  0   0 #000) drop-shadow(-3px  0   0 #000)
+            drop-shadow( 0    3px 0 #000) drop-shadow( 0   -3px 0 #000)
+            drop-shadow( 3px  3px 0 #000) drop-shadow(-3px  3px 0 #000)
+            drop-shadow( 0    8px 0 rgba(0,0,0,0.85))`;
+        titulo.style.animation = 'anidiaShimmer 4s steps(4, end) infinite, anidiaTituloBob 2.6s ease-in-out infinite';
         
         // Ornatos roxos (combina com outline #5a1f8c)
         const purp = '#5a1f8c';
@@ -385,7 +515,22 @@ function _refrescarPills() {
             -1px -1px 0 #a06020, 1px -1px 0 #a06020,
             -1px 1px 0 #a06020, 1px 1px 0 #a06020,
             0 0 12px rgba(255,210,80,0.5)`;
-        titulo.style.filter = 'drop-shadow(0 0 24px rgba(255,200,80,0.75))';
+        // Título modo dia — mesmo gradiente "melt" roxo da concept art (igual ao noturno)
+        titulo.style.background = `linear-gradient(180deg,
+            #ffeb8a 0%,   #ffeb8a 16%,
+            #f0a838 16%,  #f0a838 34%,
+            #c8682a 34%,  #c8682a 50%,
+            #8a2848 50%,  #8a2848 66%,
+            #5a1f8c 66%,  #5a1f8c 84%,
+            #2a0a48 84%,  #2a0a48 100%)`;
+        titulo.style.webkitBackgroundClip = 'text';
+        titulo.style.backgroundClip = 'text';
+        titulo.style.filter = `
+            drop-shadow( 3px  0   0 #000) drop-shadow(-3px  0   0 #000)
+            drop-shadow( 0    3px 0 #000) drop-shadow( 0   -3px 0 #000)
+            drop-shadow( 3px  3px 0 #000) drop-shadow(-3px  3px 0 #000)
+            drop-shadow( 0    8px 0 rgba(0,0,0,0.85))`;
+        titulo.style.animation = 'anidiaShimmer 4s steps(4, end) infinite, anidiaTituloBob 2.6s ease-in-out infinite';
 
         // Ornatos dourados/bronze (combina com outline #a06020)
         const gold = '#a06020';
@@ -422,20 +567,22 @@ const foot = document.createElement('div');
 foot.style.cssText = `
     position: absolute; bottom: 22px; left: 0; right: 0;
     text-align: center;
-    font-size: 11px; color: #8a6a30;
-    letter-spacing: 3px;
-    font-family: 'Courier New', monospace;
+    font-size: 8px; color: #5a4a18;
+    letter-spacing: 3px; line-height: 1.8;
+    font-family: 'Press Start 2P', monospace;
+    text-shadow: 1px 1px 0 #000;
     pointer-events: none;
 `;
-foot.innerHTML = `DESENVOLVIDO POR ALEXANDRE PEREIRA, FRANCISCO MONTEIRO E JOÃO GUEDES<br>PROJECTO WEBGL  ·  THREE.JS`;
+foot.innerHTML = `DESENVOLVIDO POR ALEXANDRE PEREIRA  ·  FRANCISCO MONTEIRO  ·  JOÃO GUEDES<br>PROJECTO WEBGL  ·  THREE.JS`;
 overlay.appendChild(foot);
 
 // indicador de versão (para teste de performance)
 const version = document.createElement('div');
 version.style.cssText = `
-    position: absolute; top: 10px; right: 10px;
-    font-size: 10px; color: #d4a830; opacity: 0.6;
-    font-family: monospace; pointer-events: none; z-index: 300;
+    position: absolute; top: 10px; right: 12px;
+    font-size: 14px; color: #5a3d12; opacity: 0.85;
+    letter-spacing: 1px;
+    font-family: 'VT323', monospace; pointer-events: none; z-index: 300;
 `;
 version.textContent = 'v1.10-perf-fix';
 overlay.appendChild(version);
@@ -564,6 +711,25 @@ style.textContent = `
     60%  { opacity: 1; }
     100% { opacity: 1; transform: scale(1); }
 }
+/* bob lento — sobe e desce como o título da concept (Math.sin(t*1.2)) */
+@keyframes anidiaTituloBob {
+    0%, 100% { transform: translateY(-3px); }
+    50%      { transform: translateY( 3px); }
+}
+/* corrupção pixel — chromatic split + slice shifts ocasionais */
+@keyframes anidiaTituloGlitch {
+    0%, 6%, 22%, 100% {
+        transform: translate(0,0);
+        clip-path: none;
+    }
+    7%  { transform: translate(-4px, 0) skewX(-2deg); }
+    9%  { transform: translate( 4px, 1px) skewX( 2deg); clip-path: inset(20% 0 55% 0); }
+    11% { transform: translate(-2px,-2px); clip-path: inset(60% 0 10% 0); }
+    13% { transform: translate( 0, 0); clip-path: none; }
+    52% { transform: translate( 3px, 0); clip-path: inset(40% 0 40% 0); }
+    54% { transform: translate(-3px, 0); }
+    56% { transform: translate( 0, 0); clip-path: none; }
+}
 @keyframes anidiaSubIn {
     0%, 35% { opacity: 0; transform: translateY(10px); }
     100%    { opacity: 1; transform: translateY(0); }
@@ -617,6 +783,10 @@ function _tickParticulas() {
     }
     pctx.shadowBlur = 0;
     pctx.globalAlpha = 1;
+    // Pára o RAF assim que a tela inicial fecha E as últimas partículas
+    // desaparecem. Antes o loop corria para sempre — clearRect num canvas
+    // fullscreen todos os frames a queimar ~0.5-1ms em GPUs integradas.
+    if (!_ativa && particulas.length === 0) return;
     requestAnimationFrame(_tickParticulas);
 }
 _tickParticulas();
@@ -745,6 +915,51 @@ function _row(label) {
     return r;
 }
 
+// Escolha "Teclado vs Comando" com 2 botões grandes (ícone + label),
+// estilo igual ao modal inicial. Mais óbvio que um segmented control.
+function _inputChoice(selectedIdx, onChange) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = `display:flex;gap:8px;`;
+
+    const opts = [
+        { icon: '⌨', label: 'Teclado' },
+        { icon: '🎮', label: 'Comando' },
+    ];
+
+    const btns = [];
+    const paint = (i) => {
+        btns.forEach((b, j) => {
+            const sel = j === i;
+            b.style.background  = sel ? 'rgba(212,168,48,0.18)' : 'rgba(40,28,12,0.5)';
+            b.style.borderColor = sel ? '#d4a830' : 'rgba(176,120,64,0.5)';
+            b.style.color       = sel ? '#ffe9a0' : '#a08060';
+            b.style.boxShadow   = sel ? '0 0 14px rgba(212,168,48,0.35), inset 0 0 12px rgba(212,168,48,0.15)' : 'none';
+        });
+    };
+
+    opts.forEach((opt, i) => {
+        const b = document.createElement('button');
+        b.style.cssText = `
+            flex:1; min-width:0;
+            padding: 8px 10px;
+            border: 1.5px solid rgba(176,120,64,0.5);
+            border-radius: 6px;
+            background: rgba(40,28,12,0.5);
+            color: #a08060;
+            font-family: inherit;
+            cursor: pointer;
+            display:flex; align-items:center; justify-content:center; gap:8px;
+            transition: background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+        `;
+        b.innerHTML = `<span style="font-size:18px;">${opt.icon}</span><span style="font-size:11px;letter-spacing:2px;">${opt.label.toUpperCase()}</span>`;
+        b.onclick = () => { paint(i); onChange(i); };
+        btns.push(b);
+        wrap.appendChild(b);
+    });
+    paint(selectedIdx);
+    return wrap;
+}
+
 function abrirConfig() {
     _abrirModal('⚙  AJUSTES DE SUSERANO', (body) => {
         const sec = (titulo) => {
@@ -790,6 +1005,13 @@ function abrirConfig() {
         body.appendChild(rFs);
 
         sec('ARTE DA GUERRA');
+        const rInput = _row('Método de Comando');
+        rInput.appendChild(_inputChoice(
+            settings.inputMethod === 'gamepad' ? 1 : 0,
+            (i) => setSetting('inputMethod', i === 0 ? 'keyboard' : 'gamepad'),
+        ));
+        body.appendChild(rInput);
+
         const rSens = _row('Agilidade da Mão');
         rSens.appendChild(_slider(0.1, 3.0, 0.05, settings.mouseSensitivity, v => setSetting('mouseSensitivity', v), 'x'));
         body.appendChild(rSens);
@@ -904,6 +1126,17 @@ splash.addEventListener('click', () => {
     _garantirMusicaTitulo();
     _entrarFullscreenSafely();
     setTimeout(() => splash.remove(), 1600);
+    // Primeira vez: pergunta método de input ANTES de o jogador interagir
+    // com o menu da tela inicial. A escolha fica gravada e pode ser trocada
+    // em Ajustes a qualquer momento.
+    if (!settings.inputAsked) {
+        _inputModalAberto = true;
+        // Pequeno delay para o modal aparecer já depois do splash começar a
+        // desvanecer-se (melhor estética que sobrepor instantaneamente).
+        setTimeout(() => {
+            _abrirInputModal(() => { _inputModalAberto = false; });
+        }, 400);
+    }
 });
 
 // --------------------------------------------------------
@@ -912,14 +1145,101 @@ splash.addEventListener('click', () => {
 export function isTelaInicialAberta() { return _ativa; }
 export function onTelaInicialFechar(fn) { _onIniciar = fn; }
 
+// O modal de escolha de input é aberto na primeira interacção (splash click),
+// antes do menu da tela inicial. Aqui apenas bloqueamos "Nova Jornada"
+// enquanto ele estiver visível.
+let _inputModalAberto = false;
 function iniciar() {
+    if (!_ativa) return;
+    if (_inputModalAberto) return; // não deixa entrar enquanto o modal está aberto
+    _fecharTelaInicial();
+}
+
+function _fecharTelaInicial() {
     if (!_ativa) return;
     _ativa = false;
     overlay.style.opacity = '0';
     overlay.style.transform = 'scale(1.04)';
     document.body.classList.remove('title-screen-active');
-    setTimeout(() => { overlay.style.display = 'none'; }, 900);
+    setTimeout(() => {
+        overlay.style.display = 'none';
+        // Liberta o canvas das partículas — o RAF já parou (ver _tickParticulas)
+        // quando o array esvaziou, mas garantimos que o canvas não fica a
+        // ocupar layer no compositor.
+        partCanvas.style.display = 'none';
+    }, 900);
     if (_onIniciar) { try { _onIniciar(); } catch (e) { console.error(e); } }
+}
+
+// Modal "Teclado vs Comando" — só mostra na primeira vez (controlado por
+// settings.inputAsked). Depois pode-se trocar livremente em Ajustes.
+function _abrirInputModal(onConfirm) {
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = `
+        position: fixed; inset: 0; z-index: 450;
+        background: rgba(8,4,16,0.78);
+        backdrop-filter: blur(8px);
+        display:flex; align-items:center; justify-content:center;
+        opacity: 0; transition: opacity .35s ease;
+        font-family: 'Press Start 2P', monospace;
+    `;
+    const panel = document.createElement('div');
+    panel.style.cssText = `
+        background: linear-gradient(180deg, #1a1206 0%, #0d0904 100%);
+        border: 2px solid #d4a830;
+        border-radius: 8px;
+        padding: 32px 40px;
+        max-width: 540px; width: 86vw;
+        box-shadow: 0 0 40px rgba(212,168,48,0.35), inset 0 0 30px rgba(80,40,10,0.4);
+        text-align: center;
+        transform: translateY(20px); transition: transform .35s ease;
+    `;
+    panel.innerHTML = `
+        <div style="font-size:14px;color:#d4a830;letter-spacing:4px;margin-bottom:18px;">⚔  ESCOLHEI A VOSSA ARMA  ⚔</div>
+        <div style="font-size:11px;color:#c8a96e;letter-spacing:1px;line-height:1.7;margin-bottom:28px;font-family:'Courier New',monospace;">
+            Como pretendeis comandar o herói nesta jornada?<br>
+            (Podereis trocar mais tarde em Ajustes)
+        </div>
+        <div id="input-modal-btns" style="display:flex;gap:18px;justify-content:center;"></div>
+    `;
+    backdrop.appendChild(panel);
+    document.body.appendChild(backdrop);
+
+    const btns = panel.querySelector('#input-modal-btns');
+    const mkBtn = (label, sub, value) => {
+        const b = document.createElement('button');
+        b.style.cssText = `
+            background: rgba(60,40,12,0.7);
+            border: 1.5px solid #b07840;
+            color: #f0d9a8;
+            padding: 18px 26px;
+            cursor: pointer;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 11px;
+            letter-spacing: 2px;
+            border-radius: 6px;
+            transition: transform .15s ease, background .15s ease, border-color .15s ease;
+            min-width: 160px;
+        `;
+        b.innerHTML = `<div style="font-size:24px;margin-bottom:8px;">${sub}</div>${label}`;
+        b.onmouseenter = () => { b.style.background = 'rgba(110,70,20,0.85)'; b.style.borderColor = '#d4a830'; b.style.transform = 'translateY(-2px)'; };
+        b.onmouseleave = () => { b.style.background = 'rgba(60,40,12,0.7)'; b.style.borderColor = '#b07840'; b.style.transform = ''; };
+        b.onclick = () => {
+            setSetting('inputMethod', value);
+            setSetting('inputAsked', true);
+            backdrop.style.opacity = '0';
+            panel.style.transform = 'translateY(20px)';
+            setTimeout(() => { backdrop.remove(); onConfirm?.(); }, 350);
+        };
+        return b;
+    };
+    btns.appendChild(mkBtn('TECLADO',  '⌨',  'keyboard'));
+    btns.appendChild(mkBtn('COMANDO',  '🎮', 'gamepad'));
+
+    requestAnimationFrame(() => {
+        backdrop.style.opacity = '1';
+        panel.style.transform = 'translateY(0)';
+    });
 }
 
 // Enter / Espaço inicia nova jornada; Esc fecha modais se abertos

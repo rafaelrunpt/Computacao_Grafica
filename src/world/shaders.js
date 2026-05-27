@@ -1,7 +1,20 @@
 import * as THREE from 'three';
+import { settings } from '../systems/settings.js';
 
 // ---- texturas base ----
+// As variantes 1K foram convertidas de PNG para WebP (-80% em disco/VRAM,
+// qualidade visualmente idêntica a q85). Em qualidade "baixa" carregamos as
+// variantes 512² (sufixo _512) — quartos de VRAM com baixo custo visual.
 const _loader = new THREE.TextureLoader();
+const _LOW = settings.quality === 'baixa';
+
+// Devolve o path WebP, escolhendo o sufixo _512 quando estamos em qualidade
+// baixa. Para texturas que só existam em 1K (e.g. água JPG), passa-se
+// `lowVariant=false` e mantém-se o ficheiro original.
+function _texPath(base1k, has512 = true) {
+    if (_LOW && has512) return base1k.replace(/\.webp$/, '_512.webp');
+    return base1k;
+}
 
 function loadTex(path, rx, ry) {
     return _loader.load(path, t => {
@@ -14,26 +27,38 @@ function loadTex(path, rx, ry) {
 const TS = 6;
 const W_MAP = 200, H_MAP_HALF = 95;
 
-export const grassTex    = loadTex('assets/textures/Grass007_1K-PNG/Grass007_1K-PNG_Color.png',   W_MAP/TS, H_MAP_HALF/TS);
-export const terraTex    = loadTex('assets/textures/PavingStones142_1K-PNG/PavingStones142_1K-PNG_Color.png', W_MAP/TS, H_MAP_HALF/TS);
-export const areiaTex    = loadTex('assets/textures/areia.png',   W_MAP/TS, H_MAP_HALF/TS);
-export const rockTex     = loadTex('assets/textures/castelo/pilares/Travertine013_1K-PNG/Travertine013_1K-PNG_Color.png', 1, 1);
-export const rockNormal  = loadTex('assets/textures/castelo/pilares/Travertine013_1K-PNG/Travertine013_1K-PNG_NormalGL.png', 1, 1);
-export const rockRough   = loadTex('assets/textures/castelo/pilares/Travertine013_1K-PNG/Travertine013_1K-PNG_Roughness.png', 1, 1);
+export const grassTex    = loadTex(_texPath('assets/textures/Grass007_1K-PNG/Grass007_1K-PNG_Color.webp'),   W_MAP/TS, H_MAP_HALF/TS);
+export const terraTex    = loadTex(_texPath('assets/textures/PavingStones142_1K-PNG/PavingStones142_1K-PNG_Color.webp'), W_MAP/TS, H_MAP_HALF/TS);
+export const areiaTex    = loadTex(_texPath('assets/textures/areia.webp'),   W_MAP/TS, H_MAP_HALF/TS);
+export const rockTex     = loadTex(_texPath('assets/textures/castelo/pilares/Travertine013_1K-PNG/Travertine013_1K-PNG_Color.webp'), 1, 1);
+export const rockNormal  = loadTex(_texPath('assets/textures/castelo/pilares/Travertine013_1K-PNG/Travertine013_1K-PNG_NormalGL.webp'), 1, 1);
+export const rockRough   = loadTex(_texPath('assets/textures/castelo/pilares/Travertine013_1K-PNG/Travertine013_1K-PNG_Roughness.webp'), 1, 1);
 let _woodCount = 0;
 let _woodResolve;
 export const woodTexturesReady = new Promise(r => { _woodResolve = r; });
 const _onWoodLoad = () => { if (++_woodCount === 2) _woodResolve(); };
 
-export const madeiraTex  = _loader.load('assets/textures/madeira.png', t => {
+export const madeiraTex  = _loader.load(_texPath('assets/textures/madeira.webp'), t => {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.anisotropy = 4;
     _onWoodLoad();
 });
-export const madeira2Tex = _loader.load('assets/textures/madeira2.png', t => {
+export const madeira2Tex = _loader.load(_texPath('assets/textures/madeira2.webp'), t => {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.anisotropy = 4;
     _onWoodLoad();
+});
+
+// Texturas da água — color + normal map (tileáveis, scrolladas no shader)
+export const waterColorTex = _loader.load('assets/textures/water/Water%200339.jpg', t => {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 4;
+    t.colorSpace = THREE.SRGBColorSpace;   // cor → sRGB, convertida em shader
+});
+export const waterNormalTex = _loader.load('assets/textures/water/Water%200339normal.jpg', t => {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 4;
+    // normal map mantém-se em espaço linear (NoColorSpace por defeito)
 });
 
 // ---- shader de terreno ----
@@ -430,27 +455,23 @@ matBattleDark.uniforms = {
 };
 
 // ---- shader de água ----
+// Usa normal map + color map tileáveis, com duas camadas a scrollar
+// em direcções/velocidades diferentes — o movimento fica visivelmente
+// óbvio (o padrão *vê-se* a mover sobre o fundo).
 export const matWater = new THREE.ShaderMaterial({
     transparent: true,
     uniforms: {
-        uTime:  { value: 0 },
-        uNight: { value: 0 },   // 0 = dia, 1 = noite — escurece/arrefece a água
+        uTime:       { value: 0 },
+        uNight:      { value: 0 },   // 0 = dia, 1 = noite
+        uNormalMap:  { value: waterNormalTex },
+        uColorMap:   { value: waterColorTex },
     },
     vertexShader: `
         varying vec2 vUv;
-        varying float vWave;
         varying vec3 vWorldPos;
-        uniform float uTime;
         void main() {
             vUv = uv;
-            vec3 pos = position;
-            float a = (sin(pos.x * 0.45 + uTime * 1.4) * 0.5 + 0.5) * 0.050;
-            float b = (sin(pos.x * 0.85 - pos.y * 0.6 + uTime * 1.9) * 0.5 + 0.5) * 0.030;
-            float c = (sin(pos.y * 1.6 + uTime * 0.8) * 0.5 + 0.5) * 0.018;
-            float wave = a + b + c;
-            pos.z += wave;
-            vWave = wave;
-            vec4 wp = modelMatrix * vec4(pos, 1.0);
+            vec4 wp = modelMatrix * vec4(position, 1.0);
             vWorldPos = wp.xyz;
             gl_Position = projectionMatrix * viewMatrix * wp;
         }
@@ -458,47 +479,104 @@ export const matWater = new THREE.ShaderMaterial({
     fragmentShader: `
         uniform float uTime;
         uniform float uNight;
+        uniform sampler2D uNormalMap;
+        uniform sampler2D uColorMap;
         varying vec2 vUv;
-        varying float vWave;
         varying vec3 vWorldPos;
 
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        float sn(vec2 p) {
+        float vnoise(vec2 p) {
             vec2 i = floor(p); vec2 f = fract(p); f = f*f*(3.0 - 2.0*f);
             return mix(mix(hash(i),           hash(i + vec2(1, 0)), f.x),
                        mix(hash(i + vec2(0,1)), hash(i + vec2(1, 1)), f.x), f.y);
         }
-        float fbm(vec2 p) {
-            float v = 0.0, a = 0.5;
-            // Reduzido de 3 para 2 iterações: poupa 33% do custo matemático por pixel
-            for (int i = 0; i < 2; i++) { v += a * sn(p); p = p * 2.05 + vec2(1.7, 9.2); a *= 0.5; }
-            return v;
-        }
+
         void main() {
             if (vWorldPos.y < -0.3) discard;
-            vec2 p = vec2(vUv.x * 12.0, vUv.y * 2.5);
-            float w = fbm(p + vec2(-uTime * 0.4, sin(uTime * 0.25) * 0.3));
-            
-            float ripple = sin((vUv.x * 80.0 + w * 5.0) - uTime * 3.8) * 0.5 + 0.5;
-            ripple = pow(ripple, 12.0); // pow mais baixo é ligeiramente mais rápido
-            
-            float glint = pow(sn(vec2(vUv.x * 4.0 - uTime * 0.35, vUv.y * 2.0)), 6.0);
-            vec3 deep    = vec3(0.02, 0.10, 0.30);
-            vec3 mid     = vec3(0.08, 0.40, 0.72);
-            vec3 surface = vec3(0.35, 0.78, 0.96);
-            vec3 col = mix(deep, mid, smoothstep(0.20, 0.55, w));
-            col = mix(col, surface, smoothstep(0.55, 0.85, w));
-            col += vec3(0.65, 0.88, 1.0) * ripple * 0.55;
-            col += vec3(1.0, 0.95, 0.7) * glint * 0.30;
-            col *= 1.0 + vWave * 4.0;
-            float bankDist = 1.0 - abs(vUv.y - 0.5) * 2.0;
-            float foamMask = smoothstep(0.20, 0.0, bankDist);
-            float foamBreak = sn(vec2(vUv.x * 30.0 + uTime * 1.8, vUv.y * 8.0 + uTime * 0.4));
-            float foam = clamp(foamMask * (0.5 + foamBreak * 0.6), 0.0, 1.0);
-            col = mix(col, vec3(0.94, 0.98, 1.0), foam * 0.55);
-            // modo nocturno — escurece e arrefece a água (azul-marinho)
-            col *= mix(vec3(1.0), vec3(0.34, 0.42, 0.58), uNight);
-            gl_FragColor = vec4(col, 0.93);
+
+            // UVs em coords-mundo → tiles uniformes mesmo no plano 210×6.
+            vec2 baseUv = vWorldPos.xz * 0.18;
+            float t = uTime;
+
+            // bankN — usado mais à frente só para a máscara da espuma.
+            float bankN = 1.0 - abs(vUv.y - 0.5) * 2.0;
+
+            // -- Domain warp por ruído --
+            // Distorce os UVs *antes* do scroll → o flow serpenteia em vez
+            // de ir em linha recta. Duas amostras lentas em escalas/fases
+            // diferentes geram um warp 2D contínuo.
+            float wnA = vnoise(baseUv * 0.42 + vec2(-t * 0.07,       0.0));
+            float wnB = vnoise(baseUv * 0.38 + vec2(0.0,        t * 0.05) + 17.3);
+            vec2  warp = vec2(wnA - 0.5, wnB - 0.5) * 0.55;
+
+            // Duas camadas — sinal negativo no scroll em X → o padrão move-se
+            // em -X, fazendo a corrente correr no sentido oposto ao anterior.
+            vec2 uvA = baseUv * 1.0 + vec2(-t * 0.16,  t * 0.07) + warp;
+            vec2 uvB = baseUv * 2.1 + vec2(-t * 0.26, -t * 0.10) + warp * 1.4;
+
+            vec3 nA = texture2D(uNormalMap, uvA).xyz * 2.0 - 1.0;
+            vec3 nB = texture2D(uNormalMap, uvB).xyz * 2.0 - 1.0;
+            vec3 nTS = normalize(nA + nB);
+
+            // Tangente-espaço → mundo (plano horizontal). Damped para
+            // não parecer gelatina.
+            float bump = 0.55;
+            vec3 N = normalize(vec3(nTS.x * bump, 1.0, nTS.y * bump));
+
+            // "Crista" da onda — quanto inclinada está a normal local.
+            // Usada mais à frente para gerar espuma só onde há agitação.
+            float crest = clamp(length(vec2(nTS.x, nTS.y)) * 1.4, 0.0, 1.0);
+
+            // Cor da textura — tinta subtil, escala ligeiramente diferente
+            // e scroll por dentro do warp para não correr em sintonia.
+            vec3 texCol = texture2D(uColorMap, baseUv * 0.7 + vec2(-t * 0.085, t * 0.010) + warp * 0.6).rgb;
+
+            // View / Light
+            vec3 V = normalize(cameraPosition - vWorldPos);
+            // Alinhado com o sunLight da cena (main.js: position(80, 120, 80))
+            // para que o glint da água venha da mesma direcção que as sombras.
+            vec3 L = normalize(vec3(80.0, 120.0, 80.0));
+            vec3 H = normalize(L + V);
+
+            float ndotv   = max(0.0, dot(N, V));
+            float fresnel = pow(1.0 - ndotv, 3.5);
+            float spec    = pow(max(0.0, dot(N, H)), 45.0);
+
+            // Paleta teal/verde-azul. A textura entra como tinta (22%).
+            vec3 deep    = vec3(0.04, 0.13, 0.16);
+            vec3 shallow = vec3(0.20, 0.42, 0.42);
+            vec3 sky     = vec3(0.62, 0.74, 0.78);
+
+            float texLum = dot(texCol, vec3(0.33));
+            vec3 baseTint = mix(deep, shallow, smoothstep(0.15, 0.85, texLum));
+            baseTint = mix(baseTint, texCol * shallow * 1.6, 0.22);
+
+            vec3 col = mix(baseTint, sky, fresnel * 0.55);
+            col += vec3(1.0, 0.93, 0.78) * spec * 0.45;
+
+            // -- Espuma --
+            // Antigamente: banda branca contínua junto às margens (ficava
+            // como "borda pintada"). Agora a espuma só aparece onde há
+            // *crista* da onda E perto da margem, em padrão "blobby"
+            // (dois ruídos multiplicados → manchas, não tapete). Ainda
+            // por cima usa um off-white levemente verde-acinzentado em
+            // vez de branco puro.
+            float foamMask  = smoothstep(0.22, 0.06, bankN);
+            float foamN1    = vnoise(baseUv * 5.5 + vec2(t * 0.7,  t * 0.25));
+            float foamN2    = vnoise(baseUv * 11.0 + vec2(-t * 0.5, t * 0.45));
+            float foamPat   = foamN1 * foamN2;
+            foamPat = smoothstep(0.18, 0.42, foamPat);   // limiar alto → manchas
+            float foam = foamMask * foamPat * (0.30 + crest * 1.20);
+            foam = clamp(foam, 0.0, 1.0);
+            col = mix(col, vec3(0.82, 0.90, 0.91), foam * 0.45);
+
+            // Noite
+            col *= mix(vec3(1.0), vec3(0.32, 0.42, 0.55), uNight);
+
+            // Mais transparente — deixa o leito de areia respirar.
+            float alphaBase = mix(0.55, 0.85, foam);
+            float alpha = mix(alphaBase, 0.95, fresnel * 0.7);
+            gl_FragColor = vec4(col, alpha);
         }
     `,
 });

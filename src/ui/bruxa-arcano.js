@@ -9,13 +9,13 @@ import { ATAQUES, ataqueState, desbloquearAtaque, equiparAtaque } from '../syste
 const ArcanoDialogue = window.ArcanoDialogue;
 
 const POCOES = [
-    { id: 'pocao',  preco: 30,  nome: 'Filtro Menor',  desc: 'Recupera 15 HP.' },
-    { id: 'mega',   preco: 70,  nome: 'Filtro Maior',  desc: 'Recupera 30 HP.' },
-    { id: 'elixir', preco: 160, nome: 'Elixir Lunar',  desc: 'Restaura todo o HP.' },
+    { id: 'pocao',  preco: 25,  nome: 'Poção de Cura',    desc: 'Recupera 15 HP.', icone: 'assets/icones/small_potion.png' },
+    { id: 'mega',   preco: 60,  nome: 'Poção Maior',      desc: 'Recupera 30 HP.', icone: 'assets/icones/big_potion.png' },
+    { id: 'elixir', preco: 140, nome: 'Elixir',           desc: 'Restaura todo o HP.', icone: 'assets/icones/elixir_corrupto.png' },
 ];
 
 const ATAQUES_VENDA = [
-    { id: 'escudo_mistico', preco: 220 },
+    { id: 'escudo_mistico', preco: 180 },
 ];
 
 const ABERTURAS = [
@@ -30,9 +30,9 @@ const RECUSAS = [
 ];
 
 const DESPEDIDAS = [
-    'Que a Lua proteja os vossos passos.',
-    'Ide, e regressai quando a noite vos morder.',
-    'O caldeirão fervilha em vossa ausência. Boa caça.',
+    'Que a Lua proteja os vossos passos. (Pressione Enter)',
+    'Ide, e regressai quando a noite vos morder. (Pressione Enter)',
+    'O caldeirão fervilha em vossa ausência. Boa caça. (Pressione Enter)',
 ];
 
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -41,13 +41,22 @@ let dlg = null;
 let dialogoAberto = false;
 const NPC_ID = 'bruxa';
 
+// Renderiza o ícone: PNG → <img>
+// emoji em string.
+function _iconHtml(ic, size = 16) {
+    if (ic && (ic.endsWith('.png') || ic.endsWith('.jpg') || ic.includes('/'))) {
+        return `<img src="${ic}" style="width:${size}px;height:${size}px;object-fit:contain;vertical-align:middle;margin-right:4px;">`;
+    }
+    return ic || '';
+}
+
 function buildMenuChoices() {
     const c = getCintilas();
     const escolhas = [];
 
     for (const p of POCOES) {
         escolhas.push({
-            label: `🧪 ${p.nome} — ✦ ${p.preco}`,
+            label: `${_iconHtml(p.icone)} ${p.nome} — ✦ ${p.preco}`,
             to: 'comprar_' + p.id,
             _kind: 'pocao',
             _data: p,
@@ -61,8 +70,8 @@ function buildMenuChoices() {
         const jaTem = ataqueState.desbloqueados.has(a.id);
         escolhas.push({
             label: jaTem
-                ? `🛡 ${at.nome} — [APRENDIDO]`
-                : `🛡 ${at.nome} — ✦ ${a.preco}`,
+                ? `${_iconHtml(at.icone)} ${at.nome} — [APRENDIDO]`
+                : `${_iconHtml(at.icone)} ${at.nome} — ✦ ${a.preco}`,
             to: 'comprar_' + a.id,
             _kind: 'ataque',
             _data: { ...a, at },
@@ -119,11 +128,11 @@ function ensureDialogue() {
             if (gastarCintilas(p.preco)) {
                 adicionarItem(p.id, 1);
                 npc.nodes[choice.to] = {
-                    text: `Recebei o vosso ${p.nome}. Que vos seja útil na hora certa.`,
+                    text: `Recebei o vosso ${p.nome}. Que vos seja útil na hora certa. (Pressione Enter)`,
                     next: 'menu',
                 };
             } else {
-                npc.nodes[choice.to] = { text: pick(RECUSAS), next: 'menu' };
+                npc.nodes[choice.to] = { text: pick(RECUSAS) + ' (Pressione Enter)', next: 'menu' };
             }
             rebuildMenu(npc, '');
             return;
@@ -136,11 +145,11 @@ function ensureDialogue() {
                 const slotLivre = ataqueState.slots.indexOf(null);
                 if (slotLivre !== -1) equiparAtaque(slotLivre, a.id);
                 npc.nodes[choice.to] = {
-                    text: `O ${a.at.nome} é agora vosso. Sussurrai o nome e o véu erguer-se-á.`,
+                    text: `O ${a.at.nome} é agora vosso. Sussurrai o nome e o véu erguer-se-á. (Pressione Enter)`,
                     next: 'menu',
                 };
             } else {
-                npc.nodes[choice.to] = { text: pick(RECUSAS), next: 'menu' };
+                npc.nodes[choice.to] = { text: pick(RECUSAS) + ' (Pressione Enter)', next: 'menu' };
             }
             rebuildMenu(npc, '');
             return;

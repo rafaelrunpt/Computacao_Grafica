@@ -29,7 +29,7 @@ import {
 } from './ataques.js';
 import { lancarAnimacaoAtaque, lancarEfeitoBuff, dispararProjetilSprite, playFramesFX } from '../ui/combate-anims.js';
 import { animarAtaqueWraith } from '../entities/inimigo-wraith.js';
-import { combateCamera } from '../core/renderer.js';
+import { combateCamera, combateBossCamera } from '../core/renderer.js';
 import * as THREE from 'three';
 
 export const estadoJogo = { emCombate: false, combateX: 0, combateZ: 0 };
@@ -265,11 +265,22 @@ function _atualizarPresagio() {
         ? _proximoAtaqueInimigo : null);
 }
 
-// Âncora aproximada (% do ecrã) de cada combatente, para os números de
-// dano flutuantes. As câmaras de combate são estáticas.
+// Âncora dinâmica (% do ecrã) de cada combatente para os números de dano
+// e efeitos. No modo boss, acompanha o movimento nas lanes.
 function _ancoraCombatente(alvo) {
     if (isBossMode()) {
-        return alvo === 'inimigo' ? { x: 50, y: 15 } : { x: 50, y: 55 };
+        const cam = combateBossCamera;
+        if (alvo === 'inimigo') {
+            const root = getBossRoot();
+            const bPos = root ? root.position : new THREE.Vector3(0, 0, -3.5);
+            // altura do peito do boss (~2.8)
+            const _v = new THREE.Vector3(bPos.x, bPos.y + 2.8, bPos.z).project(cam);
+            return { x: (_v.x * 0.5 + 0.5) * 100, y: (-_v.y * 0.5 + 0.5) * 100 };
+        } else {
+            // altura do peito do player (~1.2)
+            const _v = new THREE.Vector3(player.position.x, player.position.y + 1.2, player.position.z).project(cam);
+            return { x: (_v.x * 0.5 + 0.5) * 100, y: (-_v.y * 0.5 + 0.5) * 100 };
+        }
     }
     return alvo === 'inimigo' ? { x: 63, y: 25 } : { x: 38, y: 35 };
 }

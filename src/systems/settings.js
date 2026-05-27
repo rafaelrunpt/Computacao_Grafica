@@ -24,6 +24,12 @@ const defaults = {
     nightMode: false,
 
     seenTutorial: false,
+
+    // Método de input: 'keyboard' | 'gamepad'. inputAsked controla se já
+    // mostrámos o modal de escolha inicial — fica em false até o jogador
+    // responder pela primeira vez.
+    inputMethod: 'keyboard',
+    inputAsked: false,
 };
 
 function load() {

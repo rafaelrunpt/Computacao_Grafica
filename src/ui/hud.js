@@ -2,6 +2,145 @@ import * as THREE from 'three';
 import { player, coroaGroup, brincosGroup, oculosGroup, aureolaGroup, mascaraGroup } from '../entities/jogador.js';
 import { playerStats, registarCallbacksStats } from '../systems/player-stats.js';
 
+// ---- fontes pixel (uma só vez) ----
+(function carregarFontesHUD() {
+    if (document.getElementById('hud-pixel-fonts')) return;
+    const link = document.createElement('link');
+    link.id = 'hud-pixel-fonts';
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap';
+    document.head.appendChild(link);
+})();
+
+(function injectarEstilosHUD() {
+    if (document.getElementById('hud-pixel-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'hud-pixel-styles';
+    s.textContent = `
+        #game-hud {
+            position: fixed; top: 14px; left: 14px;
+            display: flex; align-items: flex-start; gap: 14px;
+            z-index: 50; pointer-events: none;
+            font-family: 'VT323', monospace;
+            image-rendering: pixelated;
+        }
+        #game-hud * { box-sizing: border-box; image-rendering: pixelated; }
+
+        /* Moldura octogonal do avatar */
+        #game-hud .hud-avatar {
+            position: relative; width: 70px; height: 70px; flex-shrink: 0;
+            /* moldura é background-image (data URI) injectada em JS — uma
+               única bitmap cacheada em vez de ~80 <rect> SVG recompostos */
+            background-repeat: no-repeat;
+            background-size: 100% 100%;
+        }
+        #game-hud .hud-avatar canvas {
+            position: absolute; top: 9px; left: 9px;
+            width: 52px; height: 52px;
+            image-rendering: pixelated;
+            clip-path: polygon(
+                25% 0%, 75% 0%, 100% 25%, 100% 75%,
+                75% 100%, 25% 100%, 0% 75%, 0% 25%
+            );
+        }
+
+        /* Coluna de info */
+        #game-hud .hud-info {
+            display: flex; flex-direction: column; gap: 4px;
+            min-width: 160px;
+            /* sem padding-top — barras alinhadas com o topo do avatar */
+            padding-top: 0;
+        }
+        #game-hud .hud-level {
+            font-family: 'Press Start 2P', monospace; font-size: 11px;
+            color: #ffd86b; letter-spacing: 2px;
+            /* sem text-shadow com blur — apenas drop sharp (zero custo de paint) */
+            text-shadow: 0 2px 0 #4a2f08, 0 3px 0 #0a0704;
+            line-height: 1;
+        }
+        #game-hud .hud-level .num {
+            color: #fff4c2; font-family: 'VT323', monospace;
+            font-size: 18px; margin-left: 6px; letter-spacing: 0; vertical-align: -1px;
+        }
+
+        /* Barras pixel */
+        #game-hud .hud-bar {
+            position: relative; width: 160px; height: 14px;
+            background: #0a0704;
+            box-shadow: 0 0 0 1px #0a0704, 0 0 0 2px #4a2f08, 0 0 0 3px #0a0704;
+            margin: 1px 3px 0;
+        }
+        #game-hud .hud-bar .track {
+            position: absolute; inset: 2px;
+            background: linear-gradient(180deg, #1a0a05 0%, #0a0402 100%);
+        }
+        #game-hud .hud-bar .fill {
+            position: absolute; top: 2px; bottom: 2px; left: 2px;
+            width: calc(var(--pct, 100%) - 4px);
+            background: var(--c-mid);
+            box-shadow: inset 0 0 0 1px var(--c-edge);
+            transition: width .35s steps(8);
+        }
+        #game-hud .hud-bar .fill::before {
+            content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+            background: var(--c-hi);
+        }
+        #game-hud .hud-bar .fill::after {
+            content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+            background: var(--c-lo);
+        }
+        #game-hud .hud-bar.xp {
+            --c-hi: #d97abf; --c-mid: #a85ad9; --c-lo: #7a3aa8; --c-edge: rgba(0,0,0,.5);
+            box-shadow: 0 0 0 1px #0a0704, 0 0 0 2px #3a1a5a, 0 0 0 3px #0a0704;
+        }
+        #game-hud .hud-bar.hp {
+            --c-hi: #d94a3a; --c-mid: #a83a26; --c-lo: #6a1a10; --c-edge: rgba(0,0,0,.5);
+            box-shadow: 0 0 0 1px #0a0704, 0 0 0 2px #5a1a10, 0 0 0 3px #0a0704;
+        }
+
+        /* Labels (tag esq, valor dir) */
+        #game-hud .hud-label {
+            display: flex; justify-content: space-between; align-items: baseline;
+            padding: 0 4px; margin-top: 1px; line-height: 1;
+        }
+        #game-hud .hud-label .tag {
+            font-family: 'Press Start 2P', monospace; font-size: 8px;
+            letter-spacing: 1px; text-shadow: 0 1px 0 #0a0704;
+        }
+        #game-hud .hud-label .val {
+            font-family: 'VT323', monospace; font-size: 14px;
+            text-shadow: 0 1px 0 #0a0704;
+        }
+        #game-hud .hud-label.xp .tag { color: #c0a0e0; }
+        #game-hud .hud-label.xp .val { color: #e8c8ff; }
+        #game-hud .hud-label.hp .tag { color: #ff9a8a; }
+        #game-hud .hud-label.hp .val { color: #ffd0c0; }
+
+        /* Cintilas */
+        #game-hud .hud-cintilas {
+            display: flex; align-items: center; gap: 6px;
+            margin-top: 6px; padding: 4px 8px 4px 6px;
+            background: linear-gradient(180deg, #1a2a3a 0%, #0a1420 100%);
+            box-shadow: 0 0 0 1px #0a0704, 0 0 0 2px #2a4a6a, 0 0 0 3px #0a0704;
+            align-self: flex-start;
+        }
+        #game-hud .hud-cintilas .icon {
+            width: 14px; height: 14px; flex-shrink: 0; image-rendering: pixelated;
+            object-fit: contain; display: block;
+        }
+        #game-hud .hud-cintilas .tag {
+            font-family: 'Press Start 2P', monospace; font-size: 8px;
+            color: #5ab8d9; letter-spacing: 1px; text-shadow: 0 1px 0 #0a0704;
+        }
+        #game-hud .hud-cintilas .val {
+            font-family: 'VT323', monospace; font-size: 18px;
+            color: #a8e0f0; letter-spacing: 1px; line-height: 1;
+            text-shadow: 0 1px 0 #0a0704;
+        }
+    `;
+    document.head.appendChild(s);
+})();
+
 // ---- aviso de interacção ----
 const promptEl = document.createElement('div');
 promptEl.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.65);color:#fff;padding:8px 18px;border-radius:8px;font-family:sans-serif;font-size:16px;display:none;pointer-events:none;z-index:50;';
@@ -10,37 +149,50 @@ document.body.appendChild(promptEl);
 export function showPrompt(msg) { promptEl.textContent = msg; promptEl.style.display = 'block'; }
 export function hidePrompt()    { promptEl.style.display = 'none'; }
 
-// ---- HUD (Mostrador de Estado) ----
+let _hudVisivel = true;
+export function isHudVisivel() { return _hudVisivel; }
+export function setHudVisible(v) {
+    _hudVisivel = !!v;
+    hudEl.style.display    = v ? 'flex' : 'none';
+    promptEl.style.display = v ? promptEl.style.display : 'none';
+    if (v) markAvatarDirty(); // re-renderiza ao reaparecer
+}
+
+// Render do avatar é caro (segundo contexto WebGL). Só renderizamos quando
+// algo mudou — equipamento, materiais, ou o próprio HUD voltar a ser visível.
+let _avatarDirty = true;
+export function markAvatarDirty() { _avatarDirty = true; }
+export function renderAvatarIfDirty() {
+    if (!_hudVisivel || !_avatarDirty) return;
+    avatarRenderer.render(avatarScene, avatarCam);
+    _avatarDirty = false;
+}
+
+// ---- HUD (estrutura DOM) ----
 const hudEl = document.createElement('div');
 hudEl.id = 'game-hud';
-hudEl.style.cssText = `
-    position: fixed; top: 10px; left: 10px;
-    display: flex; align-items: center; gap: 6px;
-    z-index: 50; pointer-events: none;
-    font-family: 'Georgia', serif;
-`;
 
-// canvas do avatar
+// Avatar — canvas WebGL dentro de moldura pixel octogonal.
+// A moldura é uma SVG serializada como data URI e usada como background
+// (uma só bitmap cacheada pelo compositor) em vez de SVG inline com ~80
+// <rect>, que custaria recomposição a cada frame que o canvas actualiza.
+const AVATAR_FRAME_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 54 54" shape-rendering="crispEdges"><g fill="#0a0704"><rect x="14" y="0" width="26" height="2"/><rect x="10" y="2" width="4" height="2"/><rect x="40" y="2" width="4" height="2"/><rect x="6" y="4" width="4" height="2"/><rect x="44" y="4" width="4" height="2"/><rect x="4" y="6" width="2" height="4"/><rect x="48" y="6" width="2" height="4"/><rect x="2" y="10" width="2" height="4"/><rect x="50" y="10" width="2" height="4"/><rect x="0" y="14" width="2" height="26"/><rect x="52" y="14" width="2" height="26"/><rect x="2" y="40" width="2" height="4"/><rect x="50" y="40" width="2" height="4"/><rect x="4" y="44" width="2" height="4"/><rect x="48" y="44" width="2" height="4"/><rect x="6" y="48" width="4" height="2"/><rect x="44" y="48" width="4" height="2"/><rect x="10" y="50" width="4" height="2"/><rect x="40" y="50" width="4" height="2"/><rect x="14" y="52" width="26" height="2"/></g><g fill="#7a4d12"><rect x="14" y="2" width="26" height="2"/><rect x="10" y="4" width="34" height="2"/><rect x="6" y="6" width="4" height="2"/><rect x="44" y="6" width="4" height="2"/><rect x="4" y="8" width="2" height="6"/><rect x="48" y="8" width="2" height="6"/><rect x="2" y="14" width="2" height="26"/><rect x="50" y="14" width="2" height="26"/><rect x="4" y="40" width="2" height="6"/><rect x="48" y="40" width="2" height="6"/><rect x="6" y="46" width="4" height="2"/><rect x="44" y="46" width="4" height="2"/><rect x="10" y="48" width="34" height="2"/><rect x="14" y="50" width="26" height="2"/></g><g fill="#c98a22"><rect x="14" y="4" width="26" height="2"/><rect x="10" y="6" width="34" height="2"/><rect x="6" y="8" width="42" height="2"/><rect x="4" y="10" width="2" height="4"/><rect x="48" y="10" width="2" height="4"/><rect x="2" y="14" width="2" height="26"/><rect x="50" y="14" width="2" height="26"/></g><g fill="#ffd86b"><rect x="14" y="3" width="26" height="1"/><rect x="10" y="5" width="4" height="1"/><rect x="40" y="5" width="4" height="1"/><rect x="6" y="7" width="4" height="1"/><rect x="44" y="7" width="4" height="1"/><rect x="4" y="9" width="2" height="1"/><rect x="48" y="9" width="2" height="1"/><rect x="3" y="10" width="1" height="4"/><rect x="50" y="10" width="1" height="4"/></g><g fill="#4a2f08"><rect x="14" y="48" width="26" height="1"/><rect x="10" y="46" width="4" height="1"/><rect x="40" y="46" width="4" height="1"/><rect x="6" y="44" width="4" height="1"/><rect x="44" y="44" width="4" height="1"/></g><g fill="#0a0704"><rect x="14" y="6" width="26" height="1"/><rect x="10" y="8" width="34" height="1"/><rect x="6" y="10" width="42" height="1"/><rect x="6" y="43" width="42" height="1"/><rect x="10" y="45" width="34" height="1"/><rect x="14" y="47" width="26" height="1"/></g><g fill="#ffd86b"><rect x="9" y="9" width="2" height="2"/><rect x="43" y="9" width="2" height="2"/><rect x="9" y="43" width="2" height="2"/><rect x="43" y="43" width="2" height="2"/></g><g fill="#0a0704"><rect x="10" y="10" width="1" height="1"/><rect x="44" y="10" width="1" height="1"/><rect x="10" y="44" width="1" height="1"/><rect x="44" y="44" width="1" height="1"/></g></svg>`;
+
+const avatarBox = document.createElement('div');
+avatarBox.className = 'hud-avatar';
+avatarBox.style.backgroundImage = `url("data:image/svg+xml;utf8,${encodeURIComponent(AVATAR_FRAME_SVG).replace(/'/g, '%27').replace(/"/g, '%22')}")`;
 const avatarCanvas = document.createElement('canvas');
-avatarCanvas.width = 96; avatarCanvas.height = 96;
-avatarCanvas.style.cssText = `
-    width: 32px; height: 32px;
-    border-radius: 50%;
-    border: 2px solid #c8a96e;
-    box-shadow: 0 0 6px rgba(0,0,0,0.7);
-    flex-shrink: 0; display: block;
-    object-fit: cover;
-`;
+avatarCanvas.width = 128; avatarCanvas.height = 128;
+avatarBox.appendChild(avatarCanvas);
 
 export const avatarRenderer = new THREE.WebGLRenderer({ canvas: avatarCanvas, antialias: true, alpha: true });
-avatarRenderer.setSize(96, 96);
+avatarRenderer.setSize(128, 128, false); // buffer interno maior — avatar agora ocupa 52×52 em CSS
 avatarRenderer.setPixelRatio(1);
 avatarRenderer.shadowMap.enabled = false;
 avatarRenderer.setClearColor(0x000000, 0);
 
 export const avatarScene = new THREE.Scene();
 avatarScene.background = new THREE.Color(0x1a1a2e);
-
 
 export const avatarCam = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.01, 10);
 avatarCam.position.set(0, 0, 2);
@@ -72,7 +224,6 @@ export function buildAvatarScene() {
     clone.position.set(0, 0, 0);
     avatarScene.add(clone);
 
-    // localizar artefactos clonados para sincronizar visibilidade
     _avatarCoroaClone   = clone.getObjectByName('coroaGroup')   || null;
     _avatarBrincosClone = clone.getObjectByName('brincosGroup') || null;
     _avatarOculosClone  = clone.getObjectByName('oculosGroup')  || null;
@@ -91,59 +242,71 @@ export function buildAvatarScene() {
     avatarCam.lookAt(0, 0.1, 0);
     avatarCam.updateProjectionMatrix();
     _avatarBuilt = true;
+    markAvatarDirty();
 }
 
+function _syncVis(clone, src) {
+    if (!clone) return;
+    if (clone.visible !== src.visible) { clone.visible = src.visible; markAvatarDirty(); }
+}
 export function syncAvatarMaterials() {
-    // visibilidade dos artefactos no avatar acompanha o herói principal
-    if (_avatarCoroaClone)   _avatarCoroaClone.visible   = coroaGroup.visible;
-    if (_avatarBrincosClone) _avatarBrincosClone.visible = brincosGroup.visible;
-    if (_avatarOculosClone)  _avatarOculosClone.visible  = oculosGroup.visible;
-    if (_avatarAureolaClone) _avatarAureolaClone.visible = aureolaGroup.visible;
-    if (_avatarMascaraClone) _avatarMascaraClone.visible = mascaraGroup.visible;
+    _syncVis(_avatarCoroaClone,   coroaGroup);
+    _syncVis(_avatarBrincosClone, brincosGroup);
+    _syncVis(_avatarOculosClone,  oculosGroup);
+    _syncVis(_avatarAureolaClone, aureolaGroup);
+    _syncVis(_avatarMascaraClone, mascaraGroup);
 
     if (++_avatarSyncCounter % 10 !== 0) return;
+    let materialChanged = false;
     for (const { orig, clone } of _avatarOriginalMeshes) {
         if (!orig.material || !clone.material) continue;
-        clone.material.color.copy(orig.material.color);
-        if (orig.material.map !== undefined) clone.material.map = orig.material.map;
-        clone.material.needsUpdate = true;
+        if (!clone.material.color.equals(orig.material.color)) {
+            clone.material.color.copy(orig.material.color);
+            materialChanged = true;
+        }
+        if (orig.material.map !== undefined && clone.material.map !== orig.material.map) {
+            clone.material.map = orig.material.map;
+            materialChanged = true;
+        }
+        if (materialChanged) clone.material.needsUpdate = true;
     }
+    if (materialChanged) markAvatarDirty();
 }
 
-// painel direito: nível + barra XP + barra HP
+// ---- coluna de info ----
 const infoEl = document.createElement('div');
-infoEl.style.cssText = 'display:flex;flex-direction:column;gap:3px;min-width:90px;';
+infoEl.className = 'hud-info';
+infoEl.innerHTML = `
+    <div class="hud-level">NÍVEL<span class="num" id="hud-level-val">1</span></div>
 
-const levelEl = document.createElement('div');
-levelEl.style.cssText = 'color:#f0d080;font-size:13px;font-weight:bold;text-shadow:0 1px 4px #000,0 0 8px #a07000;letter-spacing:1px;';
+    <div class="hud-bar xp"><div class="track"></div><div class="fill" id="hud-xp-fill" style="--pct:0%"></div></div>
+    <div class="hud-label xp">
+        <span class="tag">XP</span>
+        <span class="val" id="hud-xp-val">0 / 0</span>
+    </div>
 
-const xpBarWrap = document.createElement('div');
-xpBarWrap.style.cssText = 'width:100%;height:6px;background:rgba(0,0,0,0.55);border-radius:3px;border:1px solid #6a5020;overflow:hidden;';
+    <div class="hud-bar hp"><div class="track"></div><div class="fill" id="hud-hp-fill" style="--pct:100%"></div></div>
+    <div class="hud-label hp">
+        <span class="tag">HP</span>
+        <span class="val" id="hud-hp-val">0 / 0</span>
+    </div>
 
-const xpBarFill = document.createElement('div');
-xpBarFill.style.cssText = 'height:100%;width:0%;background:linear-gradient(90deg,#a060f0,#d090ff);border-radius:3px;transition:width 0.4s ease;box-shadow:0 0 4px #9040e0;';
-xpBarWrap.appendChild(xpBarFill);
+    <div class="hud-cintilas">
+        <img class="icon" src="assets/icones/cintilas.png" alt="">
+        <span class="val" id="hud-cintilas-val">0</span>
+        <span class="tag">CINTILAS</span>
+    </div>
+`;
 
-const xpLabelEl = document.createElement('div');
-xpLabelEl.style.cssText = 'color:#c0a0e0;font-size:11px;text-shadow:0 1px 3px #000;letter-spacing:0.5px;';
-
-const hpBarWrap = document.createElement('div');
-hpBarWrap.style.cssText = 'width:100%;height:6px;background:rgba(0,0,0,0.55);border-radius:3px;border:1px solid #6a2020;overflow:hidden;';
-
-const hpBarFill = document.createElement('div');
-hpBarFill.style.cssText = 'height:100%;width:100%;background:linear-gradient(90deg,#d04040,#ff8080);border-radius:3px;transition:width 0.3s ease;box-shadow:0 0 4px #d04040;';
-hpBarWrap.appendChild(hpBarFill);
-
-const hpLabelEl = document.createElement('div');
-hpLabelEl.style.cssText = 'color:#ffb0b0;font-size:11px;text-shadow:0 1px 3px #000;letter-spacing:0.5px;';
-
-const cintilasEl = document.createElement('div');
-cintilasEl.style.cssText = 'color:#a0c8ff;font-size:12px;font-weight:bold;text-shadow:0 1px 3px #000,0 0 8px #4488dd;letter-spacing:1px;display:flex;align-items:center;gap:5px;margin-top:3px;';
-cintilasEl.innerHTML = '<span style="font-size:14px;color:#cde2ff;">✦</span><span id="hud-cintilas-val">0</span> Cintilas';
-
-infoEl.append(levelEl, xpBarWrap, xpLabelEl, hpBarWrap, hpLabelEl, cintilasEl);
-hudEl.append(avatarCanvas, infoEl);
+hudEl.append(avatarBox, infoEl);
 document.body.appendChild(hudEl);
+
+// referências para atualizarHUD
+const levelValEl    = infoEl.querySelector('#hud-level-val');
+const xpFillEl      = infoEl.querySelector('#hud-xp-fill');
+const xpValEl       = infoEl.querySelector('#hud-xp-val');
+const hpFillEl      = infoEl.querySelector('#hud-hp-fill');
+const hpValEl       = infoEl.querySelector('#hud-hp-val');
 
 import('../systems/currency.js').then(({ onCintilasChange, getCintilas }) => {
     const el = document.getElementById('hud-cintilas-val');
@@ -155,16 +318,15 @@ import('../systems/currency.js').then(({ onCintilasChange, getCintilas }) => {
 });
 
 export function atualizarHUD() {
-    const pct = Math.min(100, (playerStats.xp / playerStats.xpToNext) * 100);
-    levelEl.textContent = `NÍVEL  ${playerStats.level}`;
-    xpBarFill.style.width = pct + '%';
-    xpLabelEl.textContent = `${playerStats.xp} / ${playerStats.xpToNext} XP`;
+    const xpPct = Math.min(100, (playerStats.xp / playerStats.xpToNext) * 100);
+    levelValEl.textContent = playerStats.level;
+    xpFillEl.style.setProperty('--pct', xpPct + '%');
+    xpValEl.textContent = `${playerStats.xp} / ${playerStats.xpToNext}`;
 
     const hpPct = Math.min(100, (playerStats.hp / playerStats.maxHp) * 100);
-    hpBarFill.style.width = hpPct + '%';
-    hpLabelEl.textContent = `${playerStats.hp} / ${playerStats.maxHp} HP${playerStats.derrotado ? ' (a recuperar)' : ''}`;
+    hpFillEl.style.setProperty('--pct', hpPct + '%');
+    hpValEl.textContent = `${playerStats.hp} / ${playerStats.maxHp}${playerStats.derrotado ? ' ⟡' : ''}`;
 }
 
-// ligar estatísticas → HUD
 registarCallbacksStats(atualizarHUD, () => atualizarHUD(), atualizarHUD);
 atualizarHUD();

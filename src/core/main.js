@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { criarMapa, verificaColisao, shopDoorInteract, bruxaInteractBox, updateBruxaMapa, castleEnterBox, tavernEnterBox, guardianInteractBox, removerGuardiao, updateGuardiao, isGuardiaoPassagemConcedida, matWater, matBattleGrass, matBattleSky, matCorruptHalo, matContTrunk, matContLeaves, matContRock, zonasSulLimpas, isShopDesbloqueada, resetZonasBatalha, getBridgeHeight, getBauInteractBox, abrirBau, bauJaAberto, updateBau, bauJaColetado, coletarBau, getBauMascaraInteractBox, abrirBauMascara, bauMascaraJaAberto, updateBauMascara, bauMascaraJaColetado, coletarBauMascara, fadeables, cullables, worldParticles } from '../world/mapa.js';
+import { criarMapa, verificaColisao, shopDoorInteract, bruxaInteractBox, updateBruxaMapa, castleEnterBox, tavernEnterBox, guardianInteractBox, removerGuardiao, updateGuardiao, isGuardiaoPassagemConcedida, matWater, matBattleGrass, matBattleSky, matCorruptHalo, matContTrunk, matContLeaves, matContRock, zonasSulLimpas, isShopDesbloqueada, resetZonasBatalha, getBridgeHeight, getBauInteractBox, abrirBau, bauJaAberto, updateBau, bauJaColetado, coletarBau, getBauMascaraInteractBox, abrirBauMascara, bauMascaraJaAberto, updateBauMascara, bauMascaraJaColetado, coletarBauMascara, fadeables, cullables, worldParticles, updateZoneParticles, getSantuarios, ativarSantuario, updateSantuarios, updateCogumelos } from '../world/mapa.js';
 import { player, updatePlayerAnimation, setCoroaVisivel, setBrincosVisivel, setOculosVisivel, setAureolaVisivel, setMascaraVisivel, setTochaVisivel, updateCoroaAnimacao } from '../entities/jogador.js';
 import { adicionarItem, registarOnEquipChange, CATALOGO, usarItem, temItem } from '../systems/inventario.js';
 import { ganharCintilas } from '../systems/currency.js';
@@ -7,7 +7,8 @@ import { mostrarRecompensa } from '../ui/popup-recompensa.js';
 import { verificarEncontro, estadoJogo, zonaBatalhaProximoCentro, iniciarCombateEm, iniciarBossFight } from '../systems/combate.js';
 import { atualizarFaseDesvio } from '../systems/boss-attacks.js';
 import { renderizarMinimapa } from '../world/minimapa.js';
-import { lojaScene, lojaColliders, lojaSaidaBox, getLojaHeight, tryMoveLoja, getBauLojaInteractBox, bauLojaJaAberto, bauLojaJaColetado, abrirBauLoja, coletarBauLoja, updateBauLoja, updateMerchant } from '../world/loja.js';
+import '../ui/compass-frame.js'; // instala moldura pixel prateada no #minimap-border
+import { lojaScene, lojaColliders, lojaSaidaBox, getLojaHeight, tryMoveLoja, getBauLojaInteractBox, bauLojaJaAberto, bauLojaJaColetado, abrirBauLoja, coletarBauLoja, updateBauLoja, updateMerchant, getMerchantInteractBox } from '../world/loja.js';
 import { abrirDialogoMercador, isDialogoMercadorAberto } from '../ui/merchant-dialog.js';
 import { caseloScene, caseloColliders, caseloSaidaBox, caseloMiniCam, bossCrystal, bossCrystalInteractBox, bossCrystalRestY, PEDESTAIS, pedestalProximoDe, colocarItemPedestal, todosPedestaisCheios, atualizarPedestais, atualizarAtmosferaCastelo } from '../world/castelo.js';
 import { mostrarPista, esconderPista, isPistaAberta } from '../ui/pista-popup.js';
@@ -25,13 +26,15 @@ import { skybox, starMat } from '../world/sky.js';
 import { renderer, mainCamera, lojaCamera, caseloCamera, tavernCamera, quartoCamera, combateCamera, combateBossCamera } from './renderer.js';
 import { isBossMode, precarregarBoss } from '../world/combate-scene.js';
 import { keys, registarCallbackInput } from './input.js';
-import { ganharXP, playerStats, recalcularMaxHp } from '../systems/player-stats.js';
-import { buildAvatarScene, syncAvatarMaterials, avatarRenderer, avatarScene, avatarCam, showPrompt, hidePrompt } from '../ui/hud.js';
+import { pollGamepad, registarCallbacksGamepad } from './gamepad.js';
+import { ganharXP, playerStats, recalcularMaxHp, adicionarBonusSantuario } from '../systems/player-stats.js';
+import { buildAvatarScene, syncAvatarMaterials, renderAvatarIfDirty, avatarRenderer, avatarScene, avatarCam, showPrompt, hidePrompt } from '../ui/hud.js';
 // Para alternar entre as duas UIs de diálogo, trocar este import:
 //   '../ui/npc-dialog.js'         → versão original
 //   '../ui/npc-dialog-arcano.js'  → versão Arcano (teste)
 import { abrirDialogoGuardiao, abrirDialogoGuardiaoCedePassagem, isDialogoAberto } from '../ui/npc-dialog.js';
 import { abrirInventario, fecharInventario, isInventarioAberto } from '../ui/inventario-ui.js';
+import { abrirLoadoutMenu, fecharLoadoutMenu, isLoadoutMenuAberto, mostrarBotaoLoadout } from '../ui/loadout-menu.js';
 import { toggleQuestBook, isQuestBookAberto } from '../ui/quest-book.js';
 import { descobrirQuest, completarQuest } from '../systems/quests.js';
 import { abrirLockpick, isLockpickAberto } from '../ui/lockpick.js';
@@ -306,7 +309,7 @@ sincronizarAcessorio();
 let mapaAberto = false;
 registarCallbackInput(
     () => {
-        if (estado.cena === 'mundo' && !estadoJogo.emCombate && !isInventarioAberto() && !isPauseAberto() && !isQuestBookAberto()) mapaAberto = !mapaAberto;
+        if (estado.cena === 'mundo' && !estadoJogo.emCombate && !isInventarioAberto() && !isPauseAberto() && !isQuestBookAberto() && !isSpaceCutsceneActive()) mapaAberto = !mapaAberto;
     },
     () => {
         // I abre o inventário só fora do combate, sem mapa nem diálogo aberto
@@ -334,8 +337,52 @@ registarCallbackInput(
         if (estadoJogo.emCombate || isInventarioAberto() || isDialogoAberto() || isPauseAberto() || isLockpickAberto()) return;
         if (!temItem('tocha')) return;
         usarItem('tocha');
+    },
+    () => {
+        // V — Abrir/fechar o menu de equipar ataques (loadout)
+        if (estadoJogo.emCombate || isSpaceCutsceneActive()) return;
+        if (mapaAberto || isInventarioAberto() || isDialogoAberto() || isPauseAberto() || isLockpickAberto() || isQuestBookAberto() || isBruxaArcanoAberto()) return;
+        if (isLoadoutMenuAberto()) fecharLoadoutMenu();
+        else abrirmLoadoutMenu();
     }
 );
+
+// Gamepad: replica os mesmos handlers (mapa, inventário, pausa, etc.).
+// Os mesmos guards aplicam-se — o gamepad é só outro driver de input.
+registarCallbacksGamepad({
+    onToggleMapa: () => {
+        if (estado.cena === 'mundo' && !estadoJogo.emCombate && !isInventarioAberto() && !isPauseAberto() && !isQuestBookAberto() && !isSpaceCutsceneActive()) mapaAberto = !mapaAberto;
+    },
+    onToggleInventario: () => {
+        if (estadoJogo.emCombate) return;
+        if (mapaAberto || isQuestBookAberto()) return;
+        if (isDialogoAberto() || isPauseAberto()) return;
+        if (isInventarioAberto()) fecharInventario();
+        else abrirInventario();
+    },
+    onTogglePause: (e) => {
+        if (!isPauseAberto()) {
+            if (isInventarioAberto() || isDialogoAberto() || mapaAberto || isLockpickAberto() || isQuestBookAberto()) return;
+        }
+        if (e) e.stopPropagation?.();
+        togglePause();
+    },
+    onToggleQuestBook: () => {
+        if (estadoJogo.emCombate || mapaAberto || isInventarioAberto() || isDialogoAberto() || isPauseAberto() || isLockpickAberto()) return;
+        toggleQuestBook();
+    },
+    onToggleTocha: () => {
+        if (estadoJogo.emCombate || isInventarioAberto() || isDialogoAberto() || isPauseAberto() || isLockpickAberto()) return;
+        if (!temItem('tocha')) return;
+        usarItem('tocha');
+    },
+    onToggleLoadout: () => {
+        if (estadoJogo.emCombate || isSpaceCutsceneActive()) return;
+        if (mapaAberto || isInventarioAberto() || isDialogoAberto() || isPauseAberto() || isLockpickAberto() || isQuestBookAberto() || isBruxaArcanoAberto()) return;
+        if (isLoadoutMenuAberto()) fecharLoadoutMenu();
+        else abrirmLoadoutMenu();
+    },
+});
 
 // --------------------------------------------------------
 // ÁUDIO (gerido em systems/audio.js)
@@ -432,24 +479,11 @@ function animateMundo(deltaTime) {
     // determinará se o jogador andou neste frame.
     // (decisão final acontece no fim de animateMundo)
 
-    // Animar partículas roxas nas zonas corruptas — throttled a 30Hz (cada 2
-    // frames). Sobe a velocidade ao dobro para compensar o salto temporal,
-    // mantendo a aparência visual idêntica. Evita upload de buffer todo o frame.
-    if ((_frameCount & 1) === 0) {
-        const dt2 = deltaTime * 2;
-        for (let i = 0; i < worldParticles.length; i++) {
-            const pts = worldParticles[i];
-            if (!pts.parent) continue;
-            const pos = pts.geometry.attributes.position;
-            for (let j = 0; j < pos.count; j++) {
-                pos.array[j * 3 + 1] += dt2 * 0.35;
-                if (pos.array[j * 3 + 1] > 4.0) pos.array[j * 3 + 1] = 0;
-            }
-            pos.needsUpdate = true;
-        }
-    }
+    // Partículas roxas das zonas corruptas — animadas no vertex shader.
+    // Um único uniform update partilhado por todas as zonas (sem upload de buffer).
+    updateZoneParticles(deltaTime);
 
-    if (!emCutscene && !estadoJogo.emCombate && !mapaAberto && !isDialogoAberto() && !isInventarioAberto() && !isLockpickAberto()) {
+    if (!emCutscene && !estadoJogo.emCombate && !mapaAberto && !isDialogoAberto() && !isInventarioAberto() && !isLockpickAberto() && !isBruxaArcanoAberto() && !isLoadoutMenuAberto()) {
         let dirX = 0, dirZ = 0;
         if (keys.w) dirZ -= 1;
         if (keys.s) dirZ += 1;
@@ -573,26 +607,44 @@ function animateMundo(deltaTime) {
                 }
             } else { hidePrompt(); }
         } else {
-            const lost = getLostItemAt(pb);
-            if (lost) {
-                showPrompt(`E — Recolher ${lost.item.nome}`);
+            // Santuários — bênção +5 HP máx, uma vez por "dia" (reset ao dormir)
+            const santuariosArr = getSantuarios();
+            let santuarioAtivo = -1;
+            for (let i = 0; i < santuariosArr.length; i++) {
+                if (santuariosArr[i].box.intersectsBox(pb)) { santuarioAtivo = i; break; }
+            }
+            if (santuarioAtivo >= 0 && !santuariosArr[santuarioAtivo].ativado) {
+                showPrompt('E — Receber Bênção do Santuário (+5 HP máx)');
                 if (keys.e) {
                     keys.e = false;
-                    if (coletarItemPerdido(lost.id)) {
-                        playSFX('abrir_bau');
+                    if (ativarSantuario(santuarioAtivo)) {
+                        adicionarBonusSantuario(5);
+                        playSFX('cristal');
                         hidePrompt();
                     }
                 }
             } else {
-                const zonaBatalha = zonaBatalhaProximoCentro(player.position.x, player.position.z);
-                if (zonaBatalha) {
-                    showPrompt('E — Iniciar Peleja');
+                const lost = getLostItemAt(pb);
+                if (lost) {
+                    showPrompt(`E — Recolher ${lost.item.nome}`);
                     if (keys.e) {
                         keys.e = false;
-                        iniciarCombateEm(player.position.x, player.position.z, zonaBatalha.tipo);
+                        if (coletarItemPerdido(lost.id)) {
+                            playSFX('abrir_bau');
+                            hidePrompt();
+                        }
                     }
                 } else {
-                    hidePrompt();
+                    const zonaBatalha = zonaBatalhaProximoCentro(player.position.x, player.position.z);
+                    if (zonaBatalha) {
+                        showPrompt('E — Iniciar Peleja');
+                        if (keys.e) {
+                            keys.e = false;
+                            iniciarCombateEm(player.position.x, player.position.z, zonaBatalha.tipo);
+                        }
+                    } else {
+                        hidePrompt();
+                    }
                 }
             }
         }
@@ -604,6 +656,8 @@ function animateMundo(deltaTime) {
     updateBau(deltaTime);
     updateBauMascara(deltaTime);
     updateLostItems(deltaTime);
+    updateSantuarios(deltaTime);
+    updateCogumelos(deltaTime);
     updateGuardiao(deltaTime);
     updateBruxaMapa(deltaTime, player.position);
     if (!moderator.lockY) {
@@ -686,7 +740,14 @@ function animateMundo(deltaTime) {
             renderer.render(scene, mainCamera);
         }
         _restoreAllCullables();
-        renderizarMinimapa(renderer, scene, window.innerWidth, window.innerHeight, player.position, false);
+        // Durante a cinemática a HUD inteira é apagada — não renderizar o
+        // minimapa nem deixar o seu border aparecer.
+        if (emCutscene) {
+            const border = document.getElementById('minimap-border');
+            if (border) border.style.display = 'none';
+        } else {
+            renderizarMinimapa(renderer, scene, window.innerWidth, window.innerHeight, player.position, false);
+        }
     }
     _frameCount++;
 }
@@ -843,7 +904,7 @@ function animateLoja(deltaTime) {
 
 function animateCaselo(deltaTime) {
     let isMoving = false, dirX = 0, dirZ = 0;
-    if (!isInventarioAberto()) {
+    if (!isInventarioAberto() && !isLoadoutMenuAberto()) {
         if (keys.w) dirZ -= 1; if (keys.s) dirZ += 1;
         if (keys.a) dirX -= 1; if (keys.d) dirX += 1;
     }
@@ -907,7 +968,7 @@ function animateCaselo(deltaTime) {
                 showPrompt(`✦ ${CATALOGO[ped.itemId]?.nome || 'Item'} já colocado`);
                 if (isPistaAberta()) esconderPista();
             } else if (ped.itemId && qtdInv(ped.itemId) > 0) {
-                showPrompt(`E — Colocar ${CATALOGO[ped.itemId].icone} ${CATALOGO[ped.itemId].nome}`);
+                showPrompt(`E — Colocar ${CATALOGO[ped.itemId].nome}`);
                 if (keys.e) {
                     keys.e = false;
                     if (colocarItemPedestal(idx)) {
@@ -1082,7 +1143,18 @@ function animateTavern(deltaTime) {
     );
 
     // bloqueia movimento/interacções enquanto a intro do bartender está aberta
-    if (isIntroBartenderAberta() || isBartenderShopAberta()) {
+    // Intro do bartender — mandatória na primeira entrada na taverna.
+    // Não depende de posição: assim que estás na cena 'tavern' com a intro
+    // ainda por fazer, abre-se. Evita o caso em que o spawn de regresso do
+    // quarto cai dentro do quartoEnterBox e o jogador, virado a sul, sai
+    // da bartenderIntroBox antes do per-frame check apanhar.
+    if (!bartenderIntroFeita() && !isIntroBartenderAberta() && !isBartenderShopAberta()) {
+        abrirIntroBartender(() => {
+            marcarBartenderIntroFeita();
+            mostrarPista('O taberneiro retirou-se para o seu recanto da estalagem. Procurai-o se precisardes de elixires ou golpes.');
+        });
+        hidePrompt();
+    } else if (isIntroBartenderAberta() || isBartenderShopAberta()) {
         hidePrompt();
     } else if (tavernSaidaBox.intersectsBox(pb)) {
         showPrompt('E — Deixar a Estalagem');
@@ -1092,16 +1164,6 @@ function animateTavern(deltaTime) {
         showPrompt('E — Ascender aos Aposentos');
         if (keys.e) { keys.e = false; entrarQuarto(); }
         if (isPistaAberta()) esconderPista();
-    } else if (!bartenderIntroFeita() && bartenderIntroBox.intersectsBox(pb)) {
-        // intro automática — assim que o jogador sai do quarto e dá um passo.
-        // Guard com isIntroBartenderAberta() para só disparar uma vez.
-        if (!isIntroBartenderAberta()) {
-            abrirIntroBartender(() => {
-                marcarBartenderIntroFeita();
-                mostrarPista('O taberneiro retirou-se para o seu recanto da estalagem. Procurai-o se precisardes de elixires ou golpes.');
-            });
-        }
-        hidePrompt();
     } else if (bartenderIntroFeita() && bartenderVendorBox.intersectsBox(pb)) {
         showPrompt('E — Parlamentar com o Taberneiro');
         if (keys.e) {
@@ -1269,10 +1331,9 @@ function animateQuarto(deltaTime) {
                     // elixires iniciais — agora vêm daqui
                     adicionarItem('pocao', 3);
                     adicionarItem('mega', 1);
-                    const it = CATALOGO['pocao'];
                     mostrarRecompensa({
-                        icone: it.icone,
-                        nome: 'Elixires de Cura',
+                        icone: 'assets/icones/big_potion.png',
+                        nome: 'Poção Lunar',
                         descricao: '×3 Elixir de Cura  +  ×1 Elixir Maior',
                     });
                     hidePrompt();
@@ -1375,10 +1436,15 @@ function animate() {
     let deltaTime = clock.getDelta();
     tickFps();
 
+    // Gamepad: actualiza estado dos botões/sticks → espelha em `keys`. Só
+    // age se inputMethod === 'gamepad' nas settings (poll é no-op c.c.).
+    pollGamepad();
+
     // Actualizar tempo dos shaders
     starMat.uniforms.uTime.value += deltaTime;
 
     // Modo nocturno só corre no mundo exterior — entra/sai conforme a cena.
+    mostrarBotaoLoadout(!estadoJogo.emCombate && !isSpaceCutsceneActive());
     if (estado.cena !== _prevCena) {
         if (estado.cena === 'mundo') {
             resumeNightMode();
@@ -1434,11 +1500,11 @@ function animate() {
     renderer.setScissorTest(false);
     renderer.clear();
 
-    // Minimapa/bússola: só aparece no mundo exterior
+    // Minimapa/bússola: só aparece no mundo exterior, e nunca durante a cinemática.
     {
         const border = document.getElementById('minimap-border');
         if (border) {
-            const queremos = (estado.cena === 'mundo') ? 'block' : 'none';
+            const queremos = (estado.cena === 'mundo' && !isSpaceCutsceneActive()) ? 'block' : 'none';
             if (border.style.display !== queremos) border.style.display = queremos;
         }
     }
@@ -1533,7 +1599,10 @@ function animate() {
         else if (estado.cena === 'boss_debug') animateBossDebug(deltaTime);
     }
 
-    avatarRenderer.render(avatarScene, avatarCam);
+    // Avatar só re-renderiza quando algo mudou (equipamento/material) e a HUD
+    // está visível. Antes era um render WebGL completo por frame, mesmo com
+    // o avatar idêntico ou a HUD escondida em combate/menu.
+    renderAvatarIfDirty();
 }
 
 criarMapa(scene);

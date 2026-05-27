@@ -1,22 +1,24 @@
-export const keys = { w: false, a: false, s: false, d: false, e: false, i: false, m: false, l: false, p: false, b: false, n: false };
+export const keys = { w: false, a: false, s: false, d: false, e: false, i: false, m: false, l: false, p: false, b: false, n: false, v: false };
 
 let _onToggleMapa = null;
 let _onToggleInventario = null;
 let _onTogglePause = null;
 let _onToggleQuestBook = null;
 let _onToggleTocha = null;
-export function registarCallbackInput(onToggleMapa, onToggleInventario, onTogglePause, onToggleQuestBook, onToggleTocha) {
+let _onToggleLoadout = null;
+export function registarCallbackInput(onToggleMapa, onToggleInventario, onTogglePause, onToggleQuestBook, onToggleTocha, onToggleLoadout) {
     _onToggleMapa = onToggleMapa;
     _onToggleInventario = onToggleInventario;
     _onTogglePause = onTogglePause;
     _onToggleQuestBook = onToggleQuestBook;
     _onToggleTocha = onToggleTocha;
+    _onToggleLoadout = onToggleLoadout;
 }
 
 // Teclas de acção (one-shot): ignorar auto-repeat do browser para que cada
 // `tap` no E corresponda a UM evento — evita que segurar a tecla dispare
 // dois passos consecutivos (ex.: abrir baú + coletar logo a seguir).
-const ACTION_KEYS = new Set(['e', 'b', 'i', 'm', 'p', 'n']);
+const ACTION_KEYS = new Set(['e', 'b', 'i', 'm', 'p', 'n', 'v']);
 
 window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
@@ -29,6 +31,7 @@ window.addEventListener('keydown', (e) => {
     if (key === 'i' && _onToggleInventario) _onToggleInventario();
     if (key === 'b' && _onToggleQuestBook) _onToggleQuestBook();
     if (key === 'n' && _onToggleTocha) _onToggleTocha();
+    if (key === 'v' && _onToggleLoadout) _onToggleLoadout();
     if ((key === 'p' || e.key === 'Escape') && _onTogglePause) _onTogglePause(e);
 });
 

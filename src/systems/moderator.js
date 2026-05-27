@@ -352,7 +352,10 @@ document.onmouseup = () => {
 function renderEstado() {
     const el = document.getElementById('mod-estado');
     if (!el) return;
-    const itens = getItens().filter(i => i.quantidade > 0).map(i => `${i.icone} ${i.nome} x${i.quantidade}`).join('<br>') || '<i style="color:#888;">— vazio —</i>';
+    const iconHtml = (ic) => (ic && (ic.endsWith('.png') || ic.endsWith('.jpg') || ic.includes('/')))
+        ? `<img src="${ic}" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;">`
+        : (ic || '');
+    const itens = getItens().filter(i => i.quantidade > 0).map(i => `${iconHtml(i.icone)} ${i.nome} x${i.quantidade}`).join('<br>') || '<i style="color:#888;">— vazio —</i>';
     el.innerHTML = `
         <span style="color:#ffe080;">Lv ${playerStats.level}</span> ·
         <span style="color:#a0c0ff;">XP ${playerStats.xp}/${playerStats.xpToNext}</span><br>
@@ -375,7 +378,7 @@ function renderItensGrid() {
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;gap:4px;align-items:center;padding:2px 0;border-bottom:1px solid rgba(240,208,128,0.1);';
         row.innerHTML = `
-            <span style="flex:1;font-size:10px;">${it.icone} ${it.nome}</span>
+            <span style="flex:1;font-size:10px;display:flex;align-items:center;gap:4px;">${(it.icone && (it.icone.endsWith('.png') || it.icone.endsWith('.jpg') || it.icone.includes('/'))) ? `<img src="${it.icone}" style="width:14px;height:14px;object-fit:contain;">` : (it.icone || '')} ${it.nome}</span>
             <button data-add="${id}" data-qtd="1" style="background:#a060f0;color:#fff;border:none;cursor:pointer;padding:2px 6px;font-size:10px;font-weight:bold;">+1</button>
             <button data-add="${id}" data-qtd="5" style="background:#7040c0;color:#fff;border:none;cursor:pointer;padding:2px 6px;font-size:10px;font-weight:bold;">+5</button>
         `;

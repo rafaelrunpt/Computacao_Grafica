@@ -30,6 +30,7 @@ import { keys } from '../core/input.js';
 import { receberDano, playerStats } from './player-stats.js';
 import { setHpPlayer, setLog, mostrarDanoFlutuante } from '../ui/combate-ui.js';
 import { tocarSomAtaqueBoss, tocarRugidoBoss } from './audio.js';
+import { BossVFX } from './boss-vfx.js';
 
 // ----------------------------------------------------------------------
 // CONFIGURAÇÃO
@@ -127,43 +128,6 @@ const _projectiles = [];
 const _kPrev = { a: false, d: false, w: false, s: false };
 
 // ----------------------------------------------------------------------
-// MATERIAIS — partilhados entre projécteis para não recriar a cada spawn
-// ----------------------------------------------------------------------
-const matTelegraphAereo = new THREE.MeshBasicMaterial({
-    color: 0xff4040, transparent: true, opacity: 0.5,
-    side: THREE.DoubleSide, depthWrite: false,
-});
-const matTelegraphRasante = new THREE.MeshBasicMaterial({
-    color: 0xffaa20, transparent: true, opacity: 0.5,
-    side: THREE.DoubleSide, depthWrite: false,
-});
-const matTelegraphLateral = new THREE.MeshBasicMaterial({
-    color: 0xb060ff, transparent: true, opacity: 0.5,
-    side: THREE.DoubleSide, depthWrite: false,
-});
-const matTelegraphVarredura = new THREE.MeshBasicMaterial({
-    color: 0x60ffaa, transparent: true, opacity: 0.55,
-    side: THREE.DoubleSide, depthWrite: false,
-});
-
-const matProjAereo = new THREE.MeshStandardMaterial({
-    color: 0xff5050, emissive: 0xff2020, emissiveIntensity: 2.2,
-    roughness: 0.3, metalness: 0.0,
-});
-const matProjRasante = new THREE.MeshStandardMaterial({
-    color: 0xffaa40, emissive: 0xff8800, emissiveIntensity: 2.5,
-    roughness: 0.3, metalness: 0.0,
-});
-const matProjLateral = new THREE.MeshStandardMaterial({
-    color: 0xc080ff, emissive: 0x8030ff, emissiveIntensity: 2.4,
-    roughness: 0.3, metalness: 0.0,
-});
-const matProjVarredura = new THREE.MeshStandardMaterial({
-    color: 0x88ffc0, emissive: 0x40dd80, emissiveIntensity: 2.5,
-    roughness: 0.3, metalness: 0.0,
-});
-
-// ----------------------------------------------------------------------
 // PROJECTEIS — factories
 // ----------------------------------------------------------------------
 
@@ -174,35 +138,9 @@ function criarAereo() {
     const z = posPlayerCombate.z;
     const speed = _speedMult();
 
-    // marcador no chão
-    const ringMat = matTelegraphAereo.clone();
-    ringMat.color.setHex(_telegraphColorHex(0xff4040));
-    const ring = new THREE.Mesh(
-        new THREE.RingGeometry(0.55, 0.85, 24),
-        ringMat
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.set(x, 0.02, z);
-    combateScene.add(ring);
-
-    // projéctil (escondido até ao impacto)
-    const proj = new THREE.Mesh(
-        new THREE.SphereGeometry(0.4, 16, 12),
-        matProjAereo
-    );
-    proj.position.set(x, 8, z);
-    proj.visible = false;
-    combateScene.add(proj);
-
-    // luz pontual
-    const light = new THREE.PointLight(0xff5050, 0, 4, 2);
-    light.position.set(x, 1.2, z);
-    combateScene.add(light);
-
-    return {
+    const pr = {
         type: 'aereo',
         lane, x, z,
-        ring, proj, light,
         teleDur: 0.95 / speed,
         impactDur: 0.35 / speed,
         t: 0,
@@ -213,6 +151,8 @@ function criarAereo() {
             return plane === lane && py < 1.0 && py >= 0; // de pé é hit
         },
     };
+    BossVFX.criarTelegraph(pr, _telegraphColorHex(0xff4040));
+    return pr;
 }
 
 // Rasante: barra alaranjada baixa que se materializa e varre o eixo Z
@@ -222,33 +162,9 @@ function criarRasante() {
     const x = posPlayerCombate.x; // varre o meio (largura cobre as 3 lanes)
     const speed = _speedMult();
 
-    // marcador no chão — linha horizontal baixa
-    const barMat = matTelegraphRasante.clone();
-    barMat.color.setHex(_telegraphColorHex(0xffaa20));
-    const bar = new THREE.Mesh(
-        new THREE.BoxGeometry(5.5, 0.05, 0.5),
-        barMat
-    );
-    bar.position.set(x, 0.06, z);
-    combateScene.add(bar);
-
-    // projéctil — uma "onda" baixa
-    const proj = new THREE.Mesh(
-        new THREE.BoxGeometry(5.5, 0.45, 0.7),
-        matProjRasante
-    );
-    proj.position.set(x, 0.25, z - 4);
-    proj.visible = false;
-    combateScene.add(proj);
-
-    const light = new THREE.PointLight(0xffaa30, 0, 6, 2);
-    light.position.set(x, 0.5, z);
-    combateScene.add(light);
-
-    return {
+    const pr = {
         type: 'rasante',
         x, z,
-        bar, proj, light,
         teleDur: 0.9 / speed,
         impactDur: 0.45 / speed,
         t: 0,
@@ -259,6 +175,8 @@ function criarRasante() {
             return py < 0.7;
         },
     };
+    BossVFX.criarTelegraph(pr, _telegraphColorHex(0xffaa20));
+    return pr;
 }
 
 // Lateral: bola roxa que vem de um lado (esq/dir do boss) e atravessa
@@ -270,50 +188,10 @@ function criarLateral() {
     const z = posPlayerCombate.z;
     const speed = _speedMult();
     const fromLeft = Math.random() < 0.5;
-    const teleHex = _telegraphColorHex(0xb060ff);
 
-    // marcador — coluna fina vertical na lane alvo
-    const colMat = matTelegraphLateral.clone();
-    colMat.color.setHex(teleHex);
-    const col = new THREE.Mesh(
-        new THREE.BoxGeometry(0.18, 2.2, 0.18),
-        colMat
-    );
-    col.position.set(targetX, 1.0, z);
-    combateScene.add(col);
-
-    // seta a apontar a direção em que o projéctil vem — fica no lado
-    // de origem e aponta para a lane alvo
-    const arrowMat = matTelegraphLateral.clone();
-    arrowMat.color.setHex(teleHex);
-    const arrow = new THREE.Mesh(
-        new THREE.ConeGeometry(0.32, 0.85, 4),
-        arrowMat
-    );
-    arrow.position.set(fromLeft ? -3.6 : 3.6, 1.2, z);
-    // o cone aponta por defeito em +Y; rotação -π/2 em Z faz apontar em
-    // +X (origem à esquerda, ponta para a direita) e +π/2 em -X
-    arrow.rotation.z = fromLeft ? -Math.PI / 2 : Math.PI / 2;
-    combateScene.add(arrow);
-
-    // projéctil — esfera grande
-    const proj = new THREE.Mesh(
-        new THREE.SphereGeometry(0.45, 14, 10),
-        matProjLateral
-    );
-    const startX = fromLeft ? -8 : 8;
-    proj.position.set(startX, 1.2, z);
-    proj.visible = false;
-    combateScene.add(proj);
-
-    const light = new THREE.PointLight(0xc080ff, 0, 5, 2);
-    light.position.set(targetX, 1.2, z);
-    combateScene.add(light);
-
-    return {
+    const pr = {
         type: 'lateral',
         lane, x: targetX, z, fromLeft,
-        col, arrow, proj, light,
         teleDur: 0.85 / speed,
         impactDur: 0.45 / speed,
         t: 0,
@@ -324,6 +202,8 @@ function criarLateral() {
             return plane === lane && player.scale.y > 0.7 && py < 1.4;
         },
     };
+    BossVFX.criarTelegraph(pr, _telegraphColorHex(0xb060ff));
+    return pr;
 }
 
 // Varredura: viga horizontal larga à altura do peito/cara que varre as
@@ -335,33 +215,9 @@ function criarVarredura() {
     const beamY = 1.35; // altura do peito/cara
     const speed = _speedMult();
 
-    // marcador — parede fina vertical à altura do peito a piscar
-    const wallMat = matTelegraphVarredura.clone();
-    wallMat.color.setHex(_telegraphColorHex(0x60ffaa));
-    const wall = new THREE.Mesh(
-        new THREE.BoxGeometry(5.5, 0.55, 0.25),
-        wallMat
-    );
-    wall.position.set(x, beamY, z);
-    combateScene.add(wall);
-
-    // projéctil — viga horizontal larga
-    const proj = new THREE.Mesh(
-        new THREE.BoxGeometry(5.5, 0.65, 0.7),
-        matProjVarredura
-    );
-    proj.position.set(x, beamY, z - 4);
-    proj.visible = false;
-    combateScene.add(proj);
-
-    const light = new THREE.PointLight(0x70ffaa, 0, 6, 2);
-    light.position.set(x, beamY + 0.3, z);
-    combateScene.add(light);
-
-    return {
+    const pr = {
         type: 'varredura',
         x, z, beamY,
-        bar: wall, proj, light,
         teleDur: 1.0 / speed,
         impactDur: 0.45 / speed,
         t: 0,
@@ -373,6 +229,8 @@ function criarVarredura() {
             return player.scale.y > 0.7;
         },
     };
+    BossVFX.criarTelegraph(pr, _telegraphColorHex(0x60ffaa));
+    return pr;
 }
 
 const FACTORIES = [criarAereo, criarRasante, criarLateral, criarVarredura];
@@ -393,49 +251,20 @@ function _paresIncompativeis(a, b) {
 // ----------------------------------------------------------------------
 function updateProjectile(pr, deltaTime) {
     pr.t += deltaTime;
-    const teleT = Math.min(1, pr.t / pr.teleDur);
     const inImpact = pr.t >= pr.teleDur;
 
-    // -------- TELEGRAPH (a piscar) --------
-    if (!inImpact) {
-        const blink = 0.45 + 0.55 * Math.abs(Math.sin(pr.t * 14));
-        if (pr.ring)  pr.ring.material.opacity  = 0.35 + blink * 0.45;
-        if (pr.bar)   pr.bar.material.opacity   = 0.35 + blink * 0.45;
-        if (pr.col)   pr.col.material.opacity   = 0.35 + blink * 0.45;
-        if (pr.arrow) pr.arrow.material.opacity = 0.40 + blink * 0.55;
-        return;
-    }
-
-    // -------- IMPACT (projéctil visível + movimento) --------
-    if (!pr.launched) {
+    // -------- TELEGRAPH / IMPACT (delegado ao VFX) --------
+    if (inImpact && !pr.launched) {
         pr.launched = true;
         tocarSomAtaqueBoss(pr.type);   // som do ataque, ao lançar o projéctil
+        BossVFX.criarProjectil(pr);
     }
-    pr.proj.visible = true;
-    const u = Math.min(1, (pr.t - pr.teleDur) / pr.impactDur);
-    if (pr.light) pr.light.intensity = 4.0 * (1 - u);
 
-    if (pr.type === 'aereo') {
-        pr.proj.position.y = 8 * (1 - u) + 0.5 * u;
-        if (pr.ring) pr.ring.material.opacity = 0.6 * (1 - u);
-    } else if (pr.type === 'rasante') {
-        // varre do z = -4 (lado do boss) até z = +3 (passa o player)
-        pr.proj.position.z = pr.z - 4 + 7 * u;
-        if (pr.bar) pr.bar.material.opacity = 0.6 * (1 - u);
-    } else if (pr.type === 'lateral') {
-        const startX = pr.fromLeft ? -8 : 8;
-        pr.proj.position.x = startX + (pr.x - startX) * u + (pr.fromLeft ? 1 : -1) * (u - 1) * 2;
-        if (pr.col)   pr.col.material.opacity   = 0.6 * (1 - u);
-        if (pr.arrow) pr.arrow.material.opacity = 0.6 * (1 - u);
-    } else if (pr.type === 'varredura') {
-        // varre do boss para o player, mantendo a altura do peito
-        pr.proj.position.z = pr.z - 4 + 7 * u;
-        pr.proj.position.y = pr.beamY;
-        if (pr.bar) pr.bar.material.opacity = 0.6 * (1 - u);
-    }
+    const u = inImpact ? Math.min(1, (pr.t - pr.teleDur) / pr.impactDur) : 0;
+    BossVFX.update(pr, u, inImpact);
 
     // -------- HIT DETECTION no instante de pico (~50% do impact) --------
-    if (!pr.hitApplied && u >= 0.5) {
+    if (inImpact && !pr.hitApplied && u >= 0.5) {
         pr.hitApplied = true;
         const py = player.position.y;
         const plane = _laneIdx;
@@ -456,12 +285,7 @@ function updateProjectile(pr, deltaTime) {
 }
 
 function _disposeProjectile(pr) {
-    if (pr.ring)  combateScene.remove(pr.ring);
-    if (pr.bar)   combateScene.remove(pr.bar);
-    if (pr.col)   combateScene.remove(pr.col);
-    if (pr.arrow) combateScene.remove(pr.arrow);
-    if (pr.proj)  combateScene.remove(pr.proj);
-    if (pr.light) combateScene.remove(pr.light);
+    BossVFX.dispose(pr);
 }
 
 // flash vermelho a cobrir o ecrã quando o jogador é atingido
@@ -610,7 +434,10 @@ function _aplicarPos() {
     const targetX = posPlayerCombate.x + LANE_OFFSETS[_laneIdx];
     _smoothX.value += (targetX - _smoothX.value) * 0.22;
     player.position.x = _smoothX.value;
-    player.position.z = posPlayerCombate.z;
+    
+    // O lunge (ataque do jogador) é um offset temporário em Z.
+    const lunge = player.userData.lungeOffset || 0;
+    player.position.z = posPlayerCombate.z - lunge;
 
     let py = 0, scaleY = 1;
     if (_yState === 'jump') {

@@ -86,7 +86,7 @@ export function criarInimigoWraith() {
     faceLight.position.set(0, 2.55, 0.25);
     grupo.add(faceLight);
 
-    // Braços + garras
+    // Braços + garras (expostos no grupo para a animação de ataque)
     function braco(side) {
         const manga = new THREE.Mesh(
             new THREE.ConeGeometry(0.18, 1.05, 8, 1, true),
@@ -95,13 +95,21 @@ export function criarInimigoWraith() {
         manga.position.set(0.55 * side, 1.55, 0.1);
         manga.rotation.z = side * 0.45;
         manga.castShadow = true;
+        manga.userData.baseRotZ = manga.rotation.z;
+        manga.userData.basePos = manga.position.clone();
         grupo.add(manga);
 
         const garra = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 10), glowMat);
         garra.position.set(0.82 * side, 1.05, 0.12);
+        garra.userData.basePos = garra.position.clone();
         grupo.add(garra);
+
+        return { manga, garra };
     }
-    braco(-1); braco(1);
+    const bEsq = braco(-1);
+    const bDir = braco(1);
+    grupo.userData.bracoEsq = bEsq;
+    grupo.userData.bracoDir = bDir;
 
     // Asas
     function asa(side) {
@@ -240,6 +248,117 @@ export function updateInimigoWraith(grupo, dt, t, basePos) {
             f.scale.set(s, s * (1.0 + Math.sin(t * 4 + u.phase) * 0.15), s);
         }
     }
+}
+
+/**
+ * Animação de ataque do wraith. Cada `tipo` tem coreografia distinta.
+ *   foice      — braço direito faz arco descendente largo
+ *   lua        — braço esquerdo varre baixo
+ *   verberacao — duplo jab alternado, asas vibram rápido
+ *   espinho    — estocada/jab do braço direito
+ *   talho      — AMBOS os braços + asas abrem (ataque mais pesado)
+ */
+export function animarAtaqueWraith(grupo, tipo = 'foice', dur = 600) {
+    const bE = grupo.userData.bracoEsq;
+    const bD = grupo.userData.bracoDir;
+    const asaL = grupo.userData.asaL;
+    const asaR = grupo.userData.asaR;
+    if (!bE || !bD) return;
+
+    const resetBraco = (b) => {
+        b.manga.rotation.set(0, 0, b.manga.userData.baseRotZ);
+        b.manga.position.copy(b.manga.userData.basePos);
+        b.garra.position.copy(b.garra.userData.basePos);
+    };
+    const resetAsas = () => {
+        if (asaL) { asaL.rotation.x = 0; asaL.rotation.z = 0; asaL.scale.set(1,1,1); }
+        if (asaR) { asaR.rotation.x = 0; asaR.rotation.z = 0; asaR.scale.set(1,1,1); }
+    };
+
+    // bell curve: vale 1 no meio, 0 nas pontas
+    const bell = (e) => Math.sin(Math.PI * e);
+    // windup/strike/recoil: -1 a recuar, +1 no golpe
+    const swingArc = (e) => {
+        if (e < 0.45)      return -(e / 0.45);                  // -1 a 0 (recua)
+        if (e < 0.7) {
+            const k = (e - 0.45) / 0.25;
+            return -1 + k * 2.6;                                 // -1 → 1.6 (chicote)
+        }
+        return 1.6 * (1 - (e - 0.7) / 0.3);                      // 1.6 → 0
+    };
+
+    const t0 = performance.now();
+    function step(now) {
+        const e = (now - t0) / dur;
+        if (e >= 1) { resetBraco(bE); resetBraco(bD); resetAsas(); return; }
+
+        if (tipo === 'foice') {
+            // braço direito: arco grande descendente, esquerdo quieto
+            const lift = bell(Math.min(1, e * 1.4));   // sobe rápido, fica
+            const sw = swingArc(e);
+            bD.manga.rotation.z = bD.manga.userData.baseRotZ + lift * 1.3;
+            bD.manga.rotation.x = -sw * 0.6;
+            bD.manga.position.y = bD.manga.userData.basePos.y + lift * 0.45;
+            bD.garra.position.y = bD.garra.userData.basePos.y + lift * 0.7;
+            bD.garra.position.z = bD.garra.userData.basePos.z + sw * 0.55;
+        }
+        else if (tipo === 'lua') {
+            // braço esquerdo: varre baixo, ligeiramente para baixo+frente
+            const lift = bell(Math.min(1, e * 1.2));
+            const sw = swingArc(e);
+            bE.manga.rotation.z = bE.manga.userData.baseRotZ - lift * 0.4;
+            bE.manga.rotation.x = -sw * 0.7;
+            bE.manga.position.y = bE.manga.userData.basePos.y - lift * 0.15;
+            bE.manga.position.x = bE.manga.userData.basePos.x - sw * 0.3;
+            bE.garra.position.y = bE.garra.userData.basePos.y - lift * 0.1;
+            bE.garra.position.z = bE.garra.userData.basePos.z + sw * 0.6;
+        }
+        else if (tipo === 'verberacao') {
+            // duplo jab alternado: esquerdo em 0..0.5, direito em 0.5..1
+            const wing = Math.sin(e * Math.PI * 6) * 0.15; // asas vibram rápido
+            if (asaL) asaL.rotation.x = wing;
+            if (asaR) asaR.rotation.x = -wing;
+            const half = e < 0.5 ? e * 2 : (e - 0.5) * 2;     // 0..1 em cada metade
+            const sw = swingArc(half);
+            const b = e < 0.5 ? bE : bD;
+            const other = e < 0.5 ? bD : bE;
+            b.manga.rotation.x = -sw * 0.7;
+            b.manga.position.z = b.manga.userData.basePos.z + sw * 0.15;
+            b.garra.position.z = b.garra.userData.basePos.z + sw * 0.65;
+            resetBraco(other);
+        }
+        else if (tipo === 'espinho') {
+            // estocada: braço direito estica para a frente, recta
+            const sw = swingArc(e);
+            bD.manga.rotation.z = bD.manga.userData.baseRotZ + 0.2;
+            bD.manga.rotation.x = -sw * 0.5;
+            bD.manga.position.z = bD.manga.userData.basePos.z + sw * 0.35;
+            bD.garra.position.z = bD.garra.userData.basePos.z + sw * 0.95; // perfura longe
+            bD.garra.position.x = bD.garra.userData.basePos.x - Math.max(0, sw) * 0.15;
+        }
+        else if (tipo === 'talho') {
+            // ATAQUE PESADO: ambos os braços + asas abrem
+            const lift = bell(Math.min(1, e * 1.3));
+            const sw = swingArc(e);
+            // braços
+            bE.manga.rotation.z = bE.manga.userData.baseRotZ - lift * 1.0;
+            bD.manga.rotation.z = bD.manga.userData.baseRotZ + lift * 1.0;
+            bE.manga.rotation.x = -sw * 0.55;
+            bD.manga.rotation.x = -sw * 0.55;
+            bE.manga.position.y = bE.manga.userData.basePos.y + lift * 0.4;
+            bD.manga.position.y = bD.manga.userData.basePos.y + lift * 0.4;
+            bE.garra.position.y = bE.garra.userData.basePos.y + lift * 0.6;
+            bD.garra.position.y = bD.garra.userData.basePos.y + lift * 0.6;
+            bE.garra.position.z = bE.garra.userData.basePos.z + sw * 0.55;
+            bD.garra.position.z = bD.garra.userData.basePos.z + sw * 0.55;
+            // asas abrem em x (forward) + escala maior
+            if (asaL) { asaL.rotation.x = -lift * 0.5; asaL.scale.setScalar(1 + lift * 0.25); }
+            if (asaR) { asaR.rotation.x = -lift * 0.5; asaR.scale.setScalar(1 + lift * 0.25); }
+        }
+
+        requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
 }
 
 /** Repõe o wraith ao estado visual inicial. */

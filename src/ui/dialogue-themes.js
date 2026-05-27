@@ -2,8 +2,8 @@ export const THEMES = {
   tavern: {
     name: 'Taberna',
     blurb: 'Madeira escura, ouro queimado, pergaminho cremoso.',
-    bodyFont: '"Spectral", "Iowan Old Style", Georgia, serif',
-    nameFont: '"IM Fell English SC", "IM Fell English", serif',
+    bodyFont: '"VT323", monospace',
+    nameFont: '"VT323", monospace',
     sceneBg:
       'radial-gradient(ellipse 80% 60% at 50% 110%, #3a2515 0%, #1f140a 60%, #120a05 100%)',
     sceneAccents: [
@@ -39,8 +39,8 @@ export const THEMES = {
   arcano: {
     name: 'Arcano',
     blurb: 'Índigo profundo, prata fria, constelações longe.',
-    bodyFont: '"Cormorant Garamond", "Garamond", serif',
-    nameFont: '"Cormorant SC", "Cormorant Garamond", serif',
+    bodyFont: '"VT323", monospace',
+    nameFont: '"VT323", monospace',
     sceneBg:
       'radial-gradient(ellipse 90% 70% at 50% 30%, #1a1340 0%, #0a0820 55%, #04031a 100%)',
     sceneAccents: [
@@ -77,8 +77,8 @@ export const THEMES = {
   manuscrito: {
     name: 'Manuscrito',
     blurb: 'Pergaminho envelhecido, tinta negra, ouro de iluminura.',
-    bodyFont: '"EB Garamond", "Garamond", serif',
-    nameFont: '"IM Fell DW Pica", "IM Fell English", serif',
+    bodyFont: '"VT323", monospace',
+    nameFont: '"VT323", monospace',
     sceneBg:
       'radial-gradient(ellipse 90% 65% at 50% 40%, #f1e3c2 0%, #e2d0a4 70%, #cdb88a 100%)',
     sceneAccents: [

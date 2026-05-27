@@ -48,22 +48,22 @@
   .arc-root[data-open="1"] .arc-dock { transform: none; opacity: 1; }
 
   .arc-nameplate-wrap {
-    max-width: 1100px; margin: 0 auto;
+    max-width: 760px; margin: 0 auto;
   }
   .arc-nameplate {
-    display: inline-flex; align-items: baseline; gap: 8px;
+    display: inline-flex; align-items: baseline; gap: 6px;
     background: #1a1244;
     border: 1px solid #8576d8; border-bottom: none;
-    padding: 7px 18px 6px;
-    border-top-left-radius: 8px; border-top-right-radius: 8px;
+    padding: 5px 14px 4px;
+    border-top-left-radius: 7px; border-top-right-radius: 7px;
     margin-left: 0; position: relative; top: 1px;
   }
   .arc-name {
     font-family: "Cormorant SC", "Cormorant Garamond", serif;
-    font-size: 18px; color: #dccfff; letter-spacing: 0.08em;
+    font-size: 15px; color: #dccfff; letter-spacing: 0.08em;
   }
   .arc-title {
-    font-size: 12px; color: rgba(220, 207, 255, 0.6);
+    font-size: 10px; color: rgba(220, 207, 255, 0.6);
     font-style: italic;
   }
 
@@ -71,27 +71,27 @@
     position: relative;
     background: #10092a;
     border: 1.5px solid #5a4ba8;
-    border-radius: 10px;
-    padding: 18px 22px;
-    display: flex; gap: 18px; align-items: flex-start;
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex; gap: 12px; align-items: flex-start;
     cursor: pointer;
     box-shadow:
-      0 -20px 80px rgba(40, 20, 100, 0.5),
+      0 -16px 60px rgba(40, 20, 100, 0.5),
       0 0 0 1px rgba(0,0,0,.5),
       inset 0 1px 0 rgba(180, 160, 255, 0.08);
-    min-height: 140px;
-    max-width: 1100px; margin: 0 auto;
+    min-height: 100px;
+    max-width: 760px; margin: 0 auto;
   }
 
-  .arc-corner { position: absolute; width: 22px; height: 22px; opacity: 0.75; pointer-events: none; }
-  .arc-corner.tl { top: 8px; left: 8px; }
-  .arc-corner.tr { top: 8px; right: 8px; transform: scaleX(-1); }
-  .arc-corner.bl { bottom: 8px; left: 8px; transform: scaleY(-1); }
-  .arc-corner.br { bottom: 8px; right: 8px; transform: scale(-1, -1); }
+  .arc-corner { position: absolute; width: 16px; height: 16px; opacity: 0.7; pointer-events: none; }
+  .arc-corner.tl { top: 5px; left: 5px; }
+  .arc-corner.tr { top: 5px; right: 5px; transform: scaleX(-1); }
+  .arc-corner.bl { bottom: 5px; left: 5px; transform: scaleY(-1); }
+  .arc-corner.br { bottom: 5px; right: 5px; transform: scale(-1, -1); }
 
   .arc-portrait {
     flex-shrink: 0;
-    width: 96px; height: 96px;
+    width: 70px; height: 70px;
     border-radius: 8px;
     border: 2px solid #8576d8;
     box-shadow: inset 0 -10px 24px rgba(0,0,0,.35), inset 0 4px 14px rgba(255,255,255,.12);
@@ -106,7 +106,7 @@
   }
   .arc-portrait-mono {
     font-family: "Cormorant SC", "Cormorant Garamond", serif;
-    font-size: 42px; color: #dccfff;
+    font-size: 30px; color: #dccfff;
     text-shadow: 0 2px 8px rgba(0,0,0,.5);
     letter-spacing: 0.02em; line-height: 1;
     position: relative; z-index: 1;
@@ -115,7 +115,7 @@
   .arc-content { flex: 1; min-width: 0; }
 
   .arc-text {
-    font-size: 17px; line-height: 1.55;
+    font-size: 13px; line-height: 1.45;
     color: #ece6ff;
   }
   .arc-text > span {
@@ -135,8 +135,8 @@
   }
 
   .arc-choices {
-    display: flex; flex-direction: column; gap: 6px;
-    margin-top: 14px;
+    display: flex; flex-direction: column; gap: 4px;
+    margin-top: 8px;
     opacity: 0; transform: translateY(4px);
     transition: opacity .25s ease, transform .25s ease;
     pointer-events: none;
@@ -145,13 +145,13 @@
   .arc-choice {
     background: rgba(26, 18, 68, 0.7);
     border: 1px solid rgba(133, 118, 216, 0.45);
-    border-radius: 6px;
-    padding: 9px 14px;
+    border-radius: 5px;
+    padding: 6px 10px;
     text-align: left; color: #dccfff;
-    font-family: inherit; font-size: 14px;
+    font-family: inherit; font-size: 11px;
     cursor: pointer;
     transition: background .12s, border-color .12s, transform .12s;
-    display: flex; align-items: center; gap: 10px;
+    display: flex; align-items: center; gap: 8px;
   }
   .arc-choice:hover {
     background: rgba(40, 28, 92, 0.95);

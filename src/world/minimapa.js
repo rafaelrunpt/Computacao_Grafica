@@ -5,6 +5,10 @@ export const minimapCamera = new THREE.OrthographicCamera(-8, 8, 8, -8, 1, 100);
 
 const _miniCamPos = new THREE.Vector2(0, 0);
 
+// Fundo preto cacheado para o minimapa pequeno — evita alocar um
+// THREE.Color novo a cada frame (era ~60 alocações/s + pressão de GC).
+const _miniBg = new THREE.Color(0x000000);
+
 // ---- Cache de luzes shadow-casters ----
 // Em vez de percorrer scene.children todos os frames, descobre uma vez na primeira chamada.
 let _shadowLights = null;
@@ -95,9 +99,13 @@ export function renderizarMinimapa(renderer, scene, windowWidth, windowHeight, p
         renderer.shadowMap.enabled = false;
         
         const _prevBg = scene.background;
-        scene.background = new THREE.Color(0x000000);
+        scene.background = _miniBg;
 
-        const size = 116, xPos = 52, yPos = 52;
+        // Preenche todo o interior octogonal da moldura prateada (180×180).
+        // O octógono é mais largo a meio (~135px) — usar 136 centrado faz o
+        // mapa encher por completo. Os cantos do quadrado que sobressaem do
+        // octógono ficam tapados pelas diagonais prateadas da SVG por cima.
+        const size = 136, xPos = 42, yPos = 42;
         renderer.setViewport(xPos, yPos, size, size);
         renderer.setScissor(xPos, yPos, size, size);
         renderer.setScissorTest(true);

@@ -7,8 +7,8 @@ import { ATAQUES, ataqueState, desbloquearAtaque, equiparAtaque } from '../syste
 
 const POCOES = [
     { id: 'pocao',  preco: 25, nome: 'Poção de Cura', desc: 'Recupera 15 HP.',           icone: 'assets/icones/small_potion.png' },
-    { id: 'mega',   preco: 60, nome: 'Poção Maior',   desc: 'Recupera 30 HP.',           icone: '🧴' },
-    { id: 'elixir', preco: 140, nome: 'Elixir',       desc: 'Recupera totalmente o HP.', icone: '⚗' },
+    { id: 'mega',   preco: 60, nome: 'Poção Maior',   desc: 'Recupera 30 HP.',           icone: 'assets/icones/big_potion.png' },
+    { id: 'elixir', preco: 140, nome: 'Elixir',       desc: 'Recupera totalmente o HP.', icone: 'assets/icones/elixir_corrupto.png' },
 ];
 
 const ATAQUES_VENDA = [
@@ -34,31 +34,31 @@ function build() {
     `;
     _root.innerHTML = `
         <div id="bs-panel" style="
-            width: min(820px, 94vw);
-            max-height: 86vh; overflow-y: auto;
+            width: min(540px, 88vw);
+            max-height: 82vh; overflow-y: auto;
             background: linear-gradient(180deg, #1a120a, #0d0805);
-            border: 2px solid #b07840; border-radius: 16px;
-            padding: 22px 26px;
+            border: 1.5px solid #b07840; border-radius: 12px;
+            padding: 12px 14px;
             color: #f0d9a8;
-            box-shadow: 0 0 30px rgba(180,100,40,0.6);
+            box-shadow: 0 0 22px rgba(180,100,40,0.55);
         ">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-                <div style="font-size:22px;font-weight:bold;letter-spacing:2px;">⚜ TABERNA DO GOBLIN ⚜</div>
-                <div style="font-size:16px;color:#cde2ff;"><span style="color:#a0c8ff">✦</span> <span id="bs-cintilas">0</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="font-size:16px;font-weight:bold;letter-spacing:1.5px;">⚜ TABERNA DO GOBLIN ⚜</div>
+                <div style="font-size:13px;color:#cde2ff;display:flex;align-items:center;gap:3px;"><img src="assets/icones/cintilas.png" style="width:13px;height:13px;object-fit:contain;"> <span id="bs-cintilas">0</span></div>
             </div>
-            <div style="font-size:13px;color:#a08060;margin-bottom:18px;">"Sorve, medita e fortalece-te. Pois nestas bandas, nada se obtém sem mercê ou ouro."</div>
+            <div style="font-size:11px;color:#a08060;margin-bottom:10px;line-height:1.3;">"Sorve, medita e fortalece-te. Nada se obtém sem mercê ou ouro."</div>
 
-            <div style="font-size:16px;color:#e8c870;margin:6px 0 8px;border-bottom:1px solid #5a3a20;padding-bottom:4px;">Elixires</div>
-            <div id="bs-pocoes" style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;"></div>
+            <div style="font-size:12px;color:#e8c870;margin:4px 0 5px;border-bottom:1px solid #5a3a20;padding-bottom:3px;letter-spacing:1px;">Elixires</div>
+            <div id="bs-pocoes" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;"></div>
 
-            <div style="font-size:16px;color:#e8c870;margin:6px 0 8px;border-bottom:1px solid #5a3a20;padding-bottom:4px;">Artes de Combate</div>
-            <div id="bs-ataques" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
+            <div style="font-size:12px;color:#e8c870;margin:4px 0 5px;border-bottom:1px solid #5a3a20;padding-bottom:3px;letter-spacing:1px;">Artes de Combate</div>
+            <div id="bs-ataques" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px;"></div>
 
-            <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+            <div style="display:flex;justify-content:flex-end;margin-top:6px;">
                 <button id="bs-close" style="
                     background:#3a2010; color:#f0d9a8; border:1px solid #b07840;
-                    padding: 8px 18px; cursor:pointer; border-radius:8px;
-                    font-family:'Courier New',monospace; font-size:14px; letter-spacing:1px;
+                    padding: 5px 12px; cursor:pointer; border-radius:6px;
+                    font-family:'Courier New',monospace; font-size:11px; letter-spacing:1px;
                 ">RETIRAR (ESC)</button>
             </div>
         </div>
@@ -81,26 +81,26 @@ function rowItem({ icone, nome, desc, precoLabel, btnLabel, btnDisabled, onBuy, 
 
     const row = document.createElement('div');
     row.style.cssText = `
-        display:flex; align-items:center; gap:12px;
+        display:flex; align-items:center; gap:8px;
         background: rgba(40,24,12,0.6);
-        border: 1px solid #5a3a20; border-radius: 10px;
-        padding: 10px 14px;
+        border: 1px solid #5a3a20; border-radius: 7px;
+        padding: 6px 10px;
     `;
     row.innerHTML = `
-        <div style="font-size:26px;width:34px;text-align:center;display:flex;align-items:center;justify-content:center;">${iconHtml}</div>
-        <div style="flex:1;">
-            <div style="font-size:15px;color:#f0d9a8;">${nome} ${badge || ''}</div>
-            <div style="font-size:12px;color:#a08060;">${desc}</div>
+        <div style="font-size:18px;width:24px;text-align:center;display:flex;align-items:center;justify-content:center;">${iconHtml.replace(/width:26px;height:26px/, 'width:20px;height:20px')}</div>
+        <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;color:#f0d9a8;">${nome} ${badge || ''}</div>
+            <div style="font-size:10px;color:#a08060;line-height:1.25;">${desc}</div>
         </div>
-        <div style="color:#cde2ff;font-size:14px;min-width:80px;text-align:right;">${precoLabel}</div>
+        <div style="color:#cde2ff;font-size:11px;min-width:54px;text-align:right;">${precoLabel}</div>
         <button style="
             background:${btnDisabled ? '#2a1a10' : '#5a3818'};
             color:${btnDisabled ? '#604030' : '#f0d9a8'};
             border:1px solid ${btnDisabled ? '#4a2a18' : '#b07840'};
-            padding:7px 14px; border-radius:6px;
+            padding:4px 10px; border-radius:5px;
             cursor:${btnDisabled ? 'not-allowed' : 'pointer'};
-            font-family:'Courier New',monospace; font-size:13px; letter-spacing:1px;
-            min-width: 100px;
+            font-family:'Courier New',monospace; font-size:10px; letter-spacing:1px;
+            min-width: 72px;
         " ${btnDisabled ? 'disabled' : ''}>${btnLabel}</button>
     `;
     if (!btnDisabled) row.querySelector('button').addEventListener('click', onBuy);
@@ -120,7 +120,7 @@ function renderListas() {
         const podeComprar = c >= p.preco;
         pocoesEl.appendChild(rowItem({
             icone: p.icone, nome: p.nome, desc: p.desc,
-            precoLabel: `✦ ${p.preco}`,
+            precoLabel: `<img src="assets/icones/cintilas.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;"> ${p.preco}`,
             btnLabel: 'ADQUIRIR',
             btnDisabled: !podeComprar,
             onBuy: () => {
@@ -141,7 +141,7 @@ function renderListas() {
             nome: at.nome,
             desc: at.desc,
             badge: jaTem ? '<span style="color:#88dd88;font-size:11px;margin-left:6px;">[MESTRADO]</span>' : '',
-            precoLabel: jaTem ? '—' : `✦ ${a.preco}`,
+            precoLabel: jaTem ? '—' : `<img src="assets/icones/cintilas.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;"> ${a.preco}`,
             btnLabel: jaTem ? 'CONHECIDO' : 'MESTRAR',
             btnDisabled: jaTem || !podeComprar,
             onBuy: () => {

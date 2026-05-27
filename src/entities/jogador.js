@@ -11,7 +11,6 @@ const matCamisa = new THREE.MeshStandardMaterial({ color: 0x2b529f, roughness: 0
 const matCalcas = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.8 }); // Calças Escuras
 const matChapeu = new THREE.MeshStandardMaterial({ color: 0x9e3b45, roughness: 0.6 }); // Boné Vermelho
 const matAba = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }); // Aba Branca
-const matMochila = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.4 }); 
 const matOlhos = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1 });
 
 export const player = new THREE.Group();
@@ -45,12 +44,38 @@ const body = new THREE.Mesh(bodyGeo, matCamisa);
 body.castShadow = true;
 bodyGroup.add(body);
 
-// Mochila a tiracolo
-const bagGeo = new THREE.BoxGeometry(0.35, 0.22, 0.12);
-const bag = new THREE.Mesh(bagGeo, matMochila);
-bag.castShadow = true;
-bag.position.set(0, -0.05, -0.22); // Colada às costas
-bodyGroup.add(bag);
+// Espada às costas (em vez da mochila)
+const matEspadaLamina = new THREE.MeshStandardMaterial({ color: 0xc8d4e0, roughness: 0.25, metalness: 0.85 });
+const matEspadaCabo   = new THREE.MeshStandardMaterial({ color: 0x4a2a14, roughness: 0.7 });
+const matEspadaGuarda = new THREE.MeshStandardMaterial({ color: 0xc89030, roughness: 0.4, metalness: 0.7 });
+
+// Helper que constrói uma cópia da espada (lâmina, guarda, cabo, pomo) — usada
+// para a versão das costas e para a versão empunhada na mão.
+function _construirEspada() {
+    const g = new THREE.Group();
+    const pomo = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 10), matEspadaGuarda);
+    pomo.castShadow = true;
+    pomo.position.y = 0.27;
+    const cabo = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.14, 12), matEspadaCabo);
+    cabo.castShadow = true;
+    cabo.position.y = 0.18;
+    const guarda = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 0.04), matEspadaGuarda);
+    guarda.castShadow = true;
+    guarda.position.y = 0.08;
+    const lamina = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.55, 0.015), matEspadaLamina);
+    lamina.castShadow = true;
+    lamina.position.y = -0.22;
+    g.add(pomo, cabo, guarda, lamina);
+    return g;
+}
+
+// --- Espada nas costas (estilo "Cloud" — cabo em cima, lâmina aponta para baixo)
+const espadaCostas = _construirEspada();
+// colada às costas (raio do tronco ~0.22; lâmina espessa 0.015 → z=-0.235 encosta)
+espadaCostas.position.set(0, 0, -0.235);
+// leve inclinação para o lado direito
+espadaCostas.rotation.z = -Math.PI * 0.08;
+bodyGroup.add(espadaCostas);
 
 // ---------------------------------------------------------
 // 3. BRAÇOS E MÃOS
@@ -429,6 +454,38 @@ export function setTochaVisivel(v) {
     for (const child of tochaGroup.children) {
         if (child.isMesh) child.visible = _tochaEquipada;
     }
+}
+
+// ---------------------------------------------------------
+// 4h. ESPADA EMPUNHADA (no combate)
+// ---------------------------------------------------------
+// Em combate o player roda 90° e o braço direito fica atrás (lado oposto à
+// câmara), por isso a espada empunhada vai no braço ESQUERDO — esse fica
+// virado para a câmara e a espada aparece bem visível.
+// Escala 0.6 para parecer empunhável com uma só mão; lâmina aponta para cima.
+export const espadaMaoGroup = _construirEspada();
+espadaMaoGroup.name = 'espadaMaoGroup';
+// Espada maior e inclinada para cima-frente — aponta para o inimigo em diagonal.
+const SWORD_SCALE = 0.85;
+const SWORD_ROT_X = -Math.PI * 0.70;   // ~ -126°: lâmina para a frente, tilt ~36° p/ cima
+espadaMaoGroup.scale.setScalar(SWORD_SCALE);
+espadaMaoGroup.rotation.set(SWORD_ROT_X, 0, 0);
+// Cabo (local y=+0.18) tem que coincidir com a mão (arm local y=-0.34).
+// Após rotação X, cabo passa para (0, 0.18*cosθ, 0.18*sinθ) e escala SWORD_SCALE.
+{
+    const _cY = 0.18 * Math.cos(SWORD_ROT_X) * SWORD_SCALE;
+    const _cZ = 0.18 * Math.sin(SWORD_ROT_X) * SWORD_SCALE;
+    espadaMaoGroup.position.set(0, -0.34 - _cY, -_cZ);
+}
+leftArmGroup.add(espadaMaoGroup);
+for (const child of espadaMaoGroup.children) child.visible = false;
+
+let _espadaMaoEquipada = false;
+export function setEspadaMaoVisivel(v) {
+    _espadaMaoEquipada = !!v;
+    for (const child of espadaMaoGroup.children) child.visible = _espadaMaoEquipada;
+    // esconder a espada das costas quando empunhada
+    espadaCostas.visible = !_espadaMaoEquipada;
 }
 
 // ---------------------------------------------------------

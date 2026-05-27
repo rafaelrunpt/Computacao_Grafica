@@ -37,6 +37,20 @@ export function getMaxHpBonus() {
     return bonus;
 }
 
+// Bónus acumulado dos santuários (+5 cada). Reset ao dormir.
+let _santuariosBonus = 0;
+export function getSantuariosBonus() { return _santuariosBonus; }
+export function adicionarBonusSantuario(amount) {
+    _santuariosBonus += amount;
+    // ao subir o cap, sobe também o HP actual (sentido "bênção restauradora")
+    playerStats.hp = Math.min(playerStats.maxHp + amount, playerStats.hp + amount);
+    recalcularMaxHp();
+}
+export function resetBonusSantuarios() {
+    _santuariosBonus = 0;
+    recalcularMaxHp();
+}
+
 export function getReducaoCooldown() {
     let red = 0;
     for (const id of Object.values(playerStats.equipped)) {
@@ -76,7 +90,7 @@ export function getLevelDamageMult() {
 // Recalcula maxHp a partir da base + bónus de equipamento. Chamar
 // sempre que muda o equipamento ou se sobe de nível.
 export function recalcularMaxHp() {
-    const novoMax = playerStats.baseMaxHp + getMaxHpBonus();
+    const novoMax = playerStats.baseMaxHp + getMaxHpBonus() + _santuariosBonus;
     
     // Simplesmente atualiza o máximo. 
     // Não mexemos no HP atual ao equipar (não cura nem dá vida extra imediata).

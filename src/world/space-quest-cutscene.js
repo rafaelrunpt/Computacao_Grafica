@@ -15,6 +15,29 @@ import * as THREE from 'three';
 import { ITENS_PERDIDOS } from '../systems/merchant-fetch-quest.js';
 import { keys } from '../core/input.js';
 import { tocarQuedaMeteoro, tocarImpactoMeteoro } from '../systems/audio.js';
+import { setHudVisible } from '../ui/hud.js';
+
+// Elementos HUD a apagar durante a cinemática. Guardamos o valor original
+// de display para repor sem riscos no fim.
+const _HUD_SELECTORS = ['#loadout-trigger', '#fps-counter', '#qbt-stack'];
+const _hudPrev = new Map();
+function _hideHud() {
+    setHudVisible(false);
+    for (const sel of _HUD_SELECTORS) {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        _hudPrev.set(sel, el.style.display || '');
+        el.style.display = 'none';
+    }
+}
+function _restoreHud() {
+    setHudVisible(true);
+    for (const [sel, prev] of _hudPrev) {
+        const el = document.querySelector(sel);
+        if (el) el.style.display = prev;
+    }
+    _hudPrev.clear();
+}
 
 const DURATION = 7.4;
 const FOLLOW_OFFSET = new THREE.Vector3(0, 3.8, 9.5);
@@ -104,6 +127,7 @@ export function startSpaceCutscene(onComplete) {
     _letterTop.style.height = '9vh';
     _letterBot.style.height = '9vh';
     _narrEl.style.opacity = '0';
+    _hideHud();
 }
 
 // ===========================================================
@@ -344,6 +368,7 @@ function _finish() {
     _letterTop.style.height = '0';
     _letterBot.style.height = '0';
     _narrEl.style.opacity = '0';
+    _restoreHud();
     const cb = _onComplete;
     _onComplete = null;
     if (cb) cb();
