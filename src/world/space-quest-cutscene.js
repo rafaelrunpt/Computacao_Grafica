@@ -153,15 +153,26 @@ export function updateSpaceCutscene(dt, camera) {
 // ===========================================================
 // METEOROS
 // ===========================================================
+// Identidade visual por meteoro — cada amostra cai com tamanho, duração,
+// trajectória de aproximação e anel de impacto diferentes. Indexado pela
+// ordem dos itens em ITENS_PERDIDOS (Centelha / Pó / Esquírola / Cristal).
+const METEOR_PROFILES = [
+    { headScale: 3.4, trailLen: 18, trailRad: [0.45, 0.95], fallDur: 1.55, approach: { dx:  18, dz:  -8 }, ringMax: 14, ringLife: 1.05, flashLift: 1.1 },
+    { headScale: 2.8, trailLen: 16, trailRad: [0.35, 0.78], fallDur: 1.90, approach: { dx: -14, dz:  12 }, ringMax: 11, ringLife: 1.20, flashLift: 0.9 },
+    { headScale: 4.2, trailLen: 22, trailRad: [0.55, 1.20], fallDur: 1.40, approach: { dx:  22, dz:  16 }, ringMax: 18, ringLife: 0.95, flashLift: 1.3 },
+    { headScale: 3.2, trailLen: 20, trailRad: [0.42, 0.88], fallDur: 1.70, approach: { dx: -20, dz: -18 }, ringMax: 13, ringLife: 1.15, flashLift: 1.0 },
+];
+
 function _createMeteor(item, idx) {
     const grupo = new THREE.Group();
     const color = new THREE.Color(item.cor);
+    const prof  = METEOR_PROFILES[idx % METEOR_PROFILES.length];
 
     const head = new THREE.Sprite(new THREE.SpriteMaterial({
         map: _glowTex, color, transparent: true, opacity: 0,
         depthWrite: false, blending: THREE.AdditiveBlending,
     }));
-    head.scale.set(3.6, 3.6, 1);
+    head.scale.set(prof.headScale, prof.headScale, 1);
     grupo.add(head);
 
     // Cauda — cilindro vertical REAL (não billboard). Um sprite esticado
@@ -169,7 +180,7 @@ function _createMeteor(item, idx) {
     // ângulo, parecia desviar-se para o lado do item. Um cilindro existe
     // de facto no espaço do mundo: fica sempre na coluna vertical, no
     // mesmo x/z do item, só com y mais acima.
-    const TRAIL_LEN = 18;
+    const TRAIL_LEN = prof.trailLen;
     const trailMat = new THREE.ShaderMaterial({
         uniforms: {
             uColor:   { value: color },
@@ -199,7 +210,7 @@ function _createMeteor(item, idx) {
         blending: THREE.AdditiveBlending,
     });
     const trail = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.45, 0.95, TRAIL_LEN, 16, 1, true),
+        new THREE.CylinderGeometry(prof.trailRad[0], prof.trailRad[1], TRAIL_LEN, 16, 1, true),
         trailMat,
     );
     trail.position.y = TRAIL_LEN / 2;   // base do cilindro junto à cabeça
@@ -208,12 +219,18 @@ function _createMeteor(item, idx) {
     grupo.visible = false;
     _scene.add(grupo);
 
+    // Trajectória oblíqua: o meteoro entra de cima vindo de uma direcção
+    // diferente para cada item (approach dx/dz), em vez de cair sempre
+    // verticalmente. Mais identidade visual e a cauda inclina-se naturalmente.
+    const fromPos = new THREE.Vector3(item.pos.x + prof.approach.dx, 135, item.pos.z + prof.approach.dz);
     return {
         group: grupo, head, trail, color,
+        profile: prof,
         startT: 0.9 + idx * 0.55,
-        fallDur: 1.7,
+        fallDur: prof.fallDur,
         fromY: 135,
         toY: 0.7,
+        fromPos,
         toPos: new THREE.Vector3(item.pos.x, 0.7, item.pos.z),
         landed: false,
         whooshed: false,
@@ -231,11 +248,20 @@ function _updateMeteors() {
                 m.whooshed = true;
                 if (_t < DURATION - 0.1) tocarQuedaMeteoro();
             }
-            // queda com aceleração (ease-in)
+            // queda com aceleração (ease-in), em trajectória oblíqua
             m.group.visible = true;
             const e = local * local;
-            const y = m.fromY + (m.toY - m.fromY) * e;
-            m.group.position.set(m.toPos.x, y, m.toPos.z);
+            const px = m.fromPos.x + (m.toPos.x - m.fromPos.x) * e;
+            const pz = m.fromPos.z + (m.toPos.z - m.fromPos.z) * e;
+            const y  = m.fromY + (m.toY - m.fromY) * e;
+            m.group.position.set(px, y, pz);
+            // Inclina o grupo na direcção da queda — cauda passa a apontar
+            // para a origem em vez de ser perfeitamente vertical.
+            const dx = m.toPos.x - m.fromPos.x;
+            const dz = m.toPos.z - m.fromPos.z;
+            const angX =  Math.atan2(dz, m.fromY - m.toY) * 0.7; // pitch
+            const angZ = -Math.atan2(dx, m.fromY - m.toY) * 0.7; // roll
+            m.group.rotation.set(angX, 0, angZ);
             const op = Math.min(1, local * 4);
             m.head.material.opacity = op;
             m.trail.material.uniforms.uOpacity.value = op * 0.9;
@@ -243,12 +269,13 @@ function _updateMeteors() {
             if (!m.landed) {
                 m.landed = true;
                 m.whooshed = true;
-                _spawnImpact(m.toPos, m.color);
+                _spawnImpact(m.toPos, m.color, m.profile);
                 if (_t < DURATION - 0.1) tocarImpactoMeteoro();
             }
             // desvanece a cabeça/cauda logo após o impacto
             const fade = Math.min(1, (local - 1) / 0.35);
             m.group.position.set(m.toPos.x, m.toY, m.toPos.z);
+            m.group.rotation.set(0, 0, 0);
             m.head.material.opacity = (1 - fade);
             m.trail.material.uniforms.uOpacity.value = (1 - fade) * 0.9;
             m.group.visible = fade < 1;
@@ -259,9 +286,8 @@ function _updateMeteors() {
 // ===========================================================
 // IMPACTO — anel de choque + clarão no solo
 // ===========================================================
-const IMPACT_LIFE = 1.1;
-
-function _spawnImpact(pos, color) {
+function _spawnImpact(pos, color, profile) {
+    const prof = profile || { ringMax: 16, ringLife: 1.1, flashLift: 1.2 };
     const ringMat = new THREE.MeshBasicMaterial({
         map: _ringTex, color, transparent: true, opacity: 0.85,
         depthWrite: false, blending: THREE.AdditiveBlending,
@@ -272,25 +298,32 @@ function _spawnImpact(pos, color) {
     ring.scale.set(2, 2, 2);
     _scene.add(ring);
 
+    // O clarão herda a cor do meteoro, suavizada para branco — fica
+    // claramente identificado com a amostra (azul/rosa/dourado/creme).
+    const flashColor = color.clone().lerp(new THREE.Color(0xffffff), 0.55);
     const flash = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: _glowTex, color: 0xffffff, transparent: true, opacity: 1,
+        map: _glowTex, color: flashColor, transparent: true, opacity: 1,
         depthWrite: false, blending: THREE.AdditiveBlending,
     }));
-    flash.position.set(pos.x, 1.2, pos.z);
+    flash.position.set(pos.x, prof.flashLift, pos.z);
     flash.scale.set(3, 3, 1);
     _scene.add(flash);
 
-    _impacts.push({ ring, flash, bornT: _t });
+    _impacts.push({
+        ring, flash, bornT: _t,
+        ringMax:  prof.ringMax,
+        ringLife: prof.ringLife,
+    });
 }
 
 function _updateImpacts() {
     for (let i = _impacts.length - 1; i >= 0; i--) {
         const imp = _impacts[i];
         const age = _t - imp.bornT;
-        if (age >= IMPACT_LIFE) { _destroyImpact(imp); _impacts.splice(i, 1); continue; }
+        if (age >= imp.ringLife) { _destroyImpact(imp); _impacts.splice(i, 1); continue; }
 
-        const n = age / IMPACT_LIFE;
-        const s = 2 + _ss(n) * 16;
+        const n = age / imp.ringLife;
+        const s = 2 + _ss(n) * imp.ringMax;
         imp.ring.scale.set(s, s, s);
         imp.ring.material.opacity = (1 - n) * 0.85;
 

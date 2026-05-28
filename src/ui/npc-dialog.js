@@ -872,13 +872,33 @@ function _confirmChoice() {
     if (b) b.click();
 }
 
+// Tenta saltar o efeito de typing actual. Devolve true se consumiu o input
+// (ou seja, o jogador está a ver texto em andamento e queremos completá-lo
+// em vez de processar a acção normal do botão).
+function _trySkipTyping() {
+    if (!typingInterval) return false;
+    clearInterval(typingInterval);
+    typingInterval = null;
+    falaTexto.textContent = currentTypingText;
+    const cb = currentTypingCallback;
+    currentTypingText = '';
+    currentTypingCallback = null;
+    if (cb) cb();
+    return true;
+}
+
 function _entrarNavDialogo() {
     if (_navCtx) return;
     _focusedChoiceIdx = 0;
     _navCtx = {
         onNav: _navChoices,
-        onConfirm: _confirmChoice,
-        onCancel: () => fecharDialogo(),
+        // Qualquer botão do comando salta o typing se o texto ainda estiver
+        // a aparecer — igual ao keydown global. Caso contrário, faz a acção
+        // habitual (✕ confirma, ○ cancela, ✕/△ sem acção própria).
+        onConfirm: () => { if (_trySkipTyping()) return; _confirmChoice(); },
+        onCancel:  () => { if (_trySkipTyping()) return; fecharDialogo();  },
+        onCross:    () => { _trySkipTyping(); },
+        onTriangle: () => { _trySkipTyping(); },
     };
     pushNavContext(_navCtx);
     _applyChoiceFocus();

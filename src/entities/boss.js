@@ -135,6 +135,9 @@ const _SLOTS = {
 export function aplicarTexturaBoss(slot, url, opts = {}) {
     const mat = _SLOTS[slot];
     if (!mat) { console.warn('[Boss] slot desconhecido:', slot); return; }
+    url = url.replace(/\.png$/, '.webp');
+    if (opts.normalUrl)    opts.normalUrl    = opts.normalUrl.replace(/\.png$/, '.webp');
+    if (opts.roughnessUrl) opts.roughnessUrl = opts.roughnessUrl.replace(/\.png$/, '.webp');
     _texLoader.load(url, (tex) => {
         if (opts.repeat) {
             tex.wrapS = tex.wrapT = THREE.RepeatWrapping;

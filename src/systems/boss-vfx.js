@@ -17,7 +17,8 @@ function _loadTex(url) {
 function makeSheetSprite(url, cols, rows, totalFrames, frameOrder = null) {
     const tex = _loadTex(url).clone();
     tex.repeat.set(1 / cols, 1 / rows);
-    tex.needsUpdate = true;
+    // Sem needsUpdate — o clone partilha `source` com o original e recebe
+    // o upload automaticamente quando a TextureLoader resolve a imagem.
     const mat = new THREE.SpriteMaterial({
         map: tex,
         transparent: true,

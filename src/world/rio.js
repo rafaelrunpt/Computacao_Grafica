@@ -33,7 +33,9 @@ export function criarRio(scene, colliders, fadeables, cullables) {
     // precisamos de um repeat denso e dedicado ao rio (a partilhada está
     // calibrada para o shader do terreno).
     const sandTex = areiaTex.clone();
-    sandTex.needsUpdate = true;
+    // Não marcamos needsUpdate aqui — partilhamos `source` com areiaTex e o
+    // upload acontece quando a imagem original carregar (evita warning
+    // "Texture marked for update but no image data found").
     sandTex.wrapS = sandTex.wrapT = THREE.RepeatWrapping;
     sandTex.repeat.set(RL / 4, RW / 4);   // ~4 m por tile, anisotropia razoável
     const matSandBed = new THREE.MeshStandardMaterial({

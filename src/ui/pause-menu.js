@@ -241,6 +241,13 @@ function renderVideo() {
     r1.appendChild(select([['baixa','Baixa'],['media','Média'],['alta','Alta']], settings.quality, v => setSetting('quality', v)));
     conteudo.appendChild(r1);
 
+    // Resolução do canvas — reduz fragment work proporcionalmente. Aplicação
+    // imediata (sem reload) porque renderer.setPixelRatio é runtime-safe.
+    const rRes = row(); rRes.appendChild(labelLine('Resolução do Renderizador'));
+    rRes.appendChild(select([[0.5,'50% (GPU fraca)'],[0.75,'75% (Equilibrado)'],[1.0,'100% (Nativo)']],
+        settings.renderScale, v => setSetting('renderScale', parseFloat(v))));
+    conteudo.appendChild(rRes);
+
     const r2 = row(); r2.appendChild(labelLine('Alcance do Olhar (FOV)'));
     r2.appendChild(slider(50, 110, 1, settings.fov, v => setSetting('fov', v), '°'));
     conteudo.appendChild(r2);

@@ -549,6 +549,11 @@ function renderSlotBtn(btn, info, podeMexer, idx) {
 
 function refreshSlots(podeMexer) {
     btnSlots.forEach((btn, i) => renderSlotBtn(btn, _slotState[i], podeMexer, i));
+    // renderSlotBtn reescreve innerHTML — re-aplica os glyphs PS em cada slot
+    // para o jogador ver qual botão deve carregar (igual ao painel de itens).
+    if (typeof _aplicarGlyphsBotoes === 'function' && settings.inputMethod === 'gamepad') {
+        _aplicarGlyphsBotoes();
+    }
 }
 
 export function setAtaqueSlots(...slots) {
@@ -598,15 +603,16 @@ export const KEY_LABELS_SLOT  = ['1', '2', '3', '4'];
 // GAMEPAD — bindings DIRECTOS por botão (✕/○/□/△)
 // --------------------------------------------------------
 // Cada acção/ataque/item é executado pela tecla PS correspondente, sem
-// passar por foco/confirmação. No painel principal:
-//   ✕ → Ataque    □ → Itens    ○ → Fugir (abre confirmação)
+// passar por foco/confirmação. □ (Square) é o botão primário.
+// No painel principal:
+//   □ → Ataque    ✕ → Itens    ○ → Fugir (abre confirmação)
 // No painel de ataques (2×2):
 //   slot 0 (TL) → △    slot 1 (TR) → ○
-//   slot 2 (BL) → ✕    slot 3 (BR) → □
+//   slot 2 (BL) → □    slot 3 (BR) → ✕
 // No painel de poções (mesmo grid):
-//   poção 0 → △    poção 1 → ○    poção 2 → ✕    poção 3 → □
+//   poção 0 → △    poção 1 → ○    poção 2 → □    poção 3 → ✕
 // Na confirmação de fuga:
-//   ✕ → Sim, fugir    ○ → Voltar
+//   □ → Sim, fugir    ○ → Voltar
 // Stick / D-pad / setas continuam a alimentar WASD (esquiva no boss).
 import { pushNavContext, popNavContext } from '../core/gamepad.js';
 import { settings, onSettingChange } from '../systems/settings.js';
@@ -616,9 +622,9 @@ let _navCtx = null;
 let _fleeConfirmOpen = false;
 
 // Mapeamento botão → índice de slot/poção dentro do grid 2×2.
-const _SLOT_FOR_BTN = { triangle: 0, circle: 1, cross: 2, square: 3 };
+const _SLOT_FOR_BTN = { triangle: 0, circle: 1, square: 2, cross: 3 };
 // Botão correspondente a cada slot/poção, para mostrar o glyph na UI.
-const _BTN_FOR_SLOT = ['triangle', 'circle', 'cross', 'square'];
+const _BTN_FOR_SLOT = ['triangle', 'circle', 'square', 'cross'];
 
 function _currentPanel() {
     if (_fleeConfirmOpen)                       return 'flee-confirm';
@@ -638,13 +644,13 @@ function _dispatchButton(btn) {
 
     const panel = _currentPanel();
     if (panel === 'flee-confirm') {
-        if (btn === 'cross')  _confirmarFuga();
+        if (btn === 'square') _confirmarFuga();
         if (btn === 'circle') _cancelarFuga();
         return;
     }
     if (panel === 'actions') {
-        if (btn === 'cross')  btnAtacar.click();
-        if (btn === 'square') btnItens.click();
+        if (btn === 'square') btnAtacar.click();
+        if (btn === 'cross')  btnItens.click();
         if (btn === 'circle') _abrirConfirmacaoFuga();
         return;
     }
@@ -697,8 +703,8 @@ function _shoulderBack() {
 function _aplicarGlyphsBotoes() {
     // Top-level
     const map = [
-        [btnAtacar, 'cross'],
-        [btnItens,  'square'],
+        [btnAtacar, 'square'],
+        [btnItens,  'cross'],
         [btnFugir,  'circle'],
     ];
     for (const [btn, g] of map) {
@@ -758,18 +764,18 @@ function _refrescarHintBar() {
     let html = '';
     if (panel === 'actions') {
         html = `
-            <span>${_psGlyph('cross')} <span style="margin-left:4px;">Ataque</span></span>
-            <span>${_psGlyph('square')} <span style="margin-left:4px;">Itens</span></span>
+            <span>${_psGlyph('square')} <span style="margin-left:4px;">Ataque</span></span>
+            <span>${_psGlyph('cross')}  <span style="margin-left:4px;">Itens</span></span>
             <span>${_psGlyph('circle')} <span style="margin-left:4px;">Fugir</span></span>
         `;
     } else if (panel === 'attacks' || panel === 'items') {
         html = `
-            <span style="opacity:.85;">${_psGlyph('triangle')}${_psGlyph('circle')}${_psGlyph('cross')}${_psGlyph('square')} usar</span>
+            <span style="opacity:.85;">${_psGlyph('triangle')}${_psGlyph('circle')}${_psGlyph('square')}${_psGlyph('cross')} usar</span>
             <span>${_psGlyph('l1')} <span style="margin-left:4px;">Voltar</span></span>
         `;
     } else if (panel === 'flee-confirm') {
         html = `
-            <span>${_psGlyph('cross')} <span style="margin-left:4px;">Fugir</span></span>
+            <span>${_psGlyph('square')} <span style="margin-left:4px;">Fugir</span></span>
             <span>${_psGlyph('circle')} <span style="margin-left:4px;">Voltar</span></span>
         `;
     }
@@ -826,7 +832,7 @@ _fleeModal.innerHTML = `
                 cursor: pointer; font-family: inherit;
                 font-size: 12px; letter-spacing: 2px;
                 display:flex;align-items:center;gap:8px;
-            ">${_psGlyph('cross')} <span>SIM, FUGIR</span></button>
+            ">${_psGlyph('square')} <span>SIM, FUGIR</span></button>
             <button class="flee-no" style="
                 background: rgba(40,28,60,0.85);
                 border: 1.5px solid #8576d8;

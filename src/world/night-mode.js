@@ -195,13 +195,16 @@ function _applyEnvironment(t) {
         _scene.background.copy(_bgDay).lerp(_bgNight, t);
     }
     _sunLight.color.copy(_sunDay).lerp(_sunNight, t);
-    _sunLight.intensity = _orig.sunIntensity * (1 - 0.82 * t);
+    // Noite ligeiramente menos escura — sol mantém um pouco mais de luz
+    // residual (era 18% do original, agora 32%).
+    _sunLight.intensity = _orig.sunIntensity * (1 - 0.68 * t);
 
     _ambientLight.color.copy(_ambDay).lerp(_ambNight, t);
-    // preenchimento mínimo da noite — aumentado para melhor visibilidade
-    _ambientLight.intensity = _orig.ambIntensity * (1 - 0.25 * t);
+    // preenchimento ambiente sobe um pouco (era 75% → agora 88%).
+    _ambientLight.intensity = _orig.ambIntensity * (1 - 0.12 * t);
 
-    if (_hemiLight) _hemiLight.intensity = 0.75 * t;
+    // Hemisférica também reforçada (era 0.75 → agora 1.0).
+    if (_hemiLight) _hemiLight.intensity = 1.0 * t;
 
     // Densidade do nevoeiro também sobe gradualmente
     if (_scene.fog && _scene.fog.isFogExp2) {
@@ -260,8 +263,11 @@ function _createMoon() {
         depthWrite: false, depthTest: false,
         blending: THREE.AdditiveBlending,
     }));
-    _moonSprite.position.set(-80, 85, -40);
-    _moonSprite.scale.set(16, 16, 1);
+    // A lua fica bem acima do topo de qualquer câmara — incluindo a do
+    // cutscene das amostras estelares (câmara sobe até y≈86), para nunca
+    // entrar em quadro acidentalmente.
+    _moonSprite.position.set(-80, 150, -40);
+    _moonSprite.scale.set(20, 20, 1);
     _moonSprite.renderOrder = -1;
     _nightGroup.add(_moonSprite);
 

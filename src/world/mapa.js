@@ -9,9 +9,11 @@ import { renderer } from '../core/renderer.js';
 import { criarBruxa, updateBruxa } from '../entities/bruxa.js';
 import { criarSantuarios } from './santuarios.js';
 import { criarCogumelos } from './cogumelos.js';
+import { criarVegetacao, updateVegetacao, setVegetacaoZonas, atualizarVegetacaoZonas } from './vegetacao.js';
 
 export { getSantuarios, ativarSantuario, updateSantuarios } from './santuarios.js';
 export { updateCogumelos } from './cogumelos.js';
+export { updateVegetacao, setVegetacaoZonas, atualizarVegetacaoZonas } from './vegetacao.js';
 
 export { matBattleGrass, matBattleSky, matWater, matContTrunk, matContLeaves, matContRock, matCorruptHalo } from './shaders.js';
 export { getBridgeHeight } from './rio.js';
@@ -873,32 +875,45 @@ function criarTerrenoSul(scene) {
 
 // ---- montanhas de perímetro ----
 // Anel de cones-montanha à volta do mapa (versão original restaurada).
-const matMountain = new THREE.MeshStandardMaterial({ color: 0x6a6a72, roughness: 1.0, flatShading: true });
-const matSnow     = new THREE.MeshStandardMaterial({ color: 0xdde8f0, roughness: 0.8, flatShading: true });
+// Lambert em vez de Standard: as montanhas enchem grande parte do horizonte
+// e PBR custa caro em pixels distantes onde a iluminação especular nem se
+// vê. Lambert mantém aspecto facetado e poupa fragment work.
+const matMountain = new THREE.MeshLambertMaterial({
+    map: rockTex,
+    color: 0x4a4a52, // Pedra escura
+    flatShading: true
+});
+const matSnow = new THREE.MeshLambertMaterial({
+    map: rockTex,
+    color: 0xffffff, // Pedra clara (topo)
+    flatShading: true
+});
 
 function criarPico(scene, x, z, h, r, rand) {
-    // corpo principal — cone facetado
+    // corpo principal — cone facetado (6 lados, baixo poly mas estiliza bem)
     const cone = new THREE.Mesh(
-        new THREE.ConeGeometry(r, h, 7 + Math.floor(rand() * 3), 1),
+        new THREE.ConeGeometry(r, h, 6, 1),
         matMountain
     );
     cone.position.set(x, h / 2, z);
     cone.rotation.y = rand() * Math.PI;
-    cone.castShadow = true;
-    cone.receiveShadow = true;
+    // Montanhas no perímetro do mapa: as sombras delas caem fora da área
+    // de jogo. Desligar castShadow tira ~280 meshes do shadow pass.
+    cone.castShadow = false;
+    cone.receiveShadow = false;
     scene.add(cone);
     fadeables.push(cone);
     cullables.push(cone);
 
-    // neve no topo (cone menor branco)
+    // neve no topo (cone menor branco) — 5 lados chega
     const snowH = h * 0.28;
     const snow = new THREE.Mesh(
-        new THREE.ConeGeometry(r * 0.38, snowH, 7, 1),
+        new THREE.ConeGeometry(r * 0.38, snowH, 5, 1),
         matSnow
     );
     snow.position.set(x, h - snowH * 0.35, z);
     snow.rotation.y = rand() * Math.PI;
-    snow.castShadow = true;
+    snow.castShadow = false;
     scene.add(snow);
     cullables.push(snow);
 
@@ -1226,7 +1241,8 @@ export function criarMapa(scene) {
     _criarMapaDone = true;
     _tryBuildForest();
     _buildInstancedRocks();
-
+    criarVegetacao(scene);
+    setVegetacaoZonas(grassZones);
     console.log('Mapa criado.');
 }
 
@@ -1266,6 +1282,9 @@ export function limparZonaBatalha(playerX, playerZ) {
         // retira do array de encontros
         const gi = grassZones.indexOf(zo.box);
         if (gi !== -1) grassZones.splice(gi, 1);
+        
+        // Atualiza vegetação instanciada para aparecer nesta zona
+        atualizarVegetacaoZonas(grassZones);
         battleZoneObjects.splice(i, 1);
 
         _clearedZones.push({ zoneObj: zo, matSnaps });
@@ -1291,6 +1310,7 @@ export function resetZonasBatalha() {
         battleZoneObjects.push(zoneObj);
         restored++;
     }
+    if (restored > 0) atualizarVegetacaoZonas(grassZones);
     // Santuários NÃO resetam ao dormir — bênção é permanente.
     return restored;
 }

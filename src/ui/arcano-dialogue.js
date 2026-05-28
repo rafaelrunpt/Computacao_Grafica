@@ -367,10 +367,16 @@
     _gpEnterNav() {
       if (this._gpNavCtx || !window.__inputNav) return;
       this._gpFocused = 0;
+      // _advance() já trata o caso "texto a aparecer": se _done=false,
+      // termina o typing. Caso contrário avança/escolhe. Por isso qualquer
+      // botão pode dar skip ao texto.
+      const skipIfTyping = () => { if (!this._done) { this._advance(); return true; } return false; };
       this._gpNavCtx = {
         onNav: (d) => this._gpNav(d),
-        onConfirm: () => this._gpConfirm(),
-        onCancel: () => this.close(),
+        onConfirm:  () => { if (skipIfTyping()) return; this._gpConfirm(); },
+        onCancel:   () => { if (skipIfTyping()) return; this.close(); },
+        onCross:    () => { skipIfTyping(); },
+        onTriangle: () => { skipIfTyping(); },
       };
       window.__inputNav.push(this._gpNavCtx);
       this._gpApplyFocus();

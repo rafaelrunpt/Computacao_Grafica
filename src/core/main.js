@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { criarMapa, verificaColisao, shopDoorInteract, bruxaInteractBox, updateBruxaMapa, castleEnterBox, tavernEnterBox, guardianInteractBox, removerGuardiao, updateGuardiao, isGuardiaoPassagemConcedida, matWater, matBattleGrass, matBattleSky, matCorruptHalo, matContTrunk, matContLeaves, matContRock, zonasSulLimpas, isShopDesbloqueada, resetZonasBatalha, getBridgeHeight, getBauInteractBox, abrirBau, bauJaAberto, updateBau, bauJaColetado, coletarBau, getBauMascaraInteractBox, abrirBauMascara, bauMascaraJaAberto, updateBauMascara, bauMascaraJaColetado, coletarBauMascara, fadeables, cullables, worldParticles, updateZoneParticles, getSantuarios, ativarSantuario, updateSantuarios, updateCogumelos } from '../world/mapa.js';
+import { criarMapa, verificaColisao, shopDoorInteract, bruxaInteractBox, updateBruxaMapa, castleEnterBox, tavernEnterBox, guardianInteractBox, removerGuardiao, updateGuardiao, isGuardiaoPassagemConcedida, matWater, matBattleGrass, matBattleSky, matCorruptHalo, matContTrunk, matContLeaves, matContRock, zonasSulLimpas, isShopDesbloqueada, resetZonasBatalha, getBridgeHeight, getBauInteractBox, abrirBau, bauJaAberto, updateBau, bauJaColetado, coletarBau, getBauMascaraInteractBox, abrirBauMascara, bauMascaraJaAberto, updateBauMascara, bauMascaraJaColetado, coletarBauMascara, fadeables, cullables, worldParticles, updateZoneParticles, getSantuarios, ativarSantuario, updateSantuarios, updateCogumelos, updateVegetacao } from '../world/mapa.js';
 import { player, updatePlayerAnimation, setCoroaVisivel, setBrincosVisivel, setOculosVisivel, setAureolaVisivel, setMascaraVisivel, setTochaVisivel, updateCoroaAnimacao } from '../entities/jogador.js';
 import { adicionarItem, registarOnEquipChange, CATALOGO, usarItem, temItem } from '../systems/inventario.js';
 import { ganharCintilas } from '../systems/currency.js';
@@ -44,7 +44,7 @@ import { initSpaceCutscene, startSpaceCutscene, updateSpaceCutscene, isSpaceCuts
 import { estado, lojaPlayer, caseloPlayer, tavernPlayer, quartoPlayer, setWorldScene, entrarLoja, sairLoja, entrarCaselo, sairCaselo, entrarTavern, sairTavern, entrarQuarto, sairQuarto, fade } from './transicoes.js';
 import moderator from '../systems/moderator.js'; // Ativa ferramentas de debug
 import { isPauseAberto, togglePause } from '../ui/pause-menu.js';
-import { tickFps } from '../ui/fps-counter.js';
+import { tickFps, setFpsDebugTargets, sampleCullingNow } from '../ui/fps-counter.js';
 import { inicializarAudio, switchMusic, getCurrentTrack, playSFX, tocarAtivacaoCristal, saltarParaClimaxMusical } from '../systems/audio.js';
 import { isTelaInicialAberta, updateTitleCamera, titleCamera, onTelaInicialFechar } from '../ui/tela-inicial.js';
 import { initNightMode, setNightMode, updateNightMode, pauseNightMode, resumeNightMode, renderNightWorld, resizeNightComposer, isNightInitialized } from '../world/night-mode.js';
@@ -98,6 +98,21 @@ const _camFwd = new THREE.Vector3();
 const _camRight = new THREE.Vector3();
 const _moveDir = new THREE.Vector3();
 const _toObj  = new THREE.Vector3();
+// Box3 partilhada para queries de colisão de interiores e de interacção
+// no mundo. Antes alocavam-se Box3 + 2 Vector3 a cada frame (3× por frame
+// só no mundo + 2× por frame em cada interior em movimento) — agora é
+// zero-alloc.
+const _interactBox = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
+const _colBoxLoja   = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
+const _colBoxCaselo = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
+// Box3 partilhada pelas animate* dos interiores (loja/caselo/tavern/quarto)
+// para a sua AABB de interacção. Só uma cena corre por frame, dá para
+// reusar a mesma instância.
+const _scenePB = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
+// Cores estáticas do brilho pulsante do cristal do boss (no caselo) —
+// antes eram alocadas a cada frame.
+const _bossCrystalC1 = new THREE.Color(0x220044);
+const _bossCrystalC2 = new THREE.Color(0x9933ff);
 // dot mínimo para um objecto continuar visível: -0.15 dá um cone de ~107°
 // à frente da câmara — margem para os lados sem mostrar nada que esteja
 // claramente atrás.
@@ -414,22 +429,18 @@ inicializarAudio(mainCamera, {
 function verificaColisaoLoja(nx, ny, nz) {
     if (moderator.noClip) return false;
     const r = 0.25;
-    const pb = new THREE.Box3(
-        new THREE.Vector3(nx - r, ny, nz - r),
-        new THREE.Vector3(nx + r, ny + 1.7, nz + r)
-    );
-    for (const c of lojaColliders) { if (pb.intersectsBox(c)) return true; }
+    _colBoxLoja.min.set(nx - r, ny, nz - r);
+    _colBoxLoja.max.set(nx + r, ny + 1.7, nz + r);
+    for (const c of lojaColliders) { if (_colBoxLoja.intersectsBox(c)) return true; }
     return false;
 }
 
 function verificaColisaoCaselo(nx, nz) {
     if (moderator.noClip) return false;
     const r = 0.25;
-    const pb = new THREE.Box3(
-        new THREE.Vector3(nx - r, 0, nz - r),
-        new THREE.Vector3(nx + r, 1.7, nz + r)
-    );
-    for (const c of caseloColliders) { if (pb.intersectsBox(c)) return true; }
+    _colBoxCaselo.min.set(nx - r, 0, nz - r);
+    _colBoxCaselo.max.set(nx + r, 1.7, nz + r);
+    for (const c of caseloColliders) { if (_colBoxCaselo.intersectsBox(c)) return true; }
     return false;
 }
 
@@ -444,7 +455,15 @@ let _frameCount = 0; // contador global de frames para throttling
 // movimento normal, sem flicker visível. ENORME ganho de CPU em Firefox/Windows
 // porque cada bake itera 400+ meshes (árvores, rochas, edifícios).
 const _lastShadowBakePos = new THREE.Vector3(Infinity, 0, Infinity);
-const SHADOW_BAKE_MIN_DIST_SQ = 0.18 * 0.18;
+// Distância mínima andada antes do shadow map ser re-baked.
+// Cada bake é essencialmente uma segunda passagem de render (do ponto de
+// vista do sol) sobre todas as ~400 meshes com castShadow. A 18cm tinhamos
+// re-bake quase todos os frames a andar → metade do orçamento de GPU.
+// Escala com qualidade: alta mantém sombras suaves, baixa quase nunca re-baka.
+const SHADOW_BAKE_DIST = settings.quality === 'alta'  ? 0.6
+                       : settings.quality === 'baixa' ? 3.0
+                       :                                1.2;
+const SHADOW_BAKE_MIN_DIST_SQ = SHADOW_BAKE_DIST * SHADOW_BAKE_DIST;
 function _maybeMarkShadowUpdate(forceOrPos) {
     const pos = (forceOrPos && forceOrPos.isVector3) ? forceOrPos : player.position;
     const dx = pos.x - _lastShadowBakePos.x;
@@ -514,10 +533,9 @@ function animateMundo(deltaTime) {
         }
 
         const r = 0.25;
-        const pb = new THREE.Box3(
-            new THREE.Vector3(player.position.x - r, 0, player.position.z - r),
-            new THREE.Vector3(player.position.x + r, 1.7, player.position.z + r)
-        );
+        _interactBox.min.set(player.position.x - r, 0, player.position.z - r);
+        _interactBox.max.set(player.position.x + r, 1.7, player.position.z + r);
+        const pb = _interactBox;
         if (guardianInteractBox && pb.intersectsBox(guardianInteractBox)) {
             const passou = isGuardiaoPassagemConcedida();
             showPrompt('E — Parlamentar com o Guardião');
@@ -658,6 +676,7 @@ function animateMundo(deltaTime) {
     updateLostItems(deltaTime);
     updateSantuarios(deltaTime);
     updateCogumelos(deltaTime);
+    updateVegetacao(deltaTime);
     updateGuardiao(deltaTime);
     updateBruxaMapa(deltaTime, player.position);
     if (!moderator.lockY) {
@@ -724,6 +743,7 @@ function animateMundo(deltaTime) {
         // jogo normal — não fazemos culling por câmara para nada desaparecer.
         if (emCutscene) _restoreAllCullables();
         else            _cullBehindCamera(mainCamera);
+        sampleCullingNow();
         // Shadow map: re-bake throttled por distância percorrida (ver
         // _maybeMarkShadowUpdate). Em combate forçamos pois há inimigos a
         // mexerem-se sem movimento do player.
@@ -820,10 +840,9 @@ function animateLoja(deltaTime) {
     }
 
     const r = 0.25;
-    const pb = new THREE.Box3(
-        new THREE.Vector3(lojaPlayer.x - r, lojaPlayer.y, lojaPlayer.z - r),
-        new THREE.Vector3(lojaPlayer.x + r, lojaPlayer.y + 1.7, lojaPlayer.z + r)
-    );
+    _scenePB.min.set(lojaPlayer.x - r, lojaPlayer.y,        lojaPlayer.z - r);
+    _scenePB.max.set(lojaPlayer.x + r, lojaPlayer.y + 1.7,  lojaPlayer.z + r);
+    const pb = _scenePB;
 
     if (lojaSaidaBox.intersectsBox(pb)) {
         showPrompt('E — Deixar a Loja');
@@ -942,10 +961,9 @@ function animateCaselo(deltaTime) {
     }
 
     const r2 = 0.25;
-    const pb2 = new THREE.Box3(
-        new THREE.Vector3(caseloPlayer.x - r2, caseloPlayer.y, caseloPlayer.z - r2),
-        new THREE.Vector3(caseloPlayer.x + r2, caseloPlayer.y + 1.7, caseloPlayer.z + r2)
-    );
+    _scenePB.min.set(caseloPlayer.x - r2, caseloPlayer.y,        caseloPlayer.z - r2);
+    _scenePB.max.set(caseloPlayer.x + r2, caseloPlayer.y + 1.7,  caseloPlayer.z + r2);
+    const pb2 = _scenePB;
 
     if (caseloSaidaBox.intersectsBox(pb2)) {
         showPrompt('E — Abandonar o Castelo');
@@ -1037,9 +1055,7 @@ function animateCaselo(deltaTime) {
         const glow = Math.sin(performance.now() * 0.001 * Math.PI) * 0.5 + 0.5; 
         bossCrystal.material.emissiveIntensity = 2.5 + glow * 4.5; // Brilho mais forte no pico
         
-        const c1 = new THREE.Color(0x220044); 
-        const c2 = new THREE.Color(0x9933ff); // Roxo um pouco mais vivo
-        bossCrystal.material.emissive.copy(c1).lerp(c2, glow);
+        bossCrystal.material.emissive.copy(_bossCrystalC1).lerp(_bossCrystalC2, glow);
     } else {
         bossCrystal.material.color.setHex(0x8844ff);
         bossCrystal.material.emissive.setHex(0x4400aa);
@@ -1137,10 +1153,9 @@ function animateTavern(deltaTime) {
     }
 
     const r = 0.25;
-    const pb = new THREE.Box3(
-        new THREE.Vector3(tavernPlayer.x - r, tavernPlayer.y,        tavernPlayer.z - r),
-        new THREE.Vector3(tavernPlayer.x + r, tavernPlayer.y + 1.7,  tavernPlayer.z + r),
-    );
+    _scenePB.min.set(tavernPlayer.x - r, tavernPlayer.y,        tavernPlayer.z - r);
+    _scenePB.max.set(tavernPlayer.x + r, tavernPlayer.y + 1.7,  tavernPlayer.z + r);
+    const pb = _scenePB;
 
     // bloqueia movimento/interacções enquanto a intro do bartender está aberta
     // Intro do bartender — mandatória na primeira entrada na taverna.
@@ -1306,10 +1321,9 @@ function animateQuarto(deltaTime) {
     }
 
     const r = 0.25;
-    const pb = new THREE.Box3(
-        new THREE.Vector3(quartoPlayer.x - r, quartoPlayer.y,       quartoPlayer.z - r),
-        new THREE.Vector3(quartoPlayer.x + r, quartoPlayer.y + 1.7, quartoPlayer.z + r),
-    );
+    _scenePB.min.set(quartoPlayer.x - r, quartoPlayer.y,       quartoPlayer.z - r);
+    _scenePB.max.set(quartoPlayer.x + r, quartoPlayer.y + 1.7, quartoPlayer.z + r);
+    const pb = _scenePB;
 
     if (quartoSaidaBox.intersectsBox(pb)) {
         showPrompt('E — Regressar à Estalagem');
@@ -1656,5 +1670,9 @@ onTelaInicialFechar(() => {
         if (scene.background?.isColor) scene.background.setHex(0x87ceeb);
     }
 });
+
+// Debug do contador FPS: regista a scene principal + câmara do mundo para
+// que o overlay calcule vis/cull. (Outras cenas dão valores aproximados.)
+setFpsDebugTargets(scene, mainCamera);
 
 animate();

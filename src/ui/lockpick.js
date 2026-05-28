@@ -4,6 +4,10 @@
 // spot" dourada. Cada falha consome 1 das 3 tentativas; 3 acertos abrem
 // a fechadura.
 
+import { pushNavContext, popNavContext } from '../core/gamepad.js';
+import { settings, onSettingChange } from '../systems/settings.js';
+import { psGlyph } from './glyphs.js';
+
 let isAberto = false;
 let cbs = { onSuccess: null, onFail: null };
 let state = null;
@@ -53,11 +57,28 @@ panel.innerHTML = `
         <div id="lp-attempts" style="display:flex;gap:8px;"></div>
     </div>
 
-    <div style="margin-top:18px;font-size:11px;letter-spacing:2px;opacity:0.55;">
-        ESPAÇO  TENTAR  ·  ESC  SAIR
+    <div id="lp-hint" style="margin-top:18px;font-size:11px;letter-spacing:2px;opacity:0.65;display:flex;justify-content:center;gap:16px;align-items:center;">
+        <span id="lp-hint-tentar">ESPAÇO  TENTAR</span>
+        <span style="opacity:.45;">·</span>
+        <span id="lp-hint-sair">ESC  SAIR</span>
     </div>
 `;
 overlay.appendChild(panel);
+
+const elHintTentar = panel.querySelector('#lp-hint-tentar');
+const elHintSair   = panel.querySelector('#lp-hint-sair');
+function _refrescarHint() {
+    const gp = settings.inputMethod === 'gamepad';
+    if (gp) {
+        elHintTentar.innerHTML = `${psGlyph('square')} <span style="margin-left:6px;">TENTAR</span>`;
+        elHintSair.innerHTML   = `${psGlyph('circle')} <span style="margin-left:6px;">SAIR</span>`;
+    } else {
+        elHintTentar.textContent = 'ESPAÇO  TENTAR';
+        elHintSair.textContent   = 'ESC  SAIR';
+    }
+}
+_refrescarHint();
+onSettingChange('inputMethod', _refrescarHint);
 
 const elPins   = panel.querySelector('#lp-pins');
 const elBar    = panel.querySelector('#lp-bar');
@@ -162,11 +183,14 @@ function fechar(success) {
     if (raf) cancelAnimationFrame(raf);
     raf = null;
     _last = 0;
+    if (_navCtx) { popNavContext(_navCtx); _navCtx = null; }
     if (success && cbs.onSuccess) cbs.onSuccess();
     else if (!success && cbs.onFail) cbs.onFail();
     cbs.onSuccess = null;
     cbs.onFail = null;
 }
+
+let _navCtx = null;
 
 export function abrirLockpick(opts = {}) {
     if (isAberto) return;
@@ -179,6 +203,15 @@ export function abrirLockpick(opts = {}) {
         sweetX: 0.5, sweetW: 0.22,
     };
     overlay.style.display = 'flex';
+    _refrescarHint();
+    if (settings.inputMethod === 'gamepad' && !_navCtx) {
+        _navCtx = {
+            // □ é o botão primário — tenta. ○ sai. ✕/△ não fazem nada.
+            onSquare: () => attempt(),
+            onCircle: () => fechar(false),
+        };
+        pushNavContext(_navCtx);
+    }
     requestAnimationFrame(() => {
         novoPin();
         renderHUD();

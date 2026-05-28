@@ -148,14 +148,17 @@ export function pollGamepad() {
         // emitir pulsos discretos.
         if (!nav.movementPassthrough) _navStickStep(ax, ay, nav);
 
-        // Bindings directos por botão (X/O/△/□) — usado pelo combate.
-        // Caem para onConfirm/onCancel se não definidos.
-        _edge(0, gp.buttons[0]?.pressed, () => (nav.onCross    ?? nav.onConfirm)?.()); // A → ✕
-        _edge(1, gp.buttons[1]?.pressed, () => (nav.onCircle   ?? nav.onCancel )?.()); // B → ○
-        _edge(2, gp.buttons[2]?.pressed, () => (nav.onSquare   ?? nav.onAux   )?.()); // X → □
-        _edge(3, gp.buttons[3]?.pressed, () => (nav.onTriangle ?? nav.onAlt   )?.()); // Y → △
-        _edge(4, gp.buttons[4]?.pressed, () => nav.onShoulder1?.());                    // LB → L1
-        _edge(5, gp.buttons[5]?.pressed, () => nav.onShoulder2?.());                    // RB → R1
+        // Bindings directos por botão. Square (□) é o botão primário de
+        // "confirmar/interagir" — fallback para onConfirm. Cross (✕) deixa
+        // de ser o primário; é tratado como botão secundário (sem fallback).
+        // Ordem física Standard Gamepad: 0=A(Cross), 1=B(Circle), 2=X(Square),
+        // 3=Y(Triangle).
+        _edge(0, gp.buttons[0]?.pressed, () => nav.onCross?.());                         // ✕
+        _edge(1, gp.buttons[1]?.pressed, () => (nav.onCircle   ?? nav.onCancel )?.());   // ○
+        _edge(2, gp.buttons[2]?.pressed, () => (nav.onSquare   ?? nav.onConfirm)?.());   // □  ← primário
+        _edge(3, gp.buttons[3]?.pressed, () => (nav.onTriangle ?? nav.onAlt   )?.());    // △
+        _edge(4, gp.buttons[4]?.pressed, () => nav.onShoulder1?.());                    // L1
+        _edge(5, gp.buttons[5]?.pressed, () => nav.onShoulder2?.());                    // R1
 
         // Botões "globais" que continuam mesmo em UI (pausa).
         _edge(9, gp.buttons[9]?.pressed, () => {
@@ -176,18 +179,20 @@ export function pollGamepad() {
     keys.a = (ax < -DEADZONE) || !!dpadLeft;
     keys.d = (ax >  DEADZONE) || !!dpadRight;
 
-    _edge(0, gp.buttons[0]?.pressed, () => { keys.e = true; });           // A → E
+    // □ (Square, button 2) é o botão primário de interagir — substitui o ✕.
+    // ✕ (Cross, button 0) passou a abrir o Códice (era o que o □ fazia).
+    _edge(2, gp.buttons[2]?.pressed, () => { keys.e = true; });           // □ → E (interagir)
+    _edge(0, gp.buttons[0]?.pressed, () => {
+        keys.b = true;
+        if (_onToggleQuestBook) _onToggleQuestBook();
+    });                                                                    // ✕ → B (códice)
     _edge(1, gp.buttons[1]?.pressed, () => {
         if (_onTogglePause) _onTogglePause({ preventDefault() {}, key: 'Escape' });
-    });                                                                    // B → Esc
+    });                                                                    // ○ → Esc
     _edge(3, gp.buttons[3]?.pressed, () => {
         keys.i = true;
         if (_onToggleInventario) _onToggleInventario();
-    });                                                                    // Y → I
-    _edge(2, gp.buttons[2]?.pressed, () => {
-        keys.b = true;
-        if (_onToggleQuestBook) _onToggleQuestBook();
-    });                                                                    // X → B
+    });                                                                    // △ → I
     _edge(4, gp.buttons[4]?.pressed, () => {
         keys.v = true;
         if (_onToggleLoadout) _onToggleLoadout();

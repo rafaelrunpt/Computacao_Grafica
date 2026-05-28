@@ -112,12 +112,15 @@ export function psGlyph(button) {
 
 // Mapeamento da tecla lógica do jogo → botão PS correspondente.
 // Tem de bater certo com o que o gamepad.js faz no _edge().
+// Mapeamento da tecla lógica → botão PS. Nota: □ (Square) é agora o
+// botão primário de interagir/confirmar — substitui o ✕ que antes tinha
+// esse papel. ✕ ficou com o Códice (B).
 const _PS_FOR_KEY = {
-    e: 'cross',
+    e: 'square',
     esc: 'circle',
     escape: 'circle',
     i: 'triangle',
-    b: 'square',
+    b: 'cross',
     v: 'l1',
     m: 'r1',
     n: 'share',

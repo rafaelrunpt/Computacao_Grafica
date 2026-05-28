@@ -6,8 +6,15 @@ export const renderer = new THREE.WebGLRenderer({
     powerPreference: 'high-performance'
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
-// Cap agressivo: HiDPI dá pouquíssima diferença visual mas custa 2-4× mais pixels.
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
+// Cap agressivo + escala configurável: HiDPI dá pouquíssima diferença visual
+// mas custa 2-4× mais pixels. O renderScale (0.5-1.0) permite ao jogador
+// baixar ainda mais a resolução em GPUs fracas.
+function _applyPixelRatio() {
+    const scale = settings.renderScale ?? 1.0;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, scale));
+}
+_applyPixelRatio();
+onSettingChange('renderScale', _applyPixelRatio);
 renderer.shadowMap.enabled = settings.quality !== 'baixa';
 // PCFSoftShadowMap: kernel 3×3 suaviza os edges — elimina shimmer em sombras grandes.
 // A 1024² é 4× mais barato que PCFSoft a 2048² (original), mesmo com o filtro maior.
