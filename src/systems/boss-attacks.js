@@ -29,7 +29,7 @@ import { combateScene, posPlayerCombate, isBossMode } from '../world/combate-sce
 import { keys } from '../core/input.js';
 import { receberDano, playerStats } from './player-stats.js';
 import { setHpPlayer, setLog, mostrarDanoFlutuante } from '../ui/combate-ui.js';
-import { tocarSomAtaqueBoss, tocarRugidoBoss } from './audio.js';
+import { tocarSomAtaqueBoss, tocarRugidoBoss, tocarSomMovimentoBoss } from './audio.js';
 import { BossVFX } from './boss-vfx.js';
 
 // ----------------------------------------------------------------------
@@ -375,6 +375,7 @@ export function atualizarFaseDesvio(deltaTime) {
         const opts = {};
         if (pr.type === 'lateral') opts.side = pr.fromLeft ? -1 : 1;
         triggerBossAttackAnim(pr.type, pr.teleDur, opts);
+        tocarSomMovimentoBoss(pr.type); // Som do movimento físico (preparação)
 
         // Fase 2 (rage mode, abaixo de 25% HP): dispara um segundo projéctil
         // simultaneamente, evitando o par saltar+agachar.

@@ -405,6 +405,10 @@ export function tocarSomAtaquePlayer(ataqueId) {
             _whoosh(ctx, master, now + 0.03, { dur: 0.30, f0: 4200, f1: 1100, q: 2.4, vol: 0.40 });
             _tone(ctx, master, now + 0.09,   { dur: 0.26, f0: 2400, f1: 3700, type: 'square', vol: 0.16 });
             break;
+        case 'veu':                // buff defensivo — chime mágico
+            _tone(ctx, master, now,          { dur: 0.45, f0: 440, f1: 880, type: 'sine', vol: 0.35 });
+            _whoosh(ctx, master, now + 0.05, { dur: 0.40, f0: 1200, f1: 2200, q: 1.2, vol: 0.25 });
+            break;
         default:                   // fallback genérico
             _whoosh(ctx, master, now, { dur: 0.26, f0: 2000, f1: 700, q: 1.2, vol: 0.5 });
     }
@@ -475,6 +479,30 @@ export function tocarSomAtaqueInimigo(somKey) {
             break;
         default:
             _tone(ctx, master, now, { dur: 0.35, f0: 300, f1: 120, type: 'sawtooth', vol: 0.35 });
+    }
+}
+
+// --- sons de movimento físico do boss (saltos, gestos, preparações) ---
+export function tocarSomMovimentoBoss(tipo) {
+    const s = _sfxChain(0.5);
+    if (!s) return;
+    const { ctx, master, now } = s;
+
+    switch (tipo) {
+        case 'aereo': // SALTO: vento ascendente + thud místico
+            _whoosh(ctx, master, now, { dur: 0.6, f0: 100, f1: 800, q: 0.5, vol: 0.5 });
+            _tone(ctx, master, now, { dur: 0.4, f0: 80, f1: 40, type: 'sine', vol: 0.4 });
+            break;
+        case 'rasante': // SLAM: impacto seco + vibração
+            _thud(ctx, master, now, { dur: 0.5, f0: 180, f1: 30, vol: 0.8 });
+            _tone(ctx, master, now + 0.05, { dur: 0.3, f0: 120, f1: 120, type: 'sawtooth', vol: 0.2 });
+            break;
+        case 'varredura':
+        case 'lateral': // GESTOS/SWEEP: whoosh longo
+            _whoosh(ctx, master, now, { dur: 0.7, f0: 400, f1: 150, q: 0.8, vol: 0.4 });
+            break;
+        default:
+            _whoosh(ctx, master, now, { dur: 0.4, f0: 300, f1: 100, q: 1.0, vol: 0.3 });
     }
 }
 
