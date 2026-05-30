@@ -4,6 +4,62 @@ import * as THREE from 'three';
 import { player } from '../entities/jogador.js';
 import { posPlayerCombate, posInimigoCombate, getInimigoActivo, isBossMode } from '../world/combate-scene.js';
 import { combateCamera, combateBossCamera } from '../core/renderer.js';
+import { settings } from '../systems/settings.js';
+
+// ---- VFX DEBUG UI ----
+let _debugAnims = new Set();
+let _debugPaused = false;
+
+function _ensureDebugUI() {
+    if (document.getElementById('vfx-debug-ui')) return;
+    const ui = document.createElement('div');
+    ui.id = 'vfx-debug-ui';
+    ui.style.cssText = `
+        position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+        background: rgba(20,10,0,0.9); color: #f0d080; padding: 14px 22px;
+        border-radius: 10px; border: 2px solid #d4a830; z-index: 1000;
+        display: none; flex-direction: column; gap: 10px; align-items: center;
+        font-family: 'Courier New', monospace; font-size: 13px; pointer-events: auto;
+        box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    `;
+    ui.innerHTML = `
+        <div style="color:#d4a830; font-weight:bold; letter-spacing:2px;">⚜ DEPURAÇÃO VFX ⚜</div>
+        <div id="vfx-debug-info" style="min-width:200px; text-align:center;">Aguardando animação...</div>
+        <div style="display:flex; gap:12px;">
+            <button id="vfx-pause" style="background:#421; color:#f0d080; border:1px solid #d4a830; padding:5px 12px; cursor:pointer;">PAUSA</button>
+            <button id="vfx-next" style="background:#131; color:#f0d080; border:1px solid #d4a830; padding:5px 12px; cursor:pointer;">PRÓXIMO</button>
+            <button id="vfx-resume" style="background:#113; color:#f0d080; border:1px solid #d4a830; padding:5px 12px; cursor:pointer;">CONTINUAR</button>
+        </div>
+    `;
+    document.body.appendChild(ui);
+
+    ui.querySelector('#vfx-pause').onclick = () => { _debugPaused = true; };
+    ui.querySelector('#vfx-next').onclick = () => { 
+        _debugPaused = true; 
+        _debugAnims.forEach(a => a._stepOnce = true); 
+    };
+    ui.querySelector('#vfx-resume').onclick = () => { _debugPaused = false; };
+
+    // Atalho de teclado: N para próximo frame
+    window.addEventListener('keydown', (e) => {
+        if (!settings.vfxDebug || !document.getElementById('vfx-debug-ui')) return;
+        if (e.key.toLowerCase() === 'n') {
+            _debugPaused = true;
+            _debugAnims.forEach(a => a._stepOnce = true);
+        }
+    });
+}
+
+function _updateDebugUI(animName, frameIdx, total) {
+    if (!settings.vfxDebug) return;
+    _ensureDebugUI();
+    const ui = document.getElementById('vfx-debug-ui');
+    ui.style.display = 'flex';
+    ui.querySelector('#vfx-debug-info').innerHTML = `
+        <span style="color:#aaa;">File:</span> ${animName.split('/').pop()}<br>
+        <span style="color:#aaa;">Frame:</span> <b style="color:#fff;">${frameIdx + 1}</b> / ${total}
+    `;
+}
 
 // ---- overlay SVG ----
 const overlay = document.createElement('div');
@@ -165,7 +221,7 @@ export function playSlashImage({ url, x = 63, y = 25, size = 40, dur = 360, rot 
 // ---- sprite-sheet VFX ----
 // Toca um sprite-sheet (grelha cols×rows de frames) num <div> overlay.
 // Posição em vw/vh (mesmo sistema que as âncoras de combate).
-function playSpriteFX({ url, cols, rows, frames = cols * rows, fps = 24, x, y, size = 14, loop = false, dur = 0, extraCss = '' }) {
+export function playSpriteFX({ url, cols, rows, frames = cols * rows, fps = 24, x, y, size = 14, loop = false, dur = 0, extraCss = '' }) {
     const el = document.createElement('div');
     el.style.cssText = `
         position: fixed;
@@ -186,19 +242,46 @@ function playSpriteFX({ url, cols, rows, frames = cols * rows, fps = 24, x, y, s
     const frameDur = 1000 / fps;
     const totalDur = loop ? (dur || frameDur * frames) : frameDur * frames;
     const t0 = performance.now();
+    let lastTickTime = t0;
+    let accumulatedTime = 0;
+
     function tick(now) {
-        const e = now - t0;
-        if (!loop && e >= totalDur) { el.remove(); return; }
-        if (loop && e >= totalDur) { el.remove(); return; }
+        if (settings.vfxDebug) {
+            _debugAnims.add(el);
+            if (_debugPaused && !el._stepOnce) {
+                el._raf = requestAnimationFrame(tick);
+                return;
+            }
+            if (el._stepOnce) {
+                accumulatedTime += frameDur;
+                el._stepOnce = false;
+            } else {
+                accumulatedTime += (now - lastTickTime);
+            }
+        } else {
+            accumulatedTime = now - t0;
+        }
+        lastTickTime = now;
+
+        const e = accumulatedTime;
         const idx = loop ? Math.floor((e / frameDur)) % frames : Math.min(frames - 1, Math.floor(e / frameDur));
+        
+        if (settings.vfxDebug) _updateDebugUI(url, idx, frames);
+
+        if (!loop && e >= totalDur) { 
+            el.remove(); 
+            _debugAnims.delete(el);
+            if (_debugAnims.size === 0 && document.getElementById('vfx-debug-ui')) document.getElementById('vfx-debug-ui').style.display = 'none';
+            return; 
+        }
+
         const col = idx % cols;
         const row = Math.floor(idx / cols);
-        // posição percentual: divide pelos espaçamentos entre frames (cols-1 / rows-1)
         const px = cols > 1 ? (col / (cols - 1)) * 100 : 0;
         const py = rows > 1 ? (row / (rows - 1)) * 100 : 0;
         el.style.backgroundPosition = `${px}% ${py}%`;
         el.dataset.tick = String(idx);
-        if (el._stop) { el.remove(); return; }
+        if (el._stop) { el.remove(); _debugAnims.delete(el); return; }
         el._raf = requestAnimationFrame(tick);
     }
     el._raf = requestAnimationFrame(tick);
@@ -234,10 +317,33 @@ export function playFramesFX({ frames, fps = 18, x, y, size = 30, extraCss = '',
     document.body.appendChild(img);
     const frameDur = 1000 / fps;
     const t0 = performance.now();
+    let lastTickTime = t0;
+    let accumulatedTime = 0;
     let lastFired = false;
+
     function tick(now) {
-        const e = now - t0;
+        if (settings.vfxDebug) {
+            _debugAnims.add(img);
+            if (_debugPaused && !img._stepOnce) {
+                img._raf = requestAnimationFrame(tick);
+                return;
+            }
+            if (img._stepOnce) {
+                accumulatedTime += frameDur;
+                img._stepOnce = false;
+            } else {
+                accumulatedTime += (now - lastTickTime);
+            }
+        } else {
+            accumulatedTime = now - t0;
+        }
+        lastTickTime = now;
+
+        const e = accumulatedTime;
         const idx = Math.min(frames.length - 1, Math.floor(e / frameDur));
+
+        if (settings.vfxDebug) _updateDebugUI(frames[idx], idx, frames.length);
+
         img.src = frames[idx];
         if (idx === frames.length - 1 && !lastFired) {
             lastFired = true;
@@ -245,9 +351,11 @@ export function playFramesFX({ frames, fps = 18, x, y, size = 30, extraCss = '',
         }
         if (e >= frameDur * frames.length) {
             img.remove();
+            _debugAnims.delete(img);
+            if (_debugAnims.size === 0 && document.getElementById('vfx-debug-ui')) document.getElementById('vfx-debug-ui').style.display = 'none';
             return;
         }
-        requestAnimationFrame(tick);
+        img._raf = requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
     return img;
@@ -261,8 +369,29 @@ export function dispararProjetilSprite({ url, cols, rows, frames, fps, from, to,
     const syncedFps = fps || (totalFrames * 1000 / dur);
     const el = playSpriteFX({ url, cols, rows, frames: totalFrames, fps: syncedFps, x: from.x, y: from.y, size, loop: false, extraCss });
     const t0 = performance.now();
+    let lastTickTime = t0;
+    let accumulatedTime = 0;
+
     function step(now) {
-        const e = Math.min(1, (now - t0) / dur);
+        if (settings.vfxDebug) {
+            if (_debugPaused && !el._stepOnce) {
+                requestAnimationFrame(step);
+                return;
+            }
+            // o stepOnce é consumido pelo playSpriteFX interno, 
+            // mas aqui também precisamos de progredir a posição.
+            if (el._stepOnce) {
+                // progredir o tempo de voo proporcionalmente ao frame
+                accumulatedTime += (1000 / syncedFps);
+            } else {
+                accumulatedTime += (now - lastTickTime);
+            }
+        } else {
+            accumulatedTime = now - t0;
+        }
+        lastTickTime = now;
+
+        const e = Math.min(1, accumulatedTime / dur);
         const cx = from.x + (to.x - from.x) * e;
         const cy = from.y + (to.y - from.y) * e;
         el.style.left = `${cx}vw`;

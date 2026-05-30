@@ -50,8 +50,11 @@ import { isTelaInicialAberta, updateTitleCamera, titleCamera, onTelaInicialFecha
 import { initNightMode, setNightMode, updateNightMode, pauseNightMode, resumeNightMode, renderNightWorld, resizeNightComposer, isNightInitialized } from '../world/night-mode.js';
 import { initWalkDust, updateWalkDust } from '../world/walk-dust.js';
 import { settings, onSettingChange } from '../systems/settings.js';
+import { dispararTutorial, descartarTutorial, descartarTutorialPorAccao } from '../ui/tutorial.js';
 
 export { ganharXP, playerStats };
+
+import { initPassaros, updatePassaros, isPassarosAtivos } from '../world/passaros.js';
 
 // --------------------------------------------------------
 // CENA PRINCIPAL
@@ -258,12 +261,18 @@ sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(_shadowSize, _shadowSize);
 sunLight.shadow.bias = -0.0001;
 sunLight.shadow.normalBias = 0.08;
+// Frustum APERTADO à volta do player (a câmara de sombra segue-o em
+// animateMundo). Antes cobria o mapa inteiro (±105), o que tornava cada
+// re-bake brutal; agora só renderiza o que está perto do herói.
 sunLight.shadow.camera.near   =   1;
-sunLight.shadow.camera.far    = 280;
-sunLight.shadow.camera.left   = -105;
-sunLight.shadow.camera.right  =  105;
-sunLight.shadow.camera.top    =  105;
-sunLight.shadow.camera.bottom = -105;
+sunLight.shadow.camera.far    = 320;
+sunLight.shadow.camera.left   =  -32;
+sunLight.shadow.camera.right  =   32;
+sunLight.shadow.camera.top    =   32;
+sunLight.shadow.camera.bottom =  -32;
+// Offset do sol em relação ao player (mantém a MESMA direcção de sombra
+// que tinha o sol fixo em (80,120,80) a apontar para a origem).
+const _sunOffset = new THREE.Vector3(80, 120, 80);
 sunLight.position.set(80, 120, 80);
 sunLight.target.position.set(0, 0, 0);
 scene.add(sunLight, sunLight.target);
@@ -449,54 +458,75 @@ function verificaColisaoCaselo(nx, nz) {
 // --------------------------------------------------------
 let _frameCount = 0; // contador global de frames para throttling
 
-// Throttle do re-bake da shadow map por DISTÂNCIA percorrida pelo player.
-// Sombras só são re-renderizadas quando o player se mexeu o suficiente para
-// se notar o deslocamento — corta o shadow pass de 60Hz para ~15-25Hz em
-// movimento normal, sem flicker visível. ENORME ganho de CPU em Firefox/Windows
-// porque cada bake itera 400+ meshes (árvores, rochas, edifícios).
-const _lastShadowBakePos = new THREE.Vector3(Infinity, 0, Infinity);
-// Distância mínima andada antes do shadow map ser re-baked.
-// Cada bake é essencialmente uma segunda passagem de render (do ponto de
-// vista do sol) sobre todas as ~400 meshes com castShadow. A 18cm tinhamos
-// re-bake quase todos os frames a andar → metade do orçamento de GPU.
-// Escala com qualidade: alta mantém sombras suaves, baixa quase nunca re-baka.
-const SHADOW_BAKE_DIST = settings.quality === 'alta'  ? 0.6
-                       : settings.quality === 'baixa' ? 3.0
-                       :                                1.2;
-const SHADOW_BAKE_MIN_DIST_SQ = SHADOW_BAKE_DIST * SHADOW_BAKE_DIST;
-function _maybeMarkShadowUpdate(forceOrPos) {
-    const pos = (forceOrPos && forceOrPos.isVector3) ? forceOrPos : player.position;
-    const dx = pos.x - _lastShadowBakePos.x;
-    const dz = pos.z - _lastShadowBakePos.z;
-    if (dx*dx + dz*dz >= SHADOW_BAKE_MIN_DIST_SQ) {
-        renderer.shadowMap.needsUpdate = true;
-        _lastShadowBakePos.set(pos.x, 0, pos.z);
-    }
-}
+// --- BLOB SHADOW DO JOGADOR (Dia / Exterior) ---
+// Usamos uma sombra falsa (blob) para o jogador no mundo exterior e 
+// congelamos o shadow map do sol! Desta forma, o mapa enorme (com centenas
+// de árvores) é renderizado para sombra apenas uma única vez no arranque, 
+// poupando massivamente a GPU e devolvendo os FPS na totalidade.
+const _blobCanvas = document.createElement('canvas');
+_blobCanvas.width = 64; _blobCanvas.height = 64;
+const _bctx = _blobCanvas.getContext('2d');
+const _bgrad = _bctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+_bgrad.addColorStop(0, 'rgba(0,0,0,0.65)');
+_bgrad.addColorStop(0.4, 'rgba(0,0,0,0.4)');
+_bgrad.addColorStop(1, 'rgba(0,0,0,0)');
+_bctx.fillStyle = _bgrad;
+_bctx.fillRect(0, 0, 64, 64);
+const _blobTex = new THREE.CanvasTexture(_blobCanvas);
+const _blobMat = new THREE.MeshBasicMaterial({ 
+    map: _blobTex, transparent: true, depthWrite: false
+});
+const _blobGeo = new THREE.PlaneGeometry(1.6, 1.6);
+_blobGeo.rotateX(-Math.PI / 2);
+const playerBlobShadow = new THREE.Mesh(_blobGeo, _blobMat);
+playerBlobShadow.frustumCulled = false;
+scene.add(playerBlobShadow);
+
 function _forceShadowUpdate() {
     renderer.shadowMap.needsUpdate = true;
-    _lastShadowBakePos.set(Infinity, 0, Infinity);
+}
+
+// Re-bake da shadow map do sol só quando vale a pena: se o jogador andou o
+// suficiente desde o último bake (o mundo aberto tem centenas de árvores —
+// re-renderizar a sombra a cada frame mata os FPS). Em qualidade alta
+// exigimos menos distância entre bakes; em baixa, mais.
+const _lastShadowPos = new THREE.Vector3(Infinity, Infinity, Infinity);
+function _maybeMarkShadowUpdate() {
+    // Limiar pequeno → re-bake quase contínuo enquanto o jogador anda
+    // (sombra fluida, sem "saltos"); quando está parado a distância é 0 e
+    // não gastamos nada.
+    const limiar = settings.quality === 'alta' ? 0.25 : 0.7;
+    if (_lastShadowPos.distanceToSquared(player.position) >= limiar * limiar) {
+        renderer.shadowMap.needsUpdate = true;
+        _lastShadowPos.copy(player.position);
+    }
 }
 
 function animateMundo(deltaTime) {
     let isMoving = false;
     updateNightMode(deltaTime);
     updateWalkDust(deltaTime);
+    // updatePassaros(deltaTime, player); // DESATIVADO POR PERFORMANCE
 
     // Cinemática das amostras estelares — conduz a câmara e bloqueia o
     // controlo do jogador enquanto está activa.
     const emCutscene = isSpaceCutsceneActive();
     if (emCutscene) updateSpaceCutscene(deltaTime, mainCamera);
 
-    // Spotlight do jogador é actualizado abaixo (dentro do bloco de render),
-    // evitando dois `position.set` por frame.
+    // Blob desligado de dia: o jogador agora projecta sombra direccional real
+    // (shadow map re-baked por _maybeMarkShadowUpdate). Mantê-lo daria duas
+    // sombras sobrepostas. À noite a sombra vem da tocha, por isso fica sempre off.
+    playerBlobShadow.position.set(player.position.x, 0.03, player.position.z);
+    playerBlobShadow.visible = false;
 
-    // shadowMap.autoUpdate está desligado por defeito (ver renderer.js).
-    // Marcamos needsUpdate só quando algo dinâmico precisa de reflectir a
-    // sombra: jogador a mover-se, inimigos activos em zonas de batalha,
-    // ou animação de aura/tochas a tocar em objectos. _isMoving abaixo
-    // determinará se o jogador andou neste frame.
-    // (decisão final acontece no fim de animateMundo)
+    // A câmara de sombra do sol segue o player: mantém-no sempre dentro do
+    // frustum apertado (±32) para a shadow map ser barata de re-bakar.
+    sunLight.target.position.set(player.position.x, 0, player.position.z);
+    sunLight.position.set(
+        player.position.x + _sunOffset.x,
+        _sunOffset.y,
+        player.position.z + _sunOffset.z,
+    );
 
     // Partículas roxas das zonas corruptas — animadas no vertex shader.
     // Um único uniform update partilhado por todas as zonas (sem upload de buffer).
@@ -639,6 +669,18 @@ function animateMundo(deltaTime) {
                         adicionarBonusSantuario(5);
                         playSFX('cristal');
                         hidePrompt();
+                        
+                        // Mostra popup de recompensa após a animação de burst (2s)
+                        setTimeout(() => {
+                            mostrarRecompensa({
+                                titulo: '⚜ Dádiva Ancestral ⚜',
+                                icone: '💜',
+                                nome: 'Bênção de Vigor',
+                                descricao: 'O vosso espírito fortalece-se (+5 HP máximo permanentemente).',
+                                dica: 'A vossa alma transborda vitalidade',
+                                duracao: 3500
+                            });
+                        }, 2000);
                     }
                 }
             } else {
@@ -744,14 +786,16 @@ function animateMundo(deltaTime) {
         if (emCutscene) _restoreAllCullables();
         else            _cullBehindCamera(mainCamera);
         sampleCullingNow();
+        
         // Shadow map: re-bake throttled por distância percorrida (ver
-        // _maybeMarkShadowUpdate). Em combate forçamos pois há inimigos a
-        // mexerem-se sem movimento do player.
+        // _maybeMarkShadowUpdate). Em combate ou com aves no céu, forçamos 
+        // fluidez máxima.
         if (estadoJogo.emCombate) {
             renderer.shadowMap.needsUpdate = true;
-        } else if (isMoving) {
+        } else {
             _maybeMarkShadowUpdate();
         }
+
         // Modo nocturno usa EffectComposer (bloom + output sRGB). Em
         // qualidade baixa saltamos o composer (mip-chain do bloom é caro).
         if (isNightInitialized() && settings.quality !== 'baixa') {
@@ -759,6 +803,7 @@ function animateMundo(deltaTime) {
         } else {
             renderer.render(scene, mainCamera);
         }
+
         _restoreAllCullables();
         // Durante a cinemática a HUD inteira é apagada — não renderizar o
         // minimapa nem deixar o seu border aparecer.
@@ -769,7 +814,6 @@ function animateMundo(deltaTime) {
             renderizarMinimapa(renderer, scene, window.innerWidth, window.innerHeight, player.position, false);
         }
     }
-    _frameCount++;
 }
 
 function animateLoja(deltaTime) {
@@ -909,8 +953,9 @@ function animateLoja(deltaTime) {
     // Shadow map: throttled por distância (ver _maybeMarkShadowUpdate).
     // A mercadora roda lentamente: forçamos um bake adicional a cada 8
     // frames (~7Hz) para manter a sombra dela actualizada sem custo.
-    _maybeMarkShadowUpdate();
-    if ((_frameCount & 7) === 0) renderer.shadowMap.needsUpdate = true;
+    // No modo ALTO, garantimos fluidez total.
+    const shadowThrottle = settings.quality === 'alta' ? 0 : 7;
+    if ((_frameCount & shadowThrottle) === 0) renderer.shadowMap.needsUpdate = true;
 
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
@@ -1083,8 +1128,8 @@ function animateCaselo(deltaTime) {
 
     // Shadow map: throttled por distância. O castelo tem efeitos atmosféricos
     // contínuos (pulsar do cristal) que beneficiam de um refresh periódico.
-    _maybeMarkShadowUpdate();
-    if ((_frameCount & 7) === 0) renderer.shadowMap.needsUpdate = true;
+    const shadowThrottle = settings.quality === 'alta' ? 0 : 7;
+    if ((_frameCount & shadowThrottle) === 0) renderer.shadowMap.needsUpdate = true;
 
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
@@ -1167,6 +1212,8 @@ function animateTavern(deltaTime) {
         abrirIntroBartender(() => {
             marcarBartenderIntroFeita();
             mostrarPista('O taberneiro retirou-se para o seu recanto da estalagem. Procurai-o se precisardes de elixires ou golpes.');
+            // Falaste com o taberneiro → ensina a empunhar a tocha (tecla N).
+            dispararTutorial('tocha');
         });
         hidePrompt();
     } else if (isIntroBartenderAberta() || isBartenderShopAberta()) {
@@ -1246,8 +1293,9 @@ function animateTavern(deltaTime) {
 
     // Shadow map: throttled. NPCs da taverna mexem-se devagar — um refresh
     // periódico (8 em 8 frames) chega para os acompanhar.
-    _maybeMarkShadowUpdate();
-    if ((_frameCount & 7) === 0) renderer.shadowMap.needsUpdate = true;
+    // No modo ALTO, garantimos fluidez total.
+    const shadowThrottle = settings.quality === 'alta' ? 0 : 7;
+    if ((_frameCount & shadowThrottle) === 0) renderer.shadowMap.needsUpdate = true;
 
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
 
@@ -1396,8 +1444,9 @@ function animateQuarto(deltaTime) {
     }
 
     // Shadow map: throttled por distância (quarto pequeno e quase estático).
-    _maybeMarkShadowUpdate();
-    if ((_frameCount & 15) === 0) renderer.shadowMap.needsUpdate = true;
+    // No modo ALTO, garantimos fluidez total.
+    const shadowThrottle = settings.quality === 'alta' ? 0 : 15;
+    if ((_frameCount & shadowThrottle) === 0) renderer.shadowMap.needsUpdate = true;
 
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
@@ -1431,6 +1480,13 @@ function animateCombate(deltaTime) {
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
 
+    // No modo ALTO, as sombras do combate (movimento do boss/player) devem ser a 60fps
+    if (settings.quality === 'alta') {
+        renderer.shadowMap.needsUpdate = true;
+    } else if ((_frameCount & 7) === 0) {
+        renderer.shadowMap.needsUpdate = true;
+    }
+
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
     const camCombate = isBossMode() ? combateBossCamera : combateCamera;
@@ -1444,49 +1500,9 @@ function animateBossDebug(deltaTime) {
     renderer.render(bossDebugScene, moderator.freeCam ? mainCamera : bossDebugCamera);
 }
 
-let _prevCena = null;
-function animate() {
-    requestAnimationFrame(animate);
-    let deltaTime = clock.getDelta();
-    tickFps();
+// --- LOGICA DE RENDERIZAÇÃO ---
 
-    // Gamepad: actualiza estado dos botões/sticks → espelha em `keys`. Só
-    // age se inputMethod === 'gamepad' nas settings (poll é no-op c.c.).
-    pollGamepad();
-
-    // Actualizar tempo dos shaders
-    starMat.uniforms.uTime.value += deltaTime;
-
-    // Modo nocturno só corre no mundo exterior — entra/sai conforme a cena.
-    mostrarBotaoLoadout(!estadoJogo.emCombate && !isSpaceCutsceneActive());
-    if (estado.cena !== _prevCena) {
-        if (estado.cena === 'mundo') {
-            resumeNightMode();
-            if (settings.nightMode) setNightMode(true);
-        } else if (_prevCena === 'mundo') {
-            pauseNightMode();
-        }
-        _prevCena = estado.cena;
-        // Mudança de cena → forçar re-bake completo da shadow map (e reset
-        // do throttle de distância para que o próximo bake na cena nova passe).
-        _forceShadowUpdate();
-        // No mundo exterior o holofote nocturno (_playerAura) já projecta a
-        // sombra do herói; manter também o playerSpot a projectar duplicava
-        // o cálculo e fazia o shadow acne cintilar a preto ao andar. Nos
-        // interiores/combate o playerSpot continua a ser a única sombra.
-        playerSpot.castShadow = (estado.cena !== 'mundo');
-    }
-
-    // TELA INICIAL — câmara orbital cinematográfica sobre o mundo
-    if (isTelaInicialAberta()) {
-        updateTitleCamera(deltaTime);
-        // mantém shaders animados para a água/zonas brilharem
-        matWater.uniforms.uTime.value      += deltaTime;
-        matBattleGrass.uniforms.uTime.value += deltaTime;
-        matCorruptHalo.uniforms.uTime.value += deltaTime;
-        renderer.setScissorTest(false);
-        renderer.clear();
-        // Actualizar spotlight (lanterna mágica do herói)
+function _updatePlayerSpot() {
     // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
     // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
     const luzNecessaria = (estado.cena !== 'mundo');
@@ -1495,13 +1511,55 @@ function animate() {
         playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
         playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
     }
+}
 
-    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+let _prevCena = null;
+function animate() {
+    requestAnimationFrame(animate);
+    _frameCount++;
+    let deltaTime = clock.getDelta();
+    tickFps();
+
+    pollGamepad();
+
+    // As dicas de tutorial fecham assim que a respectiva acção é usada.
+    // `keys` reflecte teclado e comando, por isso cobre ambos os inputs.
+    if (keys.w || keys.a || keys.s || keys.d) descartarTutorialPorAccao('mover');
+    if (keys.n) descartarTutorialPorAccao('tocha');
+    if (keys.i || keys.e) descartarTutorialPorAccao('inventario');
+    if (keys.v) descartarTutorialPorAccao('arsenal');
+
+    starMat.uniforms.uTime.value += deltaTime;
+
+    mostrarBotaoLoadout(!estadoJogo.emCombate && !isSpaceCutsceneActive());
+    if (estado.cena !== _prevCena) {
+        if (estado.cena === 'mundo') {
+            resumeNightMode();
+            if (settings.nightMode) setNightMode(true);
+            // Primeira vez no mundo aberto → dica (fixa) de como abrir a bolsa.
+            dispararTutorial('inventario');
+        } else if (_prevCena === 'mundo') {
+            pauseNightMode();
+        }
+        _prevCena = estado.cena;
+        _forceShadowUpdate();
+        playerSpot.castShadow = (estado.cena !== 'mundo');
+    }
+
+    // TELA INICIAL
+    if (isTelaInicialAberta()) {
+        updateTitleCamera(deltaTime);
+        matWater.uniforms.uTime.value      += deltaTime;
+        matBattleGrass.uniforms.uTime.value += deltaTime;
+        matCorruptHalo.uniforms.uTime.value += deltaTime;
+        _updatePlayerSpot();
+        renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+        renderer.setScissorTest(false);
+        renderer.clear();
         renderer.render(scene, titleCamera);
         return;
     }
 
-    // PAUSA — mantém render mas congela lógica/animações
     if (isPauseAberto()) deltaTime = 0;
 
     buildAvatarScene();
@@ -1511,10 +1569,11 @@ function animate() {
         moderator.controls.update();
     }
 
+    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
     renderer.clear();
 
-    // Minimapa/bússola: só aparece no mundo exterior, e nunca durante a cinemática.
+    // Minimapa/bússola
     {
         const border = document.getElementById('minimap-border');
         if (border) {
@@ -1523,87 +1582,17 @@ function animate() {
         }
     }
 
+    _updatePlayerSpot();
+
     if (isPauseAberto()) {
-        // Render passivo da cena actual, sem actualizar lógica
-        if (estado.cena === 'mundo') {
-            // Actualizar spotlight (lanterna mágica do herói)
-    // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-    const luzNecessaria = (estado.cena !== 'mundo');
-    playerSpot.visible = luzNecessaria;
-    if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-        playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-    }
-
-    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
-            renderer.render(scene, mainCamera);
-        } else if (estado.cena === 'loja') {
-            // Actualizar spotlight (lanterna mágica do herói)
-    // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-    const luzNecessaria = (estado.cena !== 'mundo');
-    playerSpot.visible = luzNecessaria;
-    if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-        playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-    }
-
-    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
-            renderer.render(lojaScene, lojaCamera);
-        } else if (estado.cena === 'caselo') {
-            // Actualizar spotlight (lanterna mágica do herói)
-    // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-    const luzNecessaria = (estado.cena !== 'mundo');
-    playerSpot.visible = luzNecessaria;
-    if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-        playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-    }
-
-    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
-            renderer.render(caseloScene, caseloCamera);
-        } else if (estado.cena === 'tavern') {
-            // Actualizar spotlight (lanterna mágica do herói)
-    // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-    const luzNecessaria = (estado.cena !== 'mundo');
-    playerSpot.visible = luzNecessaria;
-    if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-        playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-    }
-
-    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
-            renderer.render(tavernScene, tavernCamera);
-        } else if (estado.cena === 'quarto') {
-            // Actualizar spotlight (lanterna mágica do herói)
-    // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-    const luzNecessaria = (estado.cena !== 'mundo');
-    playerSpot.visible = luzNecessaria;
-    if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-        playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-    }
-
-    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
-            renderer.render(quartoScene, quartoCamera);
-        } else if (estado.cena === 'combate') {
-            const luzNecessaria = true;
-            playerSpot.visible = luzNecessaria;
-            if (luzNecessaria) {
-                playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-                playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-            }
-            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
-            renderer.render(combateScene, isBossMode() ? combateBossCamera : combateCamera);
-        } else if (estado.cena === 'boss_debug') {
-            renderer.render(bossDebugScene, bossDebugCamera);
-        }
+        if (estado.cena === 'mundo')        renderer.render(scene, mainCamera);
+        else if (estado.cena === 'loja')    renderer.render(lojaScene, lojaCamera);
+        else if (estado.cena === 'caselo')  renderer.render(caseloScene, caseloCamera);
+        else if (estado.cena === 'tavern')  renderer.render(tavernScene, tavernCamera);
+        else if (estado.cena === 'quarto')  renderer.render(quartoScene, quartoCamera);
+        else if (estado.cena === 'combate') renderer.render(combateScene, isBossMode() ? combateBossCamera : combateCamera);
+        else if (estado.cena === 'boss_debug') renderer.render(bossDebugScene, bossDebugCamera);
     } else {
-        // Lógica activa por cena
         if (estado.cena === 'mundo')        animateMundo(deltaTime);
         else if (estado.cena === 'loja')    animateLoja(deltaTime);
         else if (estado.cena === 'caselo')  animateCaselo(deltaTime);
@@ -1613,18 +1602,8 @@ function animate() {
         else if (estado.cena === 'boss_debug') animateBossDebug(deltaTime);
     }
 
-    // Avatar só re-renderiza quando algo mudou (equipamento/material) e a HUD
-    // está visível. Antes era um render WebGL completo por frame, mesmo com
-    // o avatar idêntico ou a HUD escondida em combate/menu.
     renderAvatarIfDirty();
 
-    // Auto-clear defensivo das teclas de ACÇÃO (não as de movimento).
-    // Padrão `if (keys.e) { keys.e = false; ... }` está espalhado por toda
-    // a base; se algum bloco esquecer o reset, a flag fica "pegajosa" e o
-    // próximo frame consome-a outra vez — visível como "E sempre clicado".
-    // Limpar aqui garante semântica one-shot mesmo se o consumidor falhar:
-    // teclado volta a setar true no próximo keydown, gamepad só na próxima
-    // transição de botão (edge), e WASD/movimento ficam intactos.
     keys.e = false;
     keys.i = false;
     keys.b = false;
@@ -1640,6 +1619,7 @@ criarLostItems(scene);
 // Rasto de poeira do jogador — corre no mundo exterior tanto de dia
 // como de noite (independente do módulo nocturno).
 initWalkDust(scene, player);
+// initPassaros(scene); // <-- DESATIVADO PARA TESTE DE PERFORMANCE
 
 // Cinemática da chuva de amostras estelares (quest da Alice).
 initSpaceCutscene(scene, player);
@@ -1661,6 +1641,9 @@ player.rotation.y = quartoPlayer.rotY;
 // menu — lemos settings.nightMode AGORA (não no module load) para que o
 // toggle tenha efeito sem precisar de recarregar a página.
 onTelaInicialFechar(() => {
+    // Primeira dica: como andar. Aparece nos aposentos, no canto superior.
+    dispararTutorial('movimento');
+
     if (settings.nightMode && !isNightInitialized()) {
         initNightMode(scene, sunLight, ambientLight, player, mainCamera, renderer);
         setNightMode(true);

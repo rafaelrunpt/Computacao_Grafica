@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeTerrainShader, terraTex, matBattleGrass, matContRock, matCorruptHalo, rockTex, rockNormal, rockRough, grassTex, madeiraTex } from './shaders.js';
 import { criarRio, getBridgePassage } from './rio.js';
 import { Bau } from './bau.js';
@@ -451,6 +452,56 @@ function _buildInstancedForest() {
 const _rockSpawnList = []; // { scene, x, z, r, contaminada, chunk }
 const _rockGeoBase = new THREE.DodecahedronGeometry(1, 0);
 
+/**
+ * Utilitário para fundir todas as meshes de um modelo estático que partilham
+ * o mesmo material. Reduz centenas de draw-calls para meia dúzia.
+ */
+function mergeStaticGLB(root) {
+    const meshesByMat = new Map();
+    root.updateMatrixWorld(true);
+    root.traverse(c => {
+        if (c.isMesh && c.geometry) {
+            const mat = Array.isArray(c.material) ? c.material[0] : c.material;
+            if (!mat) return;
+            let entry = meshesByMat.get(mat.uuid);
+            if (!entry) {
+                entry = { material: mat, geos: [] };
+                meshesByMat.set(mat.uuid, entry);
+            }
+            
+            // Otimização: des-intercalar atributos do GLTF (InterleavedBufferAttributes não são suportados pelo mergeGeometries)
+            // e remover morphTargets/skinning que não são suportados em merge estático.
+            let g = c.geometry.clone();
+            
+            // Se for indexada e tiver atributos intercalados, a forma mais simples de "limpar"
+            // para o BufferGeometryUtils é converter para não-indexada e voltar a indexar (opcional).
+            // No entanto, toNonIndexed() é pesado. Tentamos apenas de-interleave se detectado.
+            // Para segurança total com GLTFLoader, usamos toNonIndexed().
+            g = g.toNonIndexed();
+            
+            g.applyMatrix4(c.matrixWorld);
+            entry.geos.push(g);
+        }
+    });
+
+    const mergedGroup = new THREE.Group();
+    for (const entry of meshesByMat.values()) {
+        if (entry.geos.length === 0) continue;
+        try {
+            const mergedGeo = BufferGeometryUtils.mergeGeometries(entry.geos, true);
+            if (mergedGeo) {
+                const mesh = new THREE.Mesh(mergedGeo, entry.material);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                mergedGroup.add(mesh);
+            }
+        } catch (err) {
+            console.warn('[mergeStaticGLB] Falha ao fundir geometrias para um material:', err);
+        }
+    }
+    return mergedGroup;
+}
+
 function criarRocha(scene, x, z, r = 0.6, contaminada = false) {
     _rockSpawnList.push({ scene, x, z, r, contaminada, chunk: z >= 0 ? 'N' : 'S' });
     // Collider individual (a hitbox usa o raio real)
@@ -647,14 +698,17 @@ function criarShop(scene, cx, cz) {
     const loader = new GLTFLoader();
     const posX = cx , posZ = cz;
     loader.load('assets/models/constructions/shop.glb', (gltf) => {
-        const m = gltf.scene;
-        m.position.set(posX , 8.95, posZ);
-        m.scale.setScalar(0.5);
-        m.rotation.y = Math.PI / 0.000001;
-        m.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
-        scene.add(m);
-        fadeables.push(m);
-        cullables.push(m);
+        gltf.scene.position.set(0, 0, 0);
+        gltf.scene.scale.setScalar(0.5);
+        gltf.scene.rotation.y = 0;
+        gltf.scene.updateMatrixWorld(true);
+
+        const optimized = mergeStaticGLB(gltf.scene);
+        optimized.position.set(posX, 8.95, posZ);
+        
+        scene.add(optimized);
+        fadeables.push(optimized);
+        cullables.push(optimized);
     }, undefined, e => console.error('Erro loja:', e));
 
     const hx = 6.5, hz = 8.0, hy = 4.0;
@@ -671,24 +725,26 @@ function criarInn(scene, cx, cz, scale = 0.1, rotationY = 0, yOffset = 0) {
     const posX = cx, posZ = cz;
     loader.load('assets/models/constructions/gobble-inn.glb', (gltf) => {
         const m = gltf.scene;
-        m.position.set(posX, 0, posZ);
+        m.position.set(0, 0, 0);
         m.scale.setScalar(scale);
         m.rotation.y = rotationY;
-        m.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+        m.updateMatrixWorld(true);
 
         // alinhar o fundo ao chão e aplicar offset Y opcional (negativo afunda)
-        m.updateMatrixWorld(true);
         const bb0 = new THREE.Box3().setFromObject(m);
         m.position.y -= bb0.min.y;
         m.position.y += yOffset;
         m.updateMatrixWorld(true);
 
-        scene.add(m);
-        fadeables.push(m);
-        cullables.push(m);
+        const optimized = mergeStaticGLB(m);
+        optimized.position.set(posX, 0, posZ);
+
+        scene.add(optimized);
+        fadeables.push(optimized);
+        cullables.push(optimized);
 
         // bbox total apenas para referência (não usado para colisão)
-        const bboxFull = new THREE.Box3().setFromObject(m);
+        const bboxFull = new THREE.Box3().setFromObject(optimized);
         console.log('[Inn] bbox total (referência):',
             `x:[${bboxFull.min.x.toFixed(2)}, ${bboxFull.max.x.toFixed(2)}]`,
             `z:[${bboxFull.min.z.toFixed(2)}, ${bboxFull.max.z.toFixed(2)}]`,
@@ -767,18 +823,15 @@ function criarPotionShop(scene, cx, cz) {
     const posX = cx, posZ = cz;
     loader.load('assets/models/constructions/potion.glb', (gltf) => {
         const m = gltf.scene;
-        m.position.set(posX, 0, posZ);
-        m.scale.setScalar(0.01); // Diminuído drasticamente como solicitado
-        m.rotation.y = 0; // Virado para Norte (para o player/câmara)
+        m.position.set(0, 0, 0);
+        m.scale.setScalar(0.01);
+        m.rotation.y = 0;
         m.traverse(c => {
             if (c.isMesh) {
                 const name = c.name.toLowerCase();
-                // Nomes específicos do Blender: latern001, latern003
                 const isLantern = name.includes('latern001') || name.includes('latern003');
-
                 c.castShadow = true;
                 c.receiveShadow = true;
-
                 if (c.material) {
                     const mats = Array.isArray(c.material) ? c.material : [c.material];
                     for (const mat of mats) {
@@ -796,22 +849,11 @@ function criarPotionShop(scene, cx, cz) {
         const bb = new THREE.Box3().setFromObject(m);
         m.position.y -= bb.min.y;
         m.position.y -= 2.1;
-        scene.add(m);
+        m.updateMatrixWorld(true);
 
-        // Atualizar BB após ajuste Y
-        bb.setFromObject(m);
-        
-        // Paredes de colisão precisas solicitadas (x:-21 a -15, z:-46 a -39)
-        const wallH = 4;
-        const wallT = 0.2;
-        // Norte (z=-39)
-        addCollider(new THREE.Box3(new THREE.Vector3(-21, 0, -39 - wallT), new THREE.Vector3(-15, wallH, -39)));
-        // Sul (z=-46) - Movida 1 unidade para trás
-        addCollider(new THREE.Box3(new THREE.Vector3(-21, 0, -46), new THREE.Vector3(-15, wallH, -46 + wallT)));
-        // Oeste (x=-21) - Estendida até -46
-        addCollider(new THREE.Box3(new THREE.Vector3(-21 - wallT, 0, -46), new THREE.Vector3(-21, wallH, -39)));
-        // Este (x=-15) - Estendida até -46
-        addCollider(new THREE.Box3(new THREE.Vector3(-15, 0, -46), new THREE.Vector3(-15 + wallT, wallH, -39)));
+        const optimized = mergeStaticGLB(m);
+        optimized.position.set(posX, 0, posZ);
+        scene.add(optimized);
 
         // Chão interior (x:-21 a -15, z:-46 a -39) - Agora com profundidade 7
         const floorGeo = new THREE.PlaneGeometry(6, 7);
@@ -826,9 +868,21 @@ function criarPotionShop(scene, cx, cz) {
         floorMesh.receiveShadow = true;
         scene.add(floorMesh);
 
-        fadeables.push(m);
-        cullables.push(m);
-    }, undefined, e => console.error('Erro Potion Shop:', e));
+        fadeables.push(optimized);
+        cullables.push(optimized);
+    }, undefined, e => console.error('Erro potion GLB:', e));
+
+    // Paredes de colisão precisas solicitadas (x:-21 a -15, z:-46 a -39)
+    const wallH = 4;
+    const wallT = 0.2;
+    // Norte (z=-39)
+    addCollider(new THREE.Box3(new THREE.Vector3(-21, 0, -39 - wallT), new THREE.Vector3(-15, wallH, -39)));
+    // Sul (z=-46)
+    addCollider(new THREE.Box3(new THREE.Vector3(-21, 0, -46), new THREE.Vector3(-15, wallH, -46 + wallT)));
+    // Oeste (x=-21)
+    addCollider(new THREE.Box3(new THREE.Vector3(-21 - wallT, 0, -46), new THREE.Vector3(-21, wallH, -39)));
+    // Este (x=-15)
+    addCollider(new THREE.Box3(new THREE.Vector3(-15, 0, -46), new THREE.Vector3(-15 + wallT, wallH, -39)));
 }
 
 // ---- terrenos ----
@@ -890,13 +944,14 @@ const matSnow = new THREE.MeshLambertMaterial({
 });
 
 function criarPico(scene, x, z, h, r, rand) {
+    const rotY = rand() * Math.PI;
     // corpo principal — cone facetado (6 lados, baixo poly mas estiliza bem)
     const cone = new THREE.Mesh(
         new THREE.ConeGeometry(r, h, 6, 1),
         matMountain
     );
     cone.position.set(x, h / 2, z);
-    cone.rotation.y = rand() * Math.PI;
+    cone.rotation.y = rotY;
     // Montanhas no perímetro do mapa: as sombras delas caem fora da área
     // de jogo. Desligar castShadow tira ~280 meshes do shadow pass.
     cone.castShadow = false;
@@ -905,14 +960,21 @@ function criarPico(scene, x, z, h, r, rand) {
     fadeables.push(cone);
     cullables.push(cone);
 
-    // neve no topo (cone menor branco) — 5 lados chega
-    const snowH = h * 0.28;
+    // neve no topo: como na realidade, é só uma fina camada sobre o cume e
+    // acompanha o afunilamento da montanha (NÃO pode ser mais larga que a
+    // rocha por baixo). Como o cone tapera linearmente, o raio da montanha à
+    // cota da base da neve é r*snowFrac; usamos uma margem mínima (1.06) só
+    // para a neve assentar por cima sem z-fighting com a vertente.
+    const snowFrac = 0.30;                 // fracção da altura coberta por neve
+    const snowH = h * snowFrac;
     const snow = new THREE.Mesh(
-        new THREE.ConeGeometry(r * 0.38, snowH, 5, 1),
+        // mesmos 6 lados e mesma rotação que a montanha → facetas alinhadas
+        new THREE.ConeGeometry(r * snowFrac * 1.06, snowH, 6, 1),
         matSnow
     );
-    snow.position.set(x, h - snowH * 0.35, z);
-    snow.rotation.y = rand() * Math.PI;
+    // ápice da neve coincide com o ápice da montanha
+    snow.position.set(x, h - snowH / 2, z);
+    snow.rotation.y = rotY;
     snow.castShadow = false;
     scene.add(snow);
     cullables.push(snow);
@@ -1025,12 +1087,16 @@ function criarCastelo(scene) {
     const loader = new GLTFLoader();
     loader.load('assets/models/constructions/casttle.glb', (gltf) => {
         const m = gltf.scene;
-        m.position.set(CX, 0, CZ);
+        m.position.set(0, 0, 0);
         m.scale.setScalar(SCALE);
-        m.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
-        scene.add(m);
-        fadeables.push(m);
-        cullables.push(m);
+        m.updateMatrixWorld(true);
+
+        const optimized = mergeStaticGLB(m);
+        optimized.position.set(CX, 0, CZ);
+        
+        scene.add(optimized);
+        fadeables.push(optimized);
+        cullables.push(optimized);
     }, undefined, e => console.error('Erro castelo GLB:', e));
 
     // caminho de acesso ao portão (agora corrompido)

@@ -7,6 +7,7 @@ import { CATALOGO as CATALOGO_INV } from '../systems/inventario.js';
 import { estado, lojaPlayer } from '../core/transicoes.js';
 import { lojaSpawnPos } from '../world/loja.js';
 import { kbGlyph, psGlyph } from './glyphs.js';
+import { limparTutoriais } from './tutorial.js';
 
 let _aberto = false;
 let _bloqueado = false;
@@ -263,6 +264,10 @@ function renderVideo() {
     const r4 = row(); r4.appendChild(labelLine('Mostrar Cadência (FPS)'));
     r4.appendChild(toggle(settings.showFps, v => setSetting('showFps', v)));
     conteudo.appendChild(r4);
+
+    const r5 = row(); r5.appendChild(labelLine('Modo Depuração VFX (Frame a Frame)'));
+    r5.appendChild(toggle(settings.vfxDebug, v => setSetting('vfxDebug', v)));
+    conteudo.appendChild(r5);
 }
 
 function renderIluminacao() {
@@ -345,9 +350,9 @@ function renderControlos() {
         { acao: 'Interagir / Falar / Entrar', kb: kbGlyph('E'), gp: psGlyph('cross') },
         { acao: 'Inventário',     kb: kbGlyph('I'),   gp: psGlyph('triangle') },
         { acao: 'Códice de Encargos', kb: kbGlyph('B'), gp: psGlyph('square') },
-        { acao: 'Arsenal de Batalha', kb: kbGlyph('V'), gp: psGlyph('l1') },
+        { acao: 'Arsenal de Batalha', kb: kbGlyph('V'), gp: psGlyph('l2') },
         { acao: 'Mapa',           kb: kbGlyph('M'),   gp: psGlyph('r1') },
-        { acao: 'Tocha do Viajante', kb: kbGlyph('N'), gp: psGlyph('share') },
+        { acao: 'Tocha do Viajante', kb: kbGlyph('N'), gp: psGlyph('l1') },
         { acao: 'Trégua / Ajustes',  kb: escKb,       gp: escGp },
     ];
 
@@ -559,6 +564,7 @@ function renderAcoes() {
 
 // --- abrir / fechar ---
 export function abrirPause() {
+    limparTutoriais();
     if (_bloqueado || _aberto) return;
     _aberto = true;
     renderTabsBar();

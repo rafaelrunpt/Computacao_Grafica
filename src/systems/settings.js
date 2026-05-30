@@ -22,6 +22,7 @@ const defaults = {
     fov: 75,
     fullscreen: false,
     showFps: false,
+    vfxDebug: false,
 
     // Benchmark de iluminação — modo nocturno do mundo exterior.
     // Quando activo, transmuta o céu, escurece a luz solar, acrescenta lua,

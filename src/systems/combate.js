@@ -27,8 +27,9 @@ import {
     getSlotAtaque, getCooldownSlot, podeUsarSlot,
     aplicarCooldown, tickCooldowns, resetCooldowns, resolverAtaque,
 } from './ataques.js';
-import { lancarAnimacaoAtaque, lancarEfeitoBuff, dispararProjetilSprite, playFramesFX } from '../ui/combate-anims.js';
+import { lancarAnimacaoAtaque, lancarEfeitoBuff, dispararProjetilSprite, playFramesFX, playSpriteFX } from '../ui/combate-anims.js';
 import { animarAtaqueWraith } from '../entities/inimigo-wraith.js';
+import { animarAtaqueNucleo } from '../entities/inimigo-nucleo.js';
 import { combateCamera, combateBossCamera } from '../core/renderer.js';
 import * as THREE from 'three';
 
@@ -549,7 +550,7 @@ function turnoInimigo() {
     if (_escudoTurnos > 0 && _escudoValor > 0) {
         const danoOriginal = dano;
         dano = Math.max(1, Math.round(dano * (1 - _escudoValor)));
-        escudoExtra = ` 🛡 Véu Arcano absorveu ${danoOriginal - dano}.`;
+        escudoExtra = ` Véu Arcano absorveu ${danoOriginal - dano}.`;
         _escudoTurnos--;
         _atualizarStatusPlayer();
     }
@@ -663,43 +664,186 @@ function turnoInimigo() {
         return;
     }
 
-    // Núcleo Corrompido dispara projéctil sprite-sheet do inimigo até ao player; dano no impacto.
+    // Núcleo Corrompido: visuais diferentes por ataque
     if (_tipoEncontro === 'nucleo') {
-        const from = _ancoraCombatente('inimigo');
-        // alvo: projecta a posição 3D real do player no combate para vw/vh
-        const _v = new THREE.Vector3(-2.6, 0, 0).project(combateCamera);
-        const to = { x: (_v.x * 0.5 + 0.5) * 100, y: (-_v.y * 0.5 + 0.5) * 100 };
-        const flightMs = 700;
+        // Alvo: projecta a posição do peito/centro do player para vw/vh
+        const _v = new THREE.Vector3(-2.6, 1.2, 0).project(combateCamera);
+        const toPos = { x: (_v.x * 0.5 + 0.5) * 100, y: (-_v.y * 0.5 + 0.5) * 100 };
 
-        // Overlay que pisca enquanto o projéctil voa (cor do ataque).
-        const flash = document.createElement('div');
-        flash.style.cssText = `
-            position: fixed; inset: 0; pointer-events: none; z-index: 244;
-            background: rgba(${'180,80,255'},0); transition: background 90ms;
-        `;
-        document.body.appendChild(flash);
+        if (at.nome === 'Praga Rúnica') {
+            // Praga Rúnica: Sinalizador (Múltiplas Runas em Órbita) -> Névoa -> Debuff
+            const signalDur = 1200;
+            const fogDur    = (24 / 12) * 1000;
 
-        const shockAudio = new Audio('assets/sounds/Attacks/shock.mp3');
-        shockAudio.volume = 0.7;
-        shockAudio.play().catch(() => {});
+            animarAtaqueNucleo(getInimigoActivo(), 'praga', signalDur + 600);
 
-        let flashOn = false;
-        const flashId = setInterval(() => {
-            flashOn = !flashOn;
-            flash.style.background = `rgba(${'180,80,255'},${flashOn ? 0.28 : 0.05})`;
-        }, 110);
+            // 1. Áudio Glifos
+            const glifosAudio = new Audio('assets/sounds/Attacks/nucleo/glifos.mp3');
+            glifosAudio.volume = 0.6;
+            glifosAudio.play().catch(() => {});
 
-        dispararProjetilSprite({
-            url: 'assets/vfx/projetilie_enim1.png',
-            cols: 4, rows: 4, frames: 16,
-            from, to, dur: flightMs, size: 105,
-            onImpact: () => {
-                clearInterval(flashId);
-                flash.remove();
-                aplicarDano();
-            },
-        });
-        bloquearTurno(flightMs + 50, () => {});
+            // Container para a órbita
+            const container = document.createElement('div');
+            container.style.cssText = `
+                position: fixed;
+                left: ${toPos.x}vw; top: ${toPos.y}vh;
+                width: 1px; height: 1px;
+                pointer-events: none; z-index: 243;
+                display: flex; align-items: center; justify-content: center;
+                transition: opacity 300ms, transform ${signalDur}ms cubic-bezier(0.4, 0, 0.2, 1);
+                opacity: 0;
+            `;
+
+            // Adicionar 6 runas pequenas em círculo
+            const numRunes = 6;
+            const radius = 10; // vh
+            for (let i = 0; i < numRunes; i++) {
+                const r = document.createElement('img');
+                r.src = 'assets/vfx/nucleo_ataques/rune.png';
+                const angle = (i / numRunes) * Math.PI * 2;
+                const lx = Math.cos(angle) * radius;
+                const ly = Math.sin(angle) * radius;
+                
+                // Intercalar cores: Roxo (original/png) vs Azul
+                const isPurple = (i % 2 === 0);
+                const filter = isPurple 
+                    ? 'drop-shadow(0 0 8px rgba(180,80,255,0.9)) hue-rotate(280deg)' // Roxo
+                    : 'drop-shadow(0 0 8px rgba(60,180,255,0.9)) hue-rotate(180deg)';  // Azul
+                
+                r.style.cssText = `
+                    position: absolute;
+                    width: 5vh; height: 5vh;
+                    left: calc(50% + ${lx}vh); top: calc(50% + ${ly}vh);
+                    transform: translate(-50%, -50%);
+                    filter: ${filter};
+                `;
+                container.appendChild(r);
+            }
+
+            document.body.appendChild(container);
+
+            // Injetar animação de rotação se não existir
+            if (!document.getElementById('anim-runa-orbita')) {
+                const style = document.createElement('style');
+                style.id = 'anim-runa-orbita';
+                style.textContent = `
+                    @keyframes orbitaRuna {
+                        from { transform: rotate(0deg) scale(0.8); }
+                        to { transform: rotate(360deg) scale(1.2); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            // Iniciar animação
+            container.style.opacity = '1';
+            container.style.animation = `orbitaRuna ${signalDur}ms infinite linear`;
+
+            setTimeout(() => {
+                // Desvanecer órbita e disparar névoa
+                container.style.opacity = '0';
+                container.style.transform = 'scale(2.0)';
+                setTimeout(() => container.remove(), 300);
+
+                // 2. Áudio Explosão
+                const explAudio = new Audio('assets/sounds/Attacks/nucleo/explosion.mp3');
+                explAudio.volume = 0.7;
+                explAudio.play().catch(() => {});
+
+                // 2. Névoa direta no player
+                playSpriteFX({
+                    url: 'assets/vfx/nucleo_ataques/nevoa_debuff.png',
+                    cols: 6, rows: 4, frames: 24, fps: 12,
+                    x: toPos.x, y: toPos.y, size: 50,
+                    extraCss: 'mix-blend-mode: screen; filter: brightness(1.5) contrast(1.2); opacity: 0.9;',
+                });
+
+                // 3. Setas de Enfraquecimento (após o início da névoa)
+                setTimeout(() => {
+                    // Áudio Debuff
+                    const debuffAudio = new Audio('assets/sounds/Attacks/nucleo/defuff.mp3');
+                    debuffAudio.volume = 0.6;
+                    debuffAudio.play().catch(() => {});
+
+                    const arrowContainer = document.createElement('div');
+                    arrowContainer.style.cssText = `
+                        position: fixed; left: ${toPos.x}vw; top: ${toPos.y}vh;
+                        width: 1px; height: 1px; pointer-events: none; z-index: 245;
+                    `;
+                    
+                    for (let i = 0; i < 3; i++) {
+                        const arrow = document.createElement('img');
+                        arrow.src = 'assets/vfx/nucleo_ataques/arrrow.png';
+                        const offsetX = (i - 1) * 5; // espalhar horizontalmente
+                        
+                        arrow.style.cssText = `
+                            position: absolute; width: 4vh; height: auto;
+                            left: ${offsetX}vh; top: -12vh;
+                            opacity: 0; transform: translate(-50%, -50%) rotate(90deg);
+                            filter: hue-rotate(300deg) brightness(1.5) drop-shadow(0 0 8px #0088ff);
+                            transition: transform 600ms ease-in, opacity 300ms;
+                        `;
+                        arrowContainer.appendChild(arrow);
+                        
+                        // Gatilho imediato (todas ao mesmo tempo)
+                        requestAnimationFrame(() => {
+                            setTimeout(() => {
+                                arrow.style.opacity = '1';
+                                arrow.style.transform = `translate(-50%, 5vh) rotate(90deg)`;
+                                setTimeout(() => { arrow.style.opacity = '0'; }, 400);
+                            }, 50);
+                        });
+                    }
+                    
+                    document.body.appendChild(arrowContainer);
+                    setTimeout(() => arrowContainer.remove(), 1500);
+                }, 1000);
+
+                setTimeout(() => aplicarDano(), 800);
+            }, signalDur);
+
+            bloquearTurno(signalDur + fogDur + 400, () => {});
+        }
+        else if (at.nome === 'Lascas do Vazio') {
+            // Lascas do Vazio: Projétil clássico com som de choque
+            const from = _ancoraCombatente('inimigo');
+            const flightMs = 700;
+
+            animarAtaqueNucleo(getInimigoActivo(), 'lascas', flightMs + 200);
+
+            const shockAudio = new Audio('assets/sounds/Attacks/shock.mp3');
+            shockAudio.volume = 0.6;
+            shockAudio.play().catch(() => {});
+
+            const flash = document.createElement('div');
+            flash.style.cssText = `
+                position: fixed; inset: 0; pointer-events: none; z-index: 244;
+                background: rgba(${at.cor},0); transition: background 90ms;
+            `;
+            document.body.appendChild(flash);
+            let flashOn = false;
+            const flashId = setInterval(() => {
+                flashOn = !flashOn;
+                flash.style.background = `rgba(${at.cor},${flashOn ? 0.28 : 0.05})`;
+            }, 110);
+
+            dispararProjetilSprite({
+                url: 'assets/vfx/nucleo_ataques/projetilie_enim1.png',
+                cols: 4, rows: 4, frames: 16,
+                from, to: toPos, dur: flightMs, size: 105,
+                onImpact: () => {
+                    clearInterval(flashId);
+                    flash.remove();
+                    aplicarDano();
+                },
+            });
+            bloquearTurno(flightMs + 50, () => {});
+        }
+        else {
+            // Esmagamento Ímpio ou outros: Dano direto (ou podes adicionar outro VFX depois)
+            aplicarDano();
+        }
+        return;
     } else {
         aplicarDano();
     }

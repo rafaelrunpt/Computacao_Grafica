@@ -37,44 +37,85 @@ const _stemGeo = new THREE.CylinderGeometry(0.05, 0.08, 0.30, 6);
 const _capGeo  = new THREE.SphereGeometry(0.18, 10, 8);
 const _stemMat = new THREE.MeshStandardMaterial({ color: 0xe0d8c0, roughness: 0.95 });
 
+let _instStem = null;
+const _instCapsByColor = new Map(); // cor -> InstancedMesh
+const _capData = []; // { meshIndex, colorKey, baseEmissive, fase }
+
 export function criarCogumelos(scene) {
     _rngState = 31337;
+    
+    // Contagem total para o InstancedMesh
+    let totalN = 0;
+    for (const cluster of CLUSTERS) totalN += cluster.n;
+
+    // Stem instancing
+    _instStem = new THREE.InstancedMesh(_stemGeo, _stemMat, totalN);
+    _instStem.castShadow = true;
+    scene.add(_instStem);
+
+    // Preparar dados para caps por cor
+    const capsByColor = new Map();
     for (const cluster of CLUSTERS) {
         for (let i = 0; i < cluster.n; i++) {
+            const cor = CORES[Math.floor(_rand() * CORES.length)];
+            if (!capsByColor.has(cor)) capsByColor.set(cor, []);
+            capsByColor.get(cor).push({ cluster, i });
+        }
+    }
+
+    const dummy = new THREE.Object3D();
+    let globalIdx = 0;
+
+    for (const [cor, items] of capsByColor) {
+        const capMat = new THREE.MeshStandardMaterial({
+            color: cor,
+            emissive: cor,
+            emissiveIntensity: 0.75,
+            roughness: 0.55,
+        });
+        const instCap = new THREE.InstancedMesh(_capGeo, capMat, items.length);
+        instCap.castShadow = true;
+        scene.add(instCap);
+        _instCapsByColor.set(cor, instCap);
+
+        for (let j = 0; j < items.length; j++) {
+            const { cluster } = items[j];
+            _rngState = 31337 + globalIdx * 7; // determinismo para reconstruir x,z
             const ang = _rand() * Math.PI * 2;
             const r   = _rand() * 1.4;
             const x   = cluster.x + Math.cos(ang) * r;
             const z   = cluster.z + Math.sin(ang) * r;
             const esc = 0.55 + _rand() * 0.85;
-            const cor = CORES[Math.floor(_rand() * CORES.length)];
 
-            const g = new THREE.Group();
-            g.position.set(x, 0, z);
-            g.rotation.y = _rand() * Math.PI * 2;
-            g.scale.setScalar(esc);
+            // Matrix para Stem
+            dummy.position.set(x, 0.15 * esc, z);
+            dummy.rotation.set(0, _rand() * Math.PI * 2, 0);
+            dummy.scale.setScalar(esc);
+            dummy.updateMatrix();
+            _instStem.setMatrixAt(globalIdx, dummy.matrix);
 
-            const stem = new THREE.Mesh(_stemGeo, _stemMat);
-            stem.position.y = 0.15;
-            stem.castShadow = true;
-            g.add(stem);
+            // Matrix para Cap
+            dummy.position.set(x, 0.32 * esc, z);
+            dummy.scale.set(esc, esc * 0.55, esc);
+            dummy.updateMatrix();
+            instCap.setMatrixAt(j, dummy.matrix);
 
-            // material próprio para cada cap (cor varia)
-            const capMat = new THREE.MeshStandardMaterial({
-                color: cor,
-                emissive: cor,
-                emissiveIntensity: 0.75,
-                roughness: 0.55,
+            _capData.push({ 
+                instCap, 
+                idx: j, 
+                baseEmissive: 0.75, 
+                fase: _rand() * Math.PI * 2 
             });
-            const cap = new THREE.Mesh(_capGeo, capMat);
-            cap.scale.set(1, 0.55, 1);
-            cap.position.y = 0.32;
-            g.add(cap);
-
-            scene.add(g);
-            _caps.push({ mesh: cap, baseEmissive: 0.75, fase: _rand() * Math.PI * 2 });
+            globalIdx++;
         }
+    }
 
-        // 1 luz por cluster (cor do cogumelo "líder", subtil para não pesar)
+    _instStem.instanceMatrix.needsUpdate = true;
+    for (const im of _instCapsByColor.values()) im.instanceMatrix.needsUpdate = true;
+
+    // 1 luz por cluster (cor do cogumelo "líder", subtil para não pesar)
+    for (const cluster of CLUSTERS) {
+        _rngState = 31337 + cluster.x + cluster.z;
         const luzCor = CORES[Math.floor(_rand() * CORES.length)];
         const light = new THREE.PointLight(luzCor, 0.55, 5.5, 2.0);
         light.position.set(cluster.x, 0.45, cluster.z);
@@ -86,9 +127,10 @@ export function criarCogumelos(scene) {
 
 export function updateCogumelos(_dt) {
     const t = performance.now() * 0.001;
-    for (let i = 0; i < _caps.length; i++) {
-        const c = _caps[i];
-        c.mesh.material.emissiveIntensity = c.baseEmissive * (0.78 + 0.28 * Math.sin(t * 1.3 + c.fase));
+    // Infelizmente o InstancedMesh não permite mudar emissiveIntensity por instância 
+    // sem shaders customizados, por isso pulsamos o material inteiro (afeta todos daquela cor).
+    for (const [cor, im] of _instCapsByColor) {
+        im.material.emissiveIntensity = 0.75 * (0.78 + 0.28 * Math.sin(t * 1.3 + cor));
     }
     for (let i = 0; i < _lights.length; i++) {
         const l = _lights[i];

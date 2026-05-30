@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { matWater, madeiraTex, madeira2Tex, areiaTex } from './shaders.js';
 
 // As texturas de madeira carregam-se assincronamente. Antes clonávamos a
@@ -70,10 +71,12 @@ export function criarRio(scene, colliders, fadeables, cullables) {
         map: madeira2Tex, color: 0x888888, roughness: 0.95, side: THREE.DoubleSide,
     });
 
-    const bridgeGroup = new THREE.Group();
     const arcSegments  = 10;
     const arcWidth     = BRIDGE_ARC_WIDTH;
     const arcHeight    = BRIDGE_ARC_HEIGHT;
+
+    const woodGeos = [];
+    const darkWoodGeos = [];
 
     for (let i = 0; i < arcSegments; i++) {
         const t0 = i / arcSegments;
@@ -83,53 +86,59 @@ export function criarRio(scene, colliders, fadeables, cullables) {
         const zCenter = (z0 + z1) / 2;
         const hCenter = arcHeight * (1 - Math.pow((2 * zCenter) / arcWidth, 2)) - 0.05;
         const segLen  = (arcWidth / arcSegments) + 0.05;
-
-        const seg = new THREE.Mesh(new THREE.BoxGeometry(BW, 0.25, segLen), matWood);
-        seg.position.set(0, hCenter, zCenter);
         const angle = -Math.atan2(arcHeight * -8 * zCenter / (arcWidth * arcWidth), 1);
-        seg.rotation.x = angle;
-        seg.castShadow = true; seg.receiveShadow = true;
-        bridgeGroup.add(seg);
+
+        const segGeo = new THREE.BoxGeometry(BW, 0.25, segLen);
+        const m4 = new THREE.Matrix4().compose(
+            new THREE.Vector3(0, hCenter, zCenter),
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle),
+            new THREE.Vector3(1, 1, 1)
+        );
+        segGeo.applyMatrix4(m4);
+        woodGeos.push(segGeo);
 
         for (const side of [-1, 1]) {
-            const beam = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, segLen), matWoodDark);
-            beam.position.set(side * (BW / 2 - 0.2), hCenter - 0.3, zCenter);
-            beam.rotation.x = angle;
-            bridgeGroup.add(beam);
+            const beamGeo = new THREE.BoxGeometry(0.3, 0.6, segLen);
+            const mBeam = new THREE.Matrix4().compose(
+                new THREE.Vector3(side * (BW / 2 - 0.2), hCenter - 0.3, zCenter),
+                new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle),
+                new THREE.Vector3(1, 1, 1)
+            );
+            beamGeo.applyMatrix4(mBeam);
+            darkWoodGeos.push(beamGeo);
         }
 
         for (let j = 0; j < 2; j++) {
             const pz = z0 + (j + 0.5) * (segLen / 2);
             const ph = arcHeight * (1 - Math.pow((2 * pz) / arcWidth, 2)) + 0.08;
-            const plank = new THREE.Mesh(new THREE.BoxGeometry(BW + 0.2, 0.08, 0.25), matWood);
-            plank.position.set((Math.random() - 0.5) * 0.1, ph, pz);
-            plank.rotation.x = angle;
-            plank.rotation.y = (Math.random() - 0.5) * 0.05;
-            plank.castShadow = true;
-            bridgeGroup.add(plank);
+            const plankGeo = new THREE.BoxGeometry(BW + 0.2, 0.08, 0.25);
+            const mPlank = new THREE.Matrix4().compose(
+                new THREE.Vector3((Math.random() - 0.5) * 0.1, ph, pz),
+                new THREE.Quaternion().setFromEuler(new THREE.Euler(angle, (Math.random() - 0.5) * 0.05, 0)),
+                new THREE.Vector3(1, 1, 1)
+            );
+            plankGeo.applyMatrix4(mPlank);
+            woodGeos.push(plankGeo);
         }
     }
-    bridgeGroup.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
-    scene.add(bridgeGroup);
-    fadeables.push(bridgeGroup);
-    cullables.push(bridgeGroup);
-
     for (const sx of [-BW / 2 + 0.1, BW / 2 - 0.1]) {
         const nPosts = 5;
-        const posts  = [];
+        const postsInSide  = [];
         for (let i = 0; i < nPosts; i++) {
             const t  = i / (nPosts - 1);
             const pz = (t - 0.5) * arcWidth;
             const ph = arcHeight * (1 - Math.pow((2 * pz) / arcWidth, 2)) + 0.4;
 
-            const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.5, 0.22), matWoodDark);
-            post.position.set(sx, ph, pz);
-            post.rotation.y = Math.random() * 0.2;
-            post.castShadow = true; post.receiveShadow = true;
-            scene.add(post);
-            fadeables.push(post);
-            cullables.push(post);
-            posts.push(post);
+            const postGeo = new THREE.BoxGeometry(0.22, 1.5, 0.22);
+            const mPost = new THREE.Matrix4().compose(
+                new THREE.Vector3(sx, ph, pz),
+                new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * 0.2),
+                new THREE.Vector3(1, 1, 1)
+            );
+            postGeo.applyMatrix4(mPost);
+            darkWoodGeos.push(postGeo);
+
+            postsInSide.push({ position: new THREE.Vector3(sx, ph, pz) });
 
             addCol(new THREE.Box3(
                 new THREE.Vector3(BX + sx - 0.2, ph - 0.75, pz - 0.11),
@@ -138,25 +147,26 @@ export function criarRio(scene, colliders, fadeables, cullables) {
         }
 
         for (let i = 0; i < nPosts - 1; i++) {
-            const p1 = posts[i].position;
-            const p2 = posts[i + 1].position;
+            const p1 = postsInSide[i].position;
+            const p2 = postsInSide[i + 1].position;
             const dist = p1.distanceTo(p2);
 
-            const rail = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, dist + 0.1), matWood);
-            rail.position.set(sx, (p1.y + p2.y) / 2 + 0.35, (p1.z + p2.z) / 2);
-            rail.lookAt(sx, (p1.y + p2.y) / 2 + 0.35, p2.z);
-            rail.castShadow = true; rail.receiveShadow = true;
-            scene.add(rail);
-            fadeables.push(rail);
-            cullables.push(rail);
+            const railGeo = new THREE.BoxGeometry(0.15, 0.15, dist + 0.1);
+            const railMidGeo = new THREE.BoxGeometry(0.12, 0.12, dist + 0.1);
 
-            const railMid = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, dist + 0.1), matWoodDark);
-            railMid.position.set(sx, (p1.y + p2.y) / 2 - 0.1, (p1.z + p2.z) / 2);
-            railMid.lookAt(sx, (p1.y + p2.y) / 2 - 0.1, p2.z);
-            railMid.castShadow = true; railMid.receiveShadow = true;
-            scene.add(railMid);
-            fadeables.push(railMid);
-            cullables.push(railMid);
+            const dummy = new THREE.Object3D();
+            
+            dummy.position.set(sx, (p1.y + p2.y) / 2 + 0.35, (p1.z + p2.z) / 2);
+            dummy.lookAt(sx, (p1.y + p2.y) / 2 + 0.35, p2.z);
+            dummy.updateMatrix();
+            railGeo.applyMatrix4(dummy.matrix);
+            woodGeos.push(railGeo);
+
+            dummy.position.set(sx, (p1.y + p2.y) / 2 - 0.1, (p1.z + p2.z) / 2);
+            dummy.lookAt(sx, (p1.y + p2.y) / 2 - 0.1, p2.z);
+            dummy.updateMatrix();
+            railMidGeo.applyMatrix4(dummy.matrix);
+            darkWoodGeos.push(railMidGeo);
 
             addCol(new THREE.Box3(
                 new THREE.Vector3(BX + sx - 0.1, Math.min(p1.y, p2.y) - 0.2, Math.min(p1.z, p2.z)),
@@ -164,6 +174,21 @@ export function criarRio(scene, colliders, fadeables, cullables) {
             ));
         }
     }
+
+    // Merge e adiciona ponte
+    const mergedWoodGeo = BufferGeometryUtils.mergeGeometries(woodGeos);
+    const bridgeWood = new THREE.Mesh(mergedWoodGeo, matWood);
+    bridgeWood.castShadow = true; bridgeWood.receiveShadow = true;
+    scene.add(bridgeWood);
+    fadeables.push(bridgeWood);
+    cullables.push(bridgeWood);
+
+    const mergedDarkWoodGeo = BufferGeometryUtils.mergeGeometries(darkWoodGeos);
+    const bridgeDarkWood = new THREE.Mesh(mergedDarkWoodGeo, matWoodDark);
+    bridgeDarkWood.castShadow = true; bridgeDarkWood.receiveShadow = true;
+    scene.add(bridgeDarkWood);
+    fadeables.push(bridgeDarkWood);
+    cullables.push(bridgeDarkWood);
 
     _bridgePassage = new THREE.Box3(
         new THREE.Vector3(BX - BW / 2 + 0.4, -2, RZ - arcWidth / 2 - 0.8),
@@ -180,7 +205,8 @@ function _criarBocaDoRio(scene, colliders, fadeables, cullables, cx, cz, riverWi
     const matBoulder       = new THREE.MeshStandardMaterial({ color: 0x7a716a, roughness: 0.95, flatShading: true });
     const matBoulderEscuro = new THREE.MeshStandardMaterial({ color: 0x4a443e, roughness: 1.0,  flatShading: true });
 
-    const grupo = new THREE.Group();
+    const boulderGeos = [];
+    const boulderDarkGeos = [];
 
     const z0 = cz - riverWidth / 2 - 1.2;
     const z1 = cz + riverWidth / 2 + 1.2;
@@ -191,47 +217,64 @@ function _criarBocaDoRio(scene, colliders, fadeables, cullables, cx, cz, riverWi
         const baseR = 1.6 + Math.abs(t - 0.5) * 2.4;
         const r = baseR + (Math.random() - 0.5) * 0.5;
         const escuro = (i + 1) % 3 === 0;
-        const m = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), escuro ? matBoulderEscuro : matBoulder);
+
+        const geo = new THREE.DodecahedronGeometry(r, 0);
         const dx = (Math.random() - 0.5) * 1.2;
         const yScale = 1.1 + Math.random() * 0.5;
-        m.position.set(cx + dx, r * yScale * 0.7 - 0.2, z + (Math.random() - 0.5) * 0.6);
-        m.rotation.set(Math.random() * 0.6, Math.random() * Math.PI * 2, Math.random() * 0.6);
-        m.scale.y = yScale;
-        m.castShadow = true; m.receiveShadow = true;
-        grupo.add(m);
+        const m4 = new THREE.Matrix4().compose(
+            new THREE.Vector3(cx + dx, r * yScale * 0.7 - 0.2, z + (Math.random() - 0.5) * 0.6),
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 0.6, Math.random() * Math.PI * 2, Math.random() * 0.6)),
+            new THREE.Vector3(1, yScale, 1)
+        );
+        geo.applyMatrix4(m4);
+        if (escuro) boulderDarkGeos.push(geo); else boulderGeos.push(geo);
 
         addCol(new THREE.Box3(
-            new THREE.Vector3(m.position.x - r * 0.7, 0, m.position.z - r * 0.7),
-            new THREE.Vector3(m.position.x + r * 0.7, r * 2.2, m.position.z + r * 0.7)
+            new THREE.Vector3(cx + dx - r * 0.7, 0, z + (Math.random() - 0.5) * 0.6 - r * 0.7),
+            new THREE.Vector3(cx + dx + r * 0.7, r * 2.2, z + (Math.random() - 0.5) * 0.6 + r * 0.7)
         ));
     }
 
     const dir = Math.sign(cx) || 1;
-    const grande = new THREE.Mesh(new THREE.DodecahedronGeometry(3.8, 0), matBoulder);
-    grande.position.set(cx + dir * 2.2, 2.6, cz + (Math.random() - 0.5) * 0.6);
-    grande.rotation.set(Math.random() * 0.5, Math.random() * Math.PI * 2, Math.random() * 0.5);
-    grande.scale.set(1.0, 1.4, 1.1);
-    grande.castShadow = true; grande.receiveShadow = true;
-    grupo.add(grande);
+    const grandeGeo = new THREE.DodecahedronGeometry(3.8, 0);
+    const mGrande = new THREE.Matrix4().compose(
+        new THREE.Vector3(cx + dir * 2.2, 2.6, cz + (Math.random() - 0.5) * 0.6),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 0.5, Math.random() * Math.PI * 2, Math.random() * 0.5)),
+        new THREE.Vector3(1.0, 1.4, 1.1)
+    );
+    grandeGeo.applyMatrix4(mGrande);
+    boulderGeos.push(grandeGeo);
+
     addCol(new THREE.Box3(
-        new THREE.Vector3(grande.position.x - 3, 0, grande.position.z - 3),
-        new THREE.Vector3(grande.position.x + 3, 5.5, grande.position.z + 3)
+        new THREE.Vector3(cx + dir * 2.2 - 3, 0, cz + (Math.random() - 0.5) * 0.6 - 3),
+        new THREE.Vector3(cx + dir * 2.2 + 3, 5.5, cz + (Math.random() - 0.5) * 0.6 + 3)
     ));
+
+    const mergedBoulders = BufferGeometryUtils.mergeGeometries(boulderGeos);
+    const bouldersMesh = new THREE.Mesh(mergedBoulders, matBoulder);
+    bouldersMesh.castShadow = true; bouldersMesh.receiveShadow = true;
+    scene.add(bouldersMesh);
+    fadeables.push(bouldersMesh);
+    cullables.push(bouldersMesh);
+
+    if (boulderDarkGeos.length > 0) {
+        const mergedDark = BufferGeometryUtils.mergeGeometries(boulderDarkGeos);
+        const darkMesh = new THREE.Mesh(mergedDark, matBoulderEscuro);
+        darkMesh.castShadow = true; darkMesh.receiveShadow = true;
+        scene.add(darkMesh);
+        fadeables.push(darkMesh);
+        cullables.push(darkMesh);
+    }
 
     const matMist = new THREE.MeshBasicMaterial({ color: 0xeaf0f6, transparent: true, opacity: 0.28, depthWrite: false });
     const mist = new THREE.Mesh(new THREE.SphereGeometry(3.0, 16, 12), matMist);
     mist.position.set(cx, 1.4, cz);
     mist.scale.set(1.0, 0.6, 1.6);
-    grupo.add(mist);
+    scene.add(mist);
 
     const mist2 = new THREE.Mesh(new THREE.SphereGeometry(4.0, 16, 12), matMist.clone());
     mist2.material.opacity = 0.14;
     mist2.position.set(cx + dir * 0.6, 1.8, cz);
     mist2.scale.set(1.1, 0.5, 1.7);
-    grupo.add(mist2);
-
-    grupo.userData.cullCenter = new THREE.Vector3(cx, 1.5, cz);
-    scene.add(grupo);
-    fadeables.push(grupo);
-    cullables.push(grupo);
+    scene.add(mist2);
 }

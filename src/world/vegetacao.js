@@ -10,10 +10,12 @@ let _purificationTimes = { value: new Float32Array(10) };
 // Presets por nível de qualidade — escolhido no ecrã inicial.
 // area = dimensão do quadrado de povoamento; sphere = raio do bounding sphere
 // usado para frustum culling. Manter sphere ≈ area*0.75 evita flicker nas bordas.
+// No modo ALTO, area=200 cobre praticamente todo o mapa visível e sphere=250 
+// garante que não há culling agressivo, mantendo a relva "sempre lá".
 const VEG_PRESETS = {
     baixa: { grass: 12000, flowers: 1200, area: 100, sphere: 80 },
     media: { grass: 45000, flowers: 3500, area: 150, sphere: 110 },
-    alta:  { grass: 80000, flowers: 5500, area: 180, sphere: 140 },
+    alta:  { grass: 160000, flowers: 8500, area: 200, sphere: 250 },
 };
 
 export function criarVegetacao(scene) {
@@ -146,7 +148,16 @@ export function criarVegetacao(scene) {
 
     const PATH_W = 4.2; 
     const RIO_BANDA = 5.2; 
-    const VILLAGE = { minX: -42, maxX: -18, minZ: 12, maxZ: 38 };
+    const VILLAGE = { minX: -42, maxX: -18, minZ: 20, maxZ: 38 };
+
+    // Estruturas onde não deve haver vegetação (ex.: interior de edifícios)
+    const ESTRUTURAS = [
+        { x: -25, z: 25, r: 6.5 },      // Loja do Mercador (reduzido de 9 para 6.5)
+        { x: -44.9, z: 33.5, r: 12 }, // Gobble Inn (Taverna)
+        { x: 0, z: -80, r: 16 },      // Castelo
+        { x: -18, z: -42.5, r: 8.5 }, // Potion Shop (Bruxa) — margem extra para colisão
+        { x: 0, z: 4.5, r: 4 },       // Guardião da Ponte
+    ];
 
     function naFaixaCaminho(x, z) {
         if (Math.abs(x) < PATH_W) return true;
@@ -158,12 +169,22 @@ export function criarVegetacao(scene) {
         return false;
     }
 
+    function naEstrutura(x, z) {
+        for (const e of ESTRUTURAS) {
+            const dx = x - e.x, dz = z - e.z;
+            if (dx*dx + dz*dz < e.r * e.r) return true;
+        }
+        // Excluir também o centro da vila para manter limpo
+        if (x > VILLAGE.minX && x < VILLAGE.maxX && z > VILLAGE.minZ && z < VILLAGE.maxZ) return true;
+        return false;
+    }
+
     const dummy = new THREE.Object3D();
     
     // Povoar Relva
     for(let i=0; i<grassCount; i++) {
         const x = (Math.random()-0.5)*preset.area, z = (Math.random()-0.5)*preset.area;
-        if (Math.abs(z) < RIO_BANDA + (Math.random()-0.5)*2.0 || naFaixaCaminho(x, z)) { i--; continue; }
+        if (Math.abs(z) < RIO_BANDA + (Math.random()-0.5)*2.0 || naFaixaCaminho(x, z) || naEstrutura(x, z)) { i--; continue; }
         dummy.position.set(x, 0, z);
         dummy.rotation.y = Math.random()*Math.PI;
         dummy.scale.setScalar(0.4 + Math.random()*1.0);
@@ -175,7 +196,7 @@ export function criarVegetacao(scene) {
     // Flores
     for(let i=0; i<flowerCount; i++) {
         const x = (Math.random()-0.5)*preset.area, z = (Math.random()-0.5)*preset.area;
-        if (Math.abs(z) < RIO_BANDA + 1.0 || naFaixaCaminho(x, z)) { i--; continue; }
+        if (Math.abs(z) < RIO_BANDA + 1.0 || naFaixaCaminho(x, z) || naEstrutura(x, z)) { i--; continue; }
         dummy.position.set(x, 0, z);
         dummy.rotation.y = Math.random()*Math.PI;
         dummy.scale.setScalar(0.4 + Math.random()*0.6);

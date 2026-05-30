@@ -376,6 +376,58 @@ export function updateInimigoNucleo(grupo, dt, t, basePos) {
     }
 }
 
+/**
+ * Animação de ataque do Núcleo.
+ *   tipo: 'lascas' | 'praga'
+ */
+export function animarAtaqueNucleo(grupo, tipo = 'lascas', dur = 1000) {
+    const ud = grupo.userData;
+    const t0 = performance.now();
+
+    function step(now) {
+        const e = (now - t0) / dur;
+        if (e >= 1) { 
+            grupo.scale.setScalar(1); 
+            return; 
+        }
+
+        // Bell curve para windup
+        const pulse = Math.sin(e * Math.PI);
+
+        if (tipo === 'lascas') {
+            // Vibração das lascas e aceleração dos anéis
+            for (const s of ud.shards) {
+                const vib = Math.sin(now * 0.05 + s.userData.phase) * 0.15 * pulse;
+                s.position.addScaledVector(s.userData.dir, vib);
+            }
+            for (const an of ud.aneis) {
+                an.spin.rotation.y += pulse * 0.45;
+            }
+            // Recuo no disparo
+            if (e > 0.6) {
+                const recoil = Math.sin((e - 0.6) / 0.4 * Math.PI) * 0.8;
+                grupo.position.z += recoil;
+            }
+        } 
+        else if (tipo === 'praga') {
+            // Inchaço do núcleo e chicoteamento frenético
+            const swell = 1.0 + pulse * 0.35;
+            grupo.scale.setScalar(swell);
+            
+            for (const tent of ud.tentaculos) {
+                for (let i = 0; i < tent.segs.length; i++) {
+                    const frenesi = Math.sin(now * 0.02 + tent.phase + i) * 0.6 * pulse;
+                    tent.segs[i].rotation.x += frenesi;
+                }
+            }
+            if (ud.nucleo) ud.nucleo.scale.setScalar(1 + pulse * 0.5);
+        }
+
+        requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+}
+
 /** Repõe o Núcleo Corrompido ao estado visual inicial. */
 export function resetInimigoNucleo(grupo) {
     grupo.rotation.set(0, -Math.PI / 2, 0);
