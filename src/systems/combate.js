@@ -812,7 +812,7 @@ function turnoInimigo() {
             animarAtaqueNucleo(getInimigoActivo(), 'lascas', flightMs + 200);
 
             const shockAudio = new Audio('assets/sounds/Attacks/shock.mp3');
-            shockAudio.volume = 0.6;
+            shockAudio.volume = 0.3;
             shockAudio.play().catch(() => {});
 
             const flash = document.createElement('div');

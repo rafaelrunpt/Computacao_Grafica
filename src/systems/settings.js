@@ -72,7 +72,8 @@ export function onSettingChange(key, fn) {
 // --- helpers de áudio ---
 export function getMusicTargetVolume() {
     if (settings.muted) return 0;
-    return settings.masterVolume * settings.musicVolume * 0.5; // 0.5 = ceiling razoável
+    // Multiplicamos por 0.2 (antes 0.5) para que a música seja mais ambiental e suave (40% do anterior)
+    return settings.masterVolume * settings.musicVolume * 0.2;
 }
 
 export function getSfxTargetVolume() {
