@@ -54,8 +54,6 @@ import { dispararTutorial, descartarTutorial, descartarTutorialPorAccao } from '
 
 export { ganharXP, playerStats };
 
-import { initPassaros, updatePassaros, isPassarosAtivos } from '../world/passaros.js';
-
 // --------------------------------------------------------
 // CENA PRINCIPAL
 // --------------------------------------------------------
@@ -184,7 +182,8 @@ const _activeFadeMeshes = new Set();
 const _transparentMaterialCache = new Map(); // originalMaterial.uuid -> clonedMaterial(s)
 
 function _getTransparentMaterial(original) {
-    if (_transparentMaterialCache.has(original.uuid)) return _transparentMaterialCache.get(original.uuid);
+    const key = Array.isArray(original) ? original.map(m => m.uuid).join('|') : original.uuid;
+    if (_transparentMaterialCache.has(key)) return _transparentMaterialCache.get(key);
     
     const origMats = Array.isArray(original) ? original : [original];
     const cloned = origMats.map(m => {
@@ -193,7 +192,7 @@ function _getTransparentMaterial(original) {
         return c;
     });
     const result = Array.isArray(original) ? cloned : cloned[0];
-    _transparentMaterialCache.set(original.uuid, result);
+    _transparentMaterialCache.set(key, result);
     return result;
 }
 
@@ -367,7 +366,7 @@ registarCallbackInput(
         if (estadoJogo.emCombate || isSpaceCutsceneActive()) return;
         if (mapaAberto || isInventarioAberto() || isDialogoAberto() || isPauseAberto() || isLockpickAberto() || isQuestBookAberto() || isBruxaArcanoAberto()) return;
         if (isLoadoutMenuAberto()) fecharLoadoutMenu();
-        else abrirmLoadoutMenu();
+        else abrirLoadoutMenu();
     }
 );
 
@@ -404,7 +403,7 @@ registarCallbacksGamepad({
         if (estadoJogo.emCombate || isSpaceCutsceneActive()) return;
         if (mapaAberto || isInventarioAberto() || isDialogoAberto() || isPauseAberto() || isLockpickAberto() || isQuestBookAberto() || isBruxaArcanoAberto()) return;
         if (isLoadoutMenuAberto()) fecharLoadoutMenu();
-        else abrirmLoadoutMenu();
+        else abrirLoadoutMenu();
     },
 });
 
@@ -506,7 +505,6 @@ function animateMundo(deltaTime) {
     let isMoving = false;
     updateNightMode(deltaTime);
     updateWalkDust(deltaTime);
-    // updatePassaros(deltaTime, player); // DESATIVADO POR PERFORMANCE
 
     // Cinemática das amostras estelares — conduz a câmara e bloqueia o
     // controlo do jogador enquanto está activa.
@@ -531,6 +529,40 @@ function animateMundo(deltaTime) {
     // Partículas roxas das zonas corruptas — animadas no vertex shader.
     // Um único uniform update partilhado por todas as zonas (sem upload de buffer).
     updateZoneParticles(deltaTime);
+
+    // Otimização de sombras: Quando o mapa está aberto, expandimos o frustum
+    // para cobrir o mundo inteiro (±105). Caso contrário, seguimos o player (±32).
+    const camS = sunLight.shadow.camera;
+    const deveSerGlobal = mapaAberto;
+    const estavaGlobal = (camS.left === -105);
+
+    if (deveSerGlobal) {
+        if (!estavaGlobal) {
+            camS.left = camS.bottom = -105;
+            camS.right = camS.top = 105;
+            camS.updateProjectionMatrix();
+            sunLight.target.position.set(0, 0, 0);
+            sunLight.position.set(_sunOffset.x, _sunOffset.y, _sunOffset.z);
+            renderer.shadowMap.needsUpdate = true; // Bake global uma vez
+        }
+    } else {
+        if (estavaGlobal) {
+            camS.left = camS.bottom = -32;
+            camS.right = camS.top = 32;
+            camS.updateProjectionMatrix();
+            renderer.shadowMap.needsUpdate = true; // Bake local imediato ao fechar
+        }
+        // Seguimento do sol só se o player se mexeu (mesmo limiar do bake para poupar matrix updates)
+        const limiar = settings.quality === 'alta' ? 0.25 : 0.7;
+        if (_lastShadowPos.distanceToSquared(player.position) >= limiar * limiar) {
+            sunLight.target.position.set(player.position.x, 0, player.position.z);
+            sunLight.position.set(
+                player.position.x + _sunOffset.x,
+                _sunOffset.y,
+                player.position.z + _sunOffset.z,
+            );
+        }
+    }
 
     if (!emCutscene && !estadoJogo.emCombate && !mapaAberto && !isDialogoAberto() && !isInventarioAberto() && !isLockpickAberto() && !isBruxaArcanoAberto() && !isLoadoutMenuAberto()) {
         let dirX = 0, dirZ = 0;
@@ -769,16 +801,16 @@ function animateMundo(deltaTime) {
         renderizarMinimapa(renderer, scene, window.innerWidth, window.innerHeight, player.position, true);
     } else {
         // Actualizar spotlight (lanterna mágica do herói)
-    // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-    const luzNecessaria = (estado.cena !== 'mundo');
-    playerSpot.visible = luzNecessaria;
-    if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-        playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-    }
+        // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
+        // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
+        const luzNecessaria = (estado.cena !== 'mundo');
+        playerSpot.visible = luzNecessaria;
+        if (luzNecessaria) {
+            playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
+            playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
+        }
 
-    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+        renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
         // Culling todo o frame — o throttle a cada 2 frames + restore a cada frame
         // fazia o estado dos objectos alternar a 30Hz (mesh pisca → parece sombra a piscar).
         // Durante a cinemática a câmara está alta e fora do enquadramento de
@@ -1205,7 +1237,7 @@ function animateTavern(deltaTime) {
     // bloqueia movimento/interacções enquanto a intro do bartender está aberta
     // Intro do bartender — mandatória na primeira entrada na taverna.
     // Não depende de posição: assim que estás na cena 'tavern' com a intro
-    // ainda por fazer, abre-se. Evita o caso em que o spawn de regresso do
+    // ainda por fazer, abre-se. Evita o caso em que o shadow map re-bake no regresso do
     // quarto cai dentro do quartoEnterBox e o jogador, virado a sul, sai
     // da bartenderIntroBox antes do per-frame check apanhar.
     if (!bartenderIntroFeita() && !isIntroBartenderAberta() && !isBartenderShopAberta()) {
@@ -1619,7 +1651,6 @@ criarLostItems(scene);
 // Rasto de poeira do jogador — corre no mundo exterior tanto de dia
 // como de noite (independente do módulo nocturno).
 initWalkDust(scene, player);
-// initPassaros(scene); // <-- DESATIVADO PARA TESTE DE PERFORMANCE
 
 // Cinemática da chuva de amostras estelares (quest da Alice).
 initSpaceCutscene(scene, player);

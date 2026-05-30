@@ -839,8 +839,58 @@ function turnoInimigo() {
             });
             bloquearTurno(flightMs + 50, () => {});
         }
+        else if (at.nome === 'Esmagamento Ímpio') {
+            // Esmagamento Ímpio: Slam físico + Erupção de Picos do chão
+            const dur = 1300;
+            animarAtaqueNucleo(getInimigoActivo(), 'esmagamento', dur);
+
+            // Flash de ecrã a meio do slam
+            setTimeout(() => {
+                const flash = document.createElement('div');
+                flash.style.cssText = `
+                    position: fixed; inset: 0; pointer-events: none; z-index: 244;
+                    background: rgba(${at.cor},0.3); transition: opacity 250ms;
+                `;
+                document.body.appendChild(flash);
+                setTimeout(() => { 
+                    flash.style.opacity = '0';
+                    setTimeout(() => flash.remove(), 250);
+                }, 100);
+
+                // Picos irrompem do chão debaixo do player
+                const spikeFrames = [
+                    'assets/vfx/boss/spikes/spike1.png',
+                    'assets/vfx/boss/spikes/spike2.png',
+                    'assets/vfx/boss/spikes/spike3.png',
+                    'assets/vfx/boss/spikes/spike4.png'
+                ];
+                
+                // Três clusters de picos para cobrir a área
+                const posBase = toPos;
+                const offsets = [
+                    { dx: 0, dy: 5, size: 45 },
+                    { dx: -12, dy: 8, size: 35 },
+                    { dx: 12, dy: 8, size: 35 }
+                ];
+
+                offsets.forEach(off => {
+                    playFramesFX({
+                        frames: spikeFrames,
+                        fps: 12,
+                        x: posBase.x + off.dx,
+                        y: posBase.y + off.dy,
+                        size: off.size,
+                        extraCss: 'filter: hue-rotate(280deg) brightness(1.3); mix-blend-mode: screen;'
+                    });
+                });
+
+                aplicarDano();
+            }, 800); // 800ms ≈ ponto de impacto do slam (1300 * 0.6)
+
+            bloquearTurno(dur + 100, () => {});
+        }
         else {
-            // Esmagamento Ímpio ou outros: Dano direto (ou podes adicionar outro VFX depois)
+            // Outros: Dano direto
             aplicarDano();
         }
         return;

@@ -378,16 +378,18 @@ export function updateInimigoNucleo(grupo, dt, t, basePos) {
 
 /**
  * Animação de ataque do Núcleo.
- *   tipo: 'lascas' | 'praga'
+ *   tipo: 'lascas' | 'praga' | 'esmagamento'
  */
 export function animarAtaqueNucleo(grupo, tipo = 'lascas', dur = 1000) {
     const ud = grupo.userData;
     const t0 = performance.now();
+    const baseScale = 1.0;
 
     function step(now) {
         const e = (now - t0) / dur;
         if (e >= 1) { 
-            grupo.scale.setScalar(1); 
+            grupo.scale.setScalar(baseScale);
+            grupo.position.y = 0; // será resetado pelo updateInimigoNucleo no próximo frame
             return; 
         }
 
@@ -421,6 +423,24 @@ export function animarAtaqueNucleo(grupo, tipo = 'lascas', dur = 1000) {
                 }
             }
             if (ud.nucleo) ud.nucleo.scale.setScalar(1 + pulse * 0.5);
+        }
+        else if (tipo === 'esmagamento') {
+            // Sobe alto e esmaga o chão
+            if (e < 0.6) {
+                // Windup: sobe devagar
+                const rise = Math.pow(e / 0.6, 2) * 2.5;
+                grupo.position.y = rise;
+                grupo.scale.setScalar(1.0 + (e / 0.6) * 0.2);
+                // Anéis giram loucamente
+                for (const an of ud.aneis) an.spin.rotation.y += e * 0.8;
+            } else {
+                // Slam: desce rápido
+                const slam = (1.0 - (e - 0.6) / 0.4) * 2.5;
+                grupo.position.y = Math.max(0, slam);
+                // Impacto de escala no final
+                const squash = 1.2 - Math.sin((e - 0.6) / 0.4 * Math.PI) * 0.4;
+                grupo.scale.set(1.1, squash, 1.1);
+            }
         }
 
         requestAnimationFrame(step);
