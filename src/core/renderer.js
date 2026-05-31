@@ -54,6 +54,37 @@ document.body.appendChild(renderer.domElement);
 
 export const mainCamera = new THREE.PerspectiveCamera(settings.fov, window.innerWidth / window.innerHeight, 0.1, 1000);
 
+// ----------------------------------------------------------------------
+// CÂMARA ORTOGRÁFICA DO MUNDO (Req. 2 — alternância perspetiva/ortográfica)
+// Espelha a posição/orientação da mainCamera; só muda a projeção.
+// Tecla C alterna. Custo nulo quando inactiva (só se sincroniza quando ON).
+// ----------------------------------------------------------------------
+export const worldOrthoCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 1000);
+let _ortho = false;
+export function isOrthoMode() { return _ortho; }
+export function toggleCameraMode() { _ortho = !_ortho; return _ortho; }
+
+// Tamanho vertical (em unidades de mundo) que a ortográfica enquadra.
+const ORTHO_VIEW = 14;
+function _aplicarFrustumOrtho() {
+    const aspect = window.innerWidth / window.innerHeight;
+    worldOrthoCamera.left   = -ORTHO_VIEW * aspect;
+    worldOrthoCamera.right  =  ORTHO_VIEW * aspect;
+    worldOrthoCamera.top    =  ORTHO_VIEW;
+    worldOrthoCamera.bottom = -ORTHO_VIEW;
+    worldOrthoCamera.updateProjectionMatrix();
+}
+_aplicarFrustumOrtho();
+
+// Devolve a câmara activa do mundo; quando em ortho, sincroniza-a com a
+// perspetiva (mesma posição/olhar) antes de devolver.
+export function getActiveWorldCamera() {
+    if (!_ortho) return mainCamera;
+    worldOrthoCamera.position.copy(mainCamera.position);
+    worldOrthoCamera.quaternion.copy(mainCamera.quaternion);
+    return worldOrthoCamera;
+}
+
 export const lojaCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
 export const caseloCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 200);
 export const tavernCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -119,4 +150,5 @@ window.addEventListener('resize', () => {
     quartoCamera.updateProjectionMatrix();
     combateCamera.updateProjectionMatrix();
     combateBossCamera.updateProjectionMatrix();
+    _aplicarFrustumOrtho();
 });

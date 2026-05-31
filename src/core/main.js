@@ -23,7 +23,7 @@ import { curar } from '../systems/player-stats.js';
 import { todasZonasLimpas } from '../world/mapa.js';
 import { combateScene, updateCombateScene } from '../world/combate-scene.js';
 import { skybox, starMat } from '../world/sky.js';
-import { renderer, mainCamera, lojaCamera, caseloCamera, tavernCamera, quartoCamera, combateCamera, combateBossCamera } from './renderer.js';
+import { renderer, mainCamera, lojaCamera, caseloCamera, tavernCamera, quartoCamera, combateCamera, combateBossCamera, getActiveWorldCamera, toggleCameraMode, isOrthoMode } from './renderer.js';
 import { isBossMode, precarregarBoss } from '../world/combate-scene.js';
 import { keys, registarCallbackInput } from './input.js';
 import { pollGamepad, registarCallbacksGamepad } from './gamepad.js';
@@ -293,6 +293,54 @@ playerSpot.shadow.camera.far = 25;
 playerSpot.shadow.camera.fov = 40;
 playerSpot.shadow.camera.layers.enable(1); // Importante: ver objetos na layer 1 para sombras
 scene.add(playerSpot, playerSpot.target);
+
+// ----------------------------------------------------------------------
+// TOGGLES DE REQUISITO (defesa CG)
+//   C → alterna câmara perspetiva / ortográfica (Req. 2)
+//   1 → liga/desliga Luz Ambiente (AmbientLight)   (Req. 3)
+//   2 → liga/desliga Luz Direcional / Sol (DirectionalLight)
+//   3 → liga/desliga Luz Pontual / Holofote do herói (SpotLight)
+// ----------------------------------------------------------------------
+let _luzSpotOn = true; // o playerSpot é controlado no loop; usamos esta flag
+
+function _toast(msg) {
+    let t = document.getElementById('cg-toast');
+    if (!t) {
+        t = document.createElement('div');
+        t.id = 'cg-toast';
+        t.style.cssText = `position:fixed;top:20px;left:50%;transform:translateX(-50%);
+            background:rgba(20,12,4,0.92);border:2px solid #d4a830;border-radius:8px;
+            color:#f0d080;font-family:'Georgia',serif;font-size:15px;letter-spacing:1px;
+            padding:10px 22px;z-index:600;pointer-events:none;box-shadow:0 0 16px rgba(0,0,0,0.7);
+            transition:opacity 0.3s;`;
+        document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.opacity = '1';
+    clearTimeout(t._h);
+    t._h = setTimeout(() => { t.style.opacity = '0'; }, 1400);
+}
+
+window.addEventListener('keydown', (e) => {
+    // Só fora de menus/combate, na exploração do mundo.
+    if (estadoJogo.emCombate || isInventarioAberto() || isPauseAberto() || isDialogoAberto()) return;
+    if (e.repeat) return;
+    const k = e.key.toLowerCase();
+    if (k === 'c') {
+        const ortho = toggleCameraMode();
+        _toast(ortho ? 'Câmara: Ortográfica' : 'Câmara: Perspetiva');
+    } else if (k === '1') {
+        ambientLight.visible = !ambientLight.visible;
+        _toast(`Luz Ambiente: ${ambientLight.visible ? 'Ligada' : 'Desligada'}`);
+    } else if (k === '2') {
+        sunLight.visible = !sunLight.visible;
+        renderer.shadowMap.needsUpdate = true;
+        _toast(`Luz Direcional (Sol): ${sunLight.visible ? 'Ligada' : 'Desligada'}`);
+    } else if (k === '3') {
+        _luzSpotOn = !_luzSpotOn;
+        _toast(`Luz Pontual (Holofote): ${_luzSpotOn ? 'Ligada' : 'Desligada'}`);
+    }
+});
 
 // ---- constantes de movimento ----
 const moveSpeed     = 0.12;
@@ -829,7 +877,7 @@ function animateMundo(deltaTime) {
         // Actualizar spotlight (lanterna mágica do herói)
         // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
         // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-        const luzNecessaria = (estado.cena !== 'mundo');
+        const luzNecessaria = (estado.cena !== 'mundo') && _luzSpotOn;
         playerSpot.visible = luzNecessaria;
         if (luzNecessaria) {
             playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
@@ -856,10 +904,10 @@ function animateMundo(deltaTime) {
 
         // Modo nocturno usa EffectComposer (bloom + output sRGB). Em
         // qualidade baixa saltamos o composer (mip-chain do bloom é caro).
-        if (isNightInitialized() && settings.quality !== 'baixa') {
+        if (isNightInitialized() && settings.quality !== 'baixa' && !isOrthoMode()) {
             renderNightWorld();
         } else {
-            renderer.render(scene, mainCamera);
+            renderer.render(scene, getActiveWorldCamera());
         }
 
         // Durante a cinemática a HUD inteira é apagada — não renderizar o
