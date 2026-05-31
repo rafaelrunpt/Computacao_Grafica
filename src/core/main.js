@@ -889,8 +889,10 @@ function animateMundo(deltaTime) {
         // fazia o estado dos objectos alternar a 30Hz (mesh pisca → parece sombra a piscar).
         // Durante a cinemática a câmara está alta e fora do enquadramento de
         // jogo normal — não fazemos culling por câmara para nada desaparecer.
-        if (emCutscene) _restoreAllCullables();
-        else            _cullBehindCamera(mainCamera);
+        // Em ortho a câmara olha de cima — o culling frontal da perspetiva
+        // esconderia objectos visíveis na vista de topo. Restaura tudo.
+        if (emCutscene || isOrthoMode()) _restoreAllCullables();
+        else                            _cullBehindCamera(mainCamera);
         sampleCullingNow();
         
         // Shadow map: re-bake throttled por distância percorrida (ver
@@ -907,7 +909,7 @@ function animateMundo(deltaTime) {
         if (isNightInitialized() && settings.quality !== 'baixa' && !isOrthoMode()) {
             renderNightWorld();
         } else {
-            renderer.render(scene, getActiveWorldCamera());
+            renderer.render(scene, getActiveWorldCamera(player.position));
         }
 
         // Durante a cinemática a HUD inteira é apagada — não renderizar o

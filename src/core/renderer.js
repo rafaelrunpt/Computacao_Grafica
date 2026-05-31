@@ -65,7 +65,10 @@ export function isOrthoMode() { return _ortho; }
 export function toggleCameraMode() { _ortho = !_ortho; return _ortho; }
 
 // Tamanho vertical (em unidades de mundo) que a ortográfica enquadra.
-const ORTHO_VIEW = 14;
+// Ângulo bem picado (vista tática) para o chão preencher o ecrã todo —
+// sem horizonte nem faixa de céu por baixo.
+const ORTHO_VIEW = 13;
+const _orthoOffset = new THREE.Vector3(0, 48, 22); // alto e ligeiramente atrás
 function _aplicarFrustumOrtho() {
     const aspect = window.innerWidth / window.innerHeight;
     worldOrthoCamera.left   = -ORTHO_VIEW * aspect;
@@ -76,12 +79,19 @@ function _aplicarFrustumOrtho() {
 }
 _aplicarFrustumOrtho();
 
-// Devolve a câmara activa do mundo; quando em ortho, sincroniza-a com a
-// perspetiva (mesma posição/olhar) antes de devolver.
-export function getActiveWorldCamera() {
+// Devolve a câmara activa do mundo. Quando em ortho, posiciona-a no alto
+// sobre o `target` (jogador) com um ângulo picado, de modo a que o chão
+// preencha todo o ecrã.
+export function getActiveWorldCamera(target = null) {
     if (!_ortho) return mainCamera;
-    worldOrthoCamera.position.copy(mainCamera.position);
-    worldOrthoCamera.quaternion.copy(mainCamera.quaternion);
+    if (target) {
+        worldOrthoCamera.position.set(
+            target.x + _orthoOffset.x,
+            _orthoOffset.y,
+            target.z + _orthoOffset.z,
+        );
+        worldOrthoCamera.lookAt(target.x, 0, target.z);
+    }
     return worldOrthoCamera;
 }
 
