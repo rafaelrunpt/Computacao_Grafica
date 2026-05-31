@@ -78,7 +78,7 @@ const _orthoTopo = { offset: new THREE.Vector3(0, 48, 22), view: 13 };
 // Vista em ângulo (Z): mesmo ângulo da perspetiva (~25°) mas câmara muito
 // mais alta/recuada — em ortográfico a distância não muda a escala, por
 // isso o chão preenche o ecrã todo sem faixa de céu nem corte do clipping.
-const _orthoAngulo = { offset: new THREE.Vector3(0, 42, 90), view: 17 };
+const _orthoAngulo = { offset: new THREE.Vector3(0, 30, 55), view: 17 };
 
 function _cfgAtual() { return _camMode === 1 ? _orthoTopo : _orthoAngulo; }
 
