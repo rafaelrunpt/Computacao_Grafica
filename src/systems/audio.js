@@ -143,9 +143,10 @@ export function stopSFX(name) {
 }
 
 export function setMusicPlaybackRate(rate) {
-    if (!_currentTrack) return;
-    const a = _sounds[_currentTrack];
-    if (a) a.setPlaybackRate(rate);
+    // Aplica a TODOS os tracks musicais para garantir reset mesmo quando _currentTrack é null
+    for (const a of Object.values(_sounds)) {
+        if (a) a.setPlaybackRate(rate);
+    }
 }
 
 export function stopMusic(fadeTime = 0.6) {

@@ -23,7 +23,7 @@ setOnPlayerDerrotado(() => {
                 estadoJogo.emCombate = false;
                 _bossFightTriggered = false;
                 esconderCombateUI();
-                iniciarBossFight();
+                setTimeout(() => iniciarBossFight(), 200);
             },
             () => sairDaArena()
         );
@@ -1004,7 +1004,7 @@ function finalizarDerrota() {
                     estadoJogo.emCombate = false;
                     _bossFightTriggered = false;
                     esconderCombateUI();
-                    iniciarBossFight();
+                    setTimeout(() => iniciarBossFight(), 200);
                 },
                 () => {
                     // Return to castle
