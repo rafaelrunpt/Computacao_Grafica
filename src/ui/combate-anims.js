@@ -659,7 +659,7 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
             fps: 15,
             // frames 0-4 normais, depois frame 4 repetido 15x = 1 segundo
             frameOrder: [0, 1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
-            x: ai.x + 12.3, y: yBase, size: 50,
+            x: ai.x, y: yBase, size: 50,
             extraCss: `
                 mix-blend-mode: screen;
                 transform-origin: bottom center;
