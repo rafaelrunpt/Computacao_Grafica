@@ -684,10 +684,30 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
         makeImpactRing({ cx: ai.x * 10, cy: ai.y * 10, cor, delay: 480 });
     } else if (tipo === 'danca') {
         const ai = getPos('inimigo');
-        const ap = getPos('player');
-        // dois cortes em X centrados no inimigo
-        makeSlash({ d: `M ${ai.x * 10 - 150} ${ai.y * 10 - 150} L ${ai.x * 10 + 150} ${ai.y * 10 + 150}`, cor, width: 12, dur: 220, delay: 220 });
-        makeSlash({ d: `M ${ai.x * 10 - 150} ${ai.y * 10 + 150} L ${ai.x * 10 + 150} ${ai.y * 10 - 150}`, cor, width: 12, dur: 220, delay: 520 });
+
+        // Primeiro corte — para baixo (normal)
+        setTimeout(() => {
+            playSpriteFX({
+                url: 'assets/vfx/player/spritesheet-2.png',
+                cols: 4, rows: 2, frames: 6,
+                fps: 24,
+                x: ai.x, y: ai.y, size: 60,
+                extraCss: `mix-blend-mode: screen; transform: translate(-50%, -50%); filter: brightness(1.4);`
+            });
+            makeFlash({ cor, cx: ai.x, cy: ai.y, dur: 260, delay: 40, intensidade: 0.8 });
+        }, 150);
+
+        // Segundo corte — para cima (virado verticalmente)
+        setTimeout(() => {
+            playSpriteFX({
+                url: 'assets/vfx/player/spritesheet-2.png',
+                cols: 4, rows: 2, frames: 6,
+                fps: 24,
+                x: ai.x, y: ai.y, size: 60,
+                extraCss: `mix-blend-mode: screen; transform: translate(-50%, -50%) scaleY(-1); filter: brightness(1.4);`
+            });
+            makeFlash({ cor, cx: ai.x, cy: ai.y, dur: 260, delay: 40, intensidade: 0.8 });
+        }, 450);
     } else if (tipo === 'tornado') {
         const ai = getPos('inimigo');
         const ap = getPos('player');
