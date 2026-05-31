@@ -26,6 +26,7 @@ import * as THREE from 'three';
 import { player } from '../entities/jogador.js';
 import { getBossRoot, triggerBossAttackAnim } from '../entities/boss.js';
 import { combateScene, posPlayerCombate, isBossMode } from '../world/combate-scene.js';
+import { renderer } from '../core/renderer.js';
 import { keys } from '../core/input.js';
 import { receberDano, playerStats } from './player-stats.js';
 import { setHpPlayer, setLog, mostrarDanoFlutuante } from '../ui/combate-ui.js';
@@ -72,6 +73,8 @@ function _entrarRageMode() {
     playSFX('boss_rage');
     setMusicPlaybackRate(1.5);
     _flashRage();
+    _impactFrame();          // frame de impacto: congela + onda de choque + shake
+    _burstRageParticles();   // explosão de partículas 3D à volta do boss
 
     // Aura roxa mais intensa
     matBossAura.opacity = 1.0;
@@ -106,6 +109,120 @@ function _flashRage() {
         o.style.transition = 'background 0.6s ease-out';
         o.style.background = 'rgba(170,30,255,0)';
     }, 90);
+}
+
+// ----------------------------------------------------------------------
+// FRAME DE IMPACTO — onda de choque radial no ecrã + clarão branco breve
+// + tremor da câmara. Vende a transição para a fase 2.
+// ----------------------------------------------------------------------
+function _impactFrame() {
+    // 1) clarão branco rápido (1 frame de "branqueamento")
+    let f = document.getElementById('boss-impact-flash');
+    if (!f) {
+        f = document.createElement('div');
+        f.id = 'boss-impact-flash';
+        f.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:98;background:#fff;opacity:0;';
+        document.body.appendChild(f);
+    }
+    f.style.transition = 'none';
+    f.style.opacity = '0.85';
+    requestAnimationFrame(() => {
+        f.style.transition = 'opacity 0.35s ease-out';
+        f.style.opacity = '0';
+    });
+
+    // 2) onda de choque radial a expandir a partir do centro
+    const ring = document.createElement('div');
+    ring.style.cssText = `
+        position:fixed; left:50%; top:50%; width:40px; height:40px;
+        margin:-20px 0 0 -20px; border-radius:50%;
+        border:6px solid rgba(190,80,255,0.9);
+        box-shadow:0 0 30px rgba(190,80,255,0.8), inset 0 0 20px rgba(190,80,255,0.6);
+        pointer-events:none; z-index:97; opacity:0.95;
+        transform:scale(0.2); transition:transform 0.55s cubic-bezier(.15,.7,.3,1), opacity 0.55s ease-out;
+    `;
+    document.body.appendChild(ring);
+    requestAnimationFrame(() => {
+        ring.style.transform = 'scale(30)';
+        ring.style.opacity = '0';
+    });
+    setTimeout(() => ring.remove(), 650);
+
+    // 3) tremor da câmara (translada o canvas WebGL durante ~0.4s)
+    const cv = renderer.domElement;
+    const t0 = performance.now();
+    const DUR = 420, AMP = 14;
+    (function shake(now) {
+        const e = (now - t0) / DUR;
+        if (e >= 1) { cv.style.transform = ''; return; }
+        const a = AMP * (1 - e);
+        cv.style.transform = `translate(${(Math.random()-0.5)*a}px, ${(Math.random()-0.5)*a}px)`;
+        requestAnimationFrame(shake);
+    })(t0);
+}
+
+// ----------------------------------------------------------------------
+// EXPLOSÃO DE PARTÍCULAS 3D — irrompe à volta do boss no momento da fúria.
+// Pontos roxos com blending aditivo, projectados para fora + gravidade,
+// a desvanecer em ~0.9s. Auto-dispose no fim.
+// ----------------------------------------------------------------------
+function _burstRageParticles() {
+    const boss = getBossRoot();
+    if (!boss) return;
+
+    const N = 140;
+    const positions = new Float32Array(N * 3);
+    const vels = [];
+    const origin = boss.position.clone();
+    origin.y += 1.6; // ao nível do peito/cintura
+
+    for (let i = 0; i < N; i++) {
+        positions[i * 3]     = origin.x;
+        positions[i * 3 + 1] = origin.y;
+        positions[i * 3 + 2] = origin.z;
+        // direcção aleatória num hemisfério para cima
+        const ang = Math.random() * Math.PI * 2;
+        const up  = 0.3 + Math.random() * 1.0;
+        const rad = 2.5 + Math.random() * 4.5;
+        vels.push(new THREE.Vector3(Math.cos(ang) * rad, up * 4.0, Math.sin(ang) * rad));
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({
+        color: 0xc060ff, size: 0.22, transparent: true, opacity: 1.0,
+        blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+    });
+    const pts = new THREE.Points(geo, mat);
+    combateScene.add(pts);
+
+    const DUR = 0.9;
+    let t = 0;
+    let last = performance.now();
+    function tick(now) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        t += dt;
+        const attr = geo.attributes.position;
+        for (let i = 0; i < N; i++) {
+            const v = vels[i];
+            v.y -= 9.0 * dt;          // gravidade
+            v.multiplyScalar(0.94);   // arrasto
+            attr.array[i * 3]     += v.x * dt;
+            attr.array[i * 3 + 1] += v.y * dt;
+            attr.array[i * 3 + 2] += v.z * dt;
+        }
+        attr.needsUpdate = true;
+        mat.opacity = Math.max(0, 1 - t / DUR);
+        if (t >= DUR) {
+            combateScene.remove(pts);
+            geo.dispose();
+            mat.dispose();
+            return;
+        }
+        requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
 }
 
 // Velocidade aumenta linearmente com o dano sofrido pelo boss, mas
