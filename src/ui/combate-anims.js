@@ -658,6 +658,8 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
             cols: 4, rows: 2, frames: 5,
             fps: 15,
             x: ai.x, y: yBase, size: 50,
+            dur: 1500,
+            loop: false,
             extraCss: `
                 mix-blend-mode: screen;
                 transform-origin: bottom center;
