@@ -444,6 +444,7 @@ inicializarAudio(mainCamera, {
     map_close:       'assets/sounds/ui/map_close.wav',
     brass_negative:  'assets/sounds/brass_negative.wav',
     brass_defeated:  'assets/sounds/brass_defeated.wav',
+    swipe:           'assets/sounds/Attacks/swipe.wav',
 });
 
 // --------------------------------------------------------

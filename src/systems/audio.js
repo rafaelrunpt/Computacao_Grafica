@@ -392,8 +392,8 @@ export function tocarSomAtaquePlayer(ataqueId) {
             _thud(ctx, master, now + 0.48, { dur: 0.40, f0: 200, f1: 40, vol: 0.85 });
             break;
         case 'combo_duplo':        // dança das lâminas — dois cortes encadeados
-            _whoosh(ctx, master, now,        { dur: 0.18, f0: 2100, f1: 800, q: 1.3, vol: 0.45 });
-            _whoosh(ctx, master, now + 0.22, { dur: 0.20, f0: 2700, f1: 700, q: 1.3, vol: 0.50 });
+            playSFX('swipe', 0);
+            playSFX('swipe', 0.3);
             break;
         case 'golpe_giratorio':    // tornado — três swishes rápidos
             _whoosh(ctx, master, now,        { dur: 0.16, f0: 1700, f1: 950,  q: 1.7, vol: 0.40 });
