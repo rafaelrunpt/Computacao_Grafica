@@ -391,9 +391,9 @@ export function tocarSomAtaquePlayer(ataqueId) {
             _tone(ctx, master, now + 0.15, { dur: 0.10, f0: 3100, type: 'triangle', vol: 0.18 });
             playSFX('swipe', 0, true, false, 0.4);
             break;
-        case 'golpe_pesado':       // talho profundo — whoosh grave + impacto
+        case 'golpe_pesado':       // talho profundo — whoosh grave + explosão no impacto
             _whoosh(ctx, master, now, { dur: 0.40, f0: 900, f1: 160, q: 0.8, vol: 0.6 });
-            _thud(ctx, master, now + 0.26, { dur: 0.34, f0: 175, f1: 48, vol: 0.7 });
+            playSFX('heavy_impact', 260, true, false, 0.7);
             break;
         case 'investida':          // carga — whoosh ascendente longo + embate
             _whoosh(ctx, master, now, { dur: 0.52, f0: 220, f1: 1400, q: 0.7, vol: 0.55 });
