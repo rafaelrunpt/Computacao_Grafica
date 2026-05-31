@@ -431,6 +431,7 @@ export function atualizarFaseDesvio(deltaTime) {
     // update projécteis
     for (let i = _projectiles.length - 1; i >= 0; i--) {
         const pr = _projectiles[i];
+        if (!pr) { _projectiles.splice(i, 1); continue; }
         updateProjectile(pr, deltaTime);
         if (pr.t >= pr.teleDur + pr.impactDur) {
             _disposeProjectile(pr);

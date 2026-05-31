@@ -17,6 +17,7 @@ setOnPlayerDerrotado(() => {
         mostrarTelaDerrotaBoss(
             () => {
                 pararFaseDesvio();
+                pararRageEfeitos();
                 recuperarTotal();
                 playerStats.derrotado = false;
                 estadoJogo.emCombate = false;
@@ -997,6 +998,7 @@ function finalizarDerrota() {
                 () => {
                     // Retry
                     pararFaseDesvio();
+                    pararRageEfeitos();
                     recuperarTotal();
                     playerStats.derrotado = false;
                     estadoJogo.emCombate = false;
