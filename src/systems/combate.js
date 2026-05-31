@@ -16,14 +16,8 @@ setOnPlayerDerrotado(() => {
         stopMusic(0.3);
         mostrarTelaDerrotaBoss(
             () => {
-                pararFaseDesvio();
-                pararRageEfeitos();
-                recuperarTotal();
-                playerStats.derrotado = false;
-                estadoJogo.emCombate = false;
-                _bossFightTriggered = false;
-                esconderCombateUI();
-                setTimeout(() => iniciarBossFight(), 200);
+                // Retry — sem transição de cena, já estamos na arena
+                setTimeout(() => reiniciarBossFight(), 300);
             },
             () => sairDaArena()
         );
@@ -996,15 +990,8 @@ function finalizarDerrota() {
             stopMusic(0.3);
             mostrarTelaDerrotaBoss(
                 () => {
-                    // Retry
-                    pararFaseDesvio();
-                    pararRageEfeitos();
-                    recuperarTotal();
-                    playerStats.derrotado = false;
-                    estadoJogo.emCombate = false;
-                    _bossFightTriggered = false;
-                    esconderCombateUI();
-                    setTimeout(() => iniciarBossFight(), 200);
+                    // Retry — sem transição de cena, já estamos na arena
+                    setTimeout(() => reiniciarBossFight(), 300);
                 },
                 () => {
                     // Return to castle
@@ -1110,6 +1097,35 @@ const BOSS_DEFS = {
     cintilasDrop: 250,
 };
 let _bossFightTriggered = false;
+
+// Reinicia o boss fight SEM transição de cena (já estamos na arena)
+export function reiniciarBossFight() {
+    pararFaseDesvio();
+    pararRageEfeitos();
+    _bossFightTriggered = true;
+    estadoJogo.emCombate = true;
+    playerStats.derrotado = false;
+    setNivelInimigo(nivelDificuldade());
+    inimigoAtual = escalarStats(BOSS_DEFS);
+    _setEnfraquecido(false);
+    recuperarTotal();
+    setBossHpFrac(1.0);
+    setBossMode(true);
+    resetCooldowns();
+    player.rotation.y = Math.PI;
+    mostrarCombateUI(inimigoAtual.nome);
+    refreshHpUI();
+    setLog('O Soberano aguarda... A batalha recomeça!');
+    setCombateHandlers({
+        onAtacarSlot: acaoAtacarSlot,
+        onItem:       acaoItem,
+        onFugir:      () => setLog('Não podes fugir do Soberano.'),
+    });
+    atualizarSlotsUI();
+    preencherItens(getItens(), acaoItem);
+    switchMusic('boss', 0.5);
+    iniciarFaseDesvio();
+}
 
 export function iniciarBossFight() {
     if (estadoJogo.emCombate || playerStats.derrotado) return;
