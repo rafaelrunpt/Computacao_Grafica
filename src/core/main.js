@@ -1582,7 +1582,7 @@ function animate() {
 
     _lastFrameTime = now - (elapsedMs % maxFpsMs);
     _frameCount++;
-    let deltaTime = 1 / 60;
+    let deltaTime = elapsedMs / 1000;
     tickFps();
 
     pollGamepad();
