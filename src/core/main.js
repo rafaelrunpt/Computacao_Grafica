@@ -1576,13 +1576,11 @@ function animate() {
     const maxFpsMs = 1000 / (settings.maxFps || 60);
     const elapsedMs = now - _lastFrameTime;
 
-    if (elapsedMs < maxFpsMs) {
-        return;
-    }
+    if (elapsedMs < maxFpsMs) return;
 
-    _lastFrameTime = now - (elapsedMs % maxFpsMs);
+    _lastFrameTime = now;
     _frameCount++;
-    let deltaTime = elapsedMs / 1000;
+    let deltaTime = clock.getDelta();
     tickFps();
 
     pollGamepad();

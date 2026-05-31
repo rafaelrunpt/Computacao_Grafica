@@ -659,18 +659,18 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
             fps: 15,
             x: ai.x, y: yBase, size: 50,
             extraCss: `
-                mix-blend-mode: screen;
+                mix-blend-mode: screen; 
                 transform-origin: bottom center;
-                transform: translate(-30%, -100%);
+                transform: translate(-45%, -100%);
                 filter: brightness(1.2);
-                margin-top: -60vh;
+                margin-top: -30vh;
                 transition: margin-top 200ms cubic-bezier(.2,.8,.3,1);
             `
         });
 
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                if (el) el.style.marginTop = '40vh';
+                if (el) el.style.marginTop = '0vh';
             });
         });
         
