@@ -23,7 +23,7 @@ import { curar } from '../systems/player-stats.js';
 import { todasZonasLimpas } from '../world/mapa.js';
 import { combateScene, updateCombateScene } from '../world/combate-scene.js';
 import { skybox, starMat } from '../world/sky.js';
-import { renderer, mainCamera, lojaCamera, caseloCamera, tavernCamera, quartoCamera, combateCamera, combateBossCamera, getActiveWorldCamera, toggleCameraMode, isOrthoMode } from './renderer.js';
+import { renderer, mainCamera, lojaCamera, caseloCamera, tavernCamera, quartoCamera, combateCamera, combateBossCamera, getActiveWorldCamera, setCameraMode, isOrthoMode } from './renderer.js';
 import { isBossMode, precarregarBoss } from '../world/combate-scene.js';
 import { keys, registarCallbackInput } from './input.js';
 import { pollGamepad, registarCallbacksGamepad } from './gamepad.js';
@@ -327,8 +327,11 @@ window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
     const k = e.key.toLowerCase();
     if (k === 'c') {
-        const ortho = toggleCameraMode();
-        _toast(ortho ? 'Câmara: Ortográfica' : 'Câmara: Perspetiva');
+        const m = setCameraMode(1);
+        _toast(m === 1 ? 'Câmara: Ortográfica (topo)' : 'Câmara: Perspetiva');
+    } else if (k === 'z') {
+        const m = setCameraMode(2);
+        _toast(m === 2 ? 'Câmara: Ortográfica (ângulo)' : 'Câmara: Perspetiva');
     } else if (k === '1') {
         ambientLight.visible = !ambientLight.visible;
         _toast(`Luz Ambiente: ${ambientLight.visible ? 'Ligada' : 'Desligada'}`);

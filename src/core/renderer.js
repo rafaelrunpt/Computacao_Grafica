@@ -59,37 +59,48 @@ export const mainCamera = new THREE.PerspectiveCamera(settings.fov, window.inner
 // Espelha a posição/orientação da mainCamera; só muda a projeção.
 // Tecla C alterna. Custo nulo quando inactiva (só se sincroniza quando ON).
 // ----------------------------------------------------------------------
-export const worldOrthoCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 1000);
-let _ortho = false;
-export function isOrthoMode() { return _ortho; }
-export function toggleCameraMode() { _ortho = !_ortho; return _ortho; }
+export const worldOrthoCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 2000);
 
-// Tamanho vertical (em unidades de mundo) que a ortográfica enquadra.
-// Ângulo bem picado (vista tática) para o chão preencher o ecrã todo —
-// sem horizonte nem faixa de céu por baixo.
-const ORTHO_VIEW = 13;
-const _orthoOffset = new THREE.Vector3(0, 48, 22); // alto e ligeiramente atrás
+// Modo de câmara: 0 = perspetiva | 1 = ortográfica de topo (C) |
+//                 2 = ortográfica em ângulo (Z, estilo perspetiva)
+let _camMode = 0;
+export function isOrthoMode() { return _camMode !== 0; }
+export function getCameraMode() { return _camMode; }
+// Alterna o modo `mode` (1 ou 2): se já está activo desliga, senão activa-o.
+export function setCameraMode(mode) {
+    _camMode = (_camMode === mode) ? 0 : mode;
+    _aplicarFrustumOrtho();
+    return _camMode;
+}
+
+// Vista de topo (C): ângulo picado, enquadramento mais apertado.
+const _orthoTopo = { offset: new THREE.Vector3(0, 48, 22), view: 13 };
+// Vista em ângulo (Z): mesmo ângulo da perspetiva (~25°) mas câmara muito
+// mais alta/recuada — em ortográfico a distância não muda a escala, por
+// isso o chão preenche o ecrã todo sem faixa de céu nem corte do clipping.
+const _orthoAngulo = { offset: new THREE.Vector3(0, 42, 90), view: 17 };
+
+function _cfgAtual() { return _camMode === 1 ? _orthoTopo : _orthoAngulo; }
+
 function _aplicarFrustumOrtho() {
+    if (_camMode === 0) return;
     const aspect = window.innerWidth / window.innerHeight;
-    worldOrthoCamera.left   = -ORTHO_VIEW * aspect;
-    worldOrthoCamera.right  =  ORTHO_VIEW * aspect;
-    worldOrthoCamera.top    =  ORTHO_VIEW;
-    worldOrthoCamera.bottom = -ORTHO_VIEW;
+    const v = _cfgAtual().view;
+    worldOrthoCamera.left   = -v * aspect;
+    worldOrthoCamera.right  =  v * aspect;
+    worldOrthoCamera.top    =  v;
+    worldOrthoCamera.bottom = -v;
     worldOrthoCamera.updateProjectionMatrix();
 }
-_aplicarFrustumOrtho();
 
-// Devolve a câmara activa do mundo. Quando em ortho, posiciona-a no alto
-// sobre o `target` (jogador) com um ângulo picado, de modo a que o chão
-// preencha todo o ecrã.
+// Devolve a câmara activa do mundo. Em ortho, posiciona-a sobre o `target`
+// (jogador) com o offset do modo escolhido, de modo a que o chão preencha
+// todo o ecrã.
 export function getActiveWorldCamera(target = null) {
-    if (!_ortho) return mainCamera;
+    if (_camMode === 0) return mainCamera;
     if (target) {
-        worldOrthoCamera.position.set(
-            target.x + _orthoOffset.x,
-            _orthoOffset.y,
-            target.z + _orthoOffset.z,
-        );
+        const off = _cfgAtual().offset;
+        worldOrthoCamera.position.set(target.x + off.x, off.y, target.z + off.z);
         worldOrthoCamera.lookAt(target.x, 0, target.z);
     }
     return worldOrthoCamera;
