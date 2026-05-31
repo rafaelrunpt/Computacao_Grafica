@@ -563,10 +563,6 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
     // movimento 3D
     // Ponto 3D onde o ataque deve "bater" (alinhado com o Boss por defeito)
     const target3D = posInimigoCombate.clone();
-    if (isBossMode()) {
-        // Deslocamos o alvo 4.5 unidades para a esquerda no mundo 3D
-        target3D.x -= 4.5;
-    }
 
     if (tipo === 'danca') {
         playerLunge({ amount: lunge, dur, peaks: [0.32, 0.72], targetPos: target3D });
