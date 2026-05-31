@@ -1,4 +1,5 @@
 import { playSpriteFX } from './combate-anims.js';
+import { playSFX } from '../systems/audio.js';
 
 // --------------------------------------------------------
 // POPUP DE RECOMPENSA + FOGOS DE ARTIFÍCIO
@@ -289,6 +290,7 @@ export function mostrarRecompensa({
     });
 
     dispararFogos();
+    playSFX('heart_collect');
 
     setTimeout(() => {
         card.style.transform = 'scale(0.85)';
