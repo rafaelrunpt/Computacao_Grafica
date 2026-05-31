@@ -443,6 +443,7 @@ inicializarAudio(mainCamera, {
     map_open:        'assets/sounds/ui/map_open.wav',
     map_close:       'assets/sounds/ui/map_close.wav',
     brass_negative:  'assets/sounds/brass_negative.wav',
+    brass_defeated:  'assets/sounds/brass_defeated.wav',
 });
 
 // --------------------------------------------------------

@@ -617,6 +617,7 @@ export const KEY_LABELS_SLOT  = ['1', '2', '3', '4'];
 import { pushNavContext, popNavContext } from '../core/gamepad.js';
 import { settings, onSettingChange } from '../systems/settings.js';
 import { keyGlyph as _keyGlyph, psGlyph as _psGlyph } from './glyphs.js';
+import { playSFX } from '../systems/audio.js';
 
 let _navCtx = null;
 let _fleeConfirmOpen = false;
@@ -1200,7 +1201,8 @@ export function mostrarTelaDerrotaBoss(onRetry, onReturn) {
         </div>
     `;
     document.body.appendChild(o);
-    
+    playSFX('brass_defeated');
+
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {
             o.style.opacity = '1';
