@@ -332,7 +332,10 @@ sincronizarAcessorio();
 let mapaAberto = false;
 registarCallbackInput(
     () => {
-        if (estado.cena === 'mundo' && !estadoJogo.emCombate && !isInventarioAberto() && !isPauseAberto() && !isQuestBookAberto() && !isSpaceCutsceneActive()) mapaAberto = !mapaAberto;
+        if (estado.cena === 'mundo' && !estadoJogo.emCombate && !isInventarioAberto() && !isPauseAberto() && !isQuestBookAberto() && !isSpaceCutsceneActive()) {
+            mapaAberto = !mapaAberto;
+            playSFX(mapaAberto ? 'map_open' : 'map_close');
+        }
     },
     () => {
         // I abre o inventário só fora do combate, sem mapa nem diálogo aberto
@@ -374,7 +377,10 @@ registarCallbackInput(
 // Os mesmos guards aplicam-se — o gamepad é só outro driver de input.
 registarCallbacksGamepad({
     onToggleMapa: () => {
-        if (estado.cena === 'mundo' && !estadoJogo.emCombate && !isInventarioAberto() && !isPauseAberto() && !isQuestBookAberto() && !isSpaceCutsceneActive()) mapaAberto = !mapaAberto;
+        if (estado.cena === 'mundo' && !estadoJogo.emCombate && !isInventarioAberto() && !isPauseAberto() && !isQuestBookAberto() && !isSpaceCutsceneActive()) {
+            mapaAberto = !mapaAberto;
+            playSFX(mapaAberto ? 'map_open' : 'map_close');
+        }
     },
     onToggleInventario: () => {
         if (estadoJogo.emCombate) return;
@@ -434,6 +440,8 @@ inicializarAudio(mainCamera, {
     step_stone: 'assets/sounds/footsteps/stone.mp3',
     ui_pop:        'assets/sounds/ui/pop_3.wav',
     heart_collect: 'assets/sounds/ui/heart_collect.wav',
+    map_open:      'assets/sounds/ui/map_open.wav',
+    map_close:     'assets/sounds/ui/map_close.wav',
 });
 
 // --------------------------------------------------------
