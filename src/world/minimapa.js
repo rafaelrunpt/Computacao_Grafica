@@ -1,73 +1,7 @@
 import * as THREE from 'three';
 import { mapBounds } from './mapa.js';
 
-// ---- Overlay HTML do mapa ----
-const _mapaOverlay = document.createElement('div');
-_mapaOverlay.style.cssText = `
-    position: fixed; inset: 0;
-    pointer-events: none;
-    z-index: 50;
-    display: none;
-    font-family: 'Georgia', serif;
-`;
-_mapaOverlay.innerHTML = `
-    <div style="
-        position: absolute; inset: 0;
-        background:
-            radial-gradient(ellipse at center, rgba(20,12,4,0.18) 0%, rgba(8,4,0,0.72) 100%);
-        mix-blend-mode: multiply;
-    "></div>
-
-    <!-- bordas estilo pergaminho -->
-    <div style="
-        position: absolute; inset: 12px;
-        border: 3px solid #c8a050;
-        border-radius: 4px;
-        box-shadow: 0 0 0 6px rgba(0,0,0,0.5), inset 0 0 40px rgba(180,120,30,0.15), 0 0 60px rgba(0,0,0,0.8);
-    "></div>
-    <div style="
-        position: absolute; inset: 18px;
-        border: 1px solid rgba(200,160,80,0.35);
-        border-radius: 2px;
-    "></div>
-
-    <!-- título -->
-    <div style="
-        position: absolute; top: 22px; left: 50%; transform: translateX(-50%);
-        background: linear-gradient(90deg, transparent, rgba(10,6,0,0.85) 20%, rgba(10,6,0,0.85) 80%, transparent);
-        padding: 6px 40px;
-        color: #f0d080;
-        font-size: 18px;
-        font-weight: bold;
-        letter-spacing: 8px;
-        text-shadow: 0 0 12px #a07020, 2px 2px 0 #000;
-        white-space: nowrap;
-    ">✦ MAPA DO MUNDO ✦</div>
-
-    <!-- canto sup esq -->
-    <div style="position:absolute;top:8px;left:8px;width:40px;height:40px;
-        border-top:3px solid #c8a050;border-left:3px solid #c8a050;border-radius:3px 0 0 0;"></div>
-    <!-- canto sup dir -->
-    <div style="position:absolute;top:8px;right:8px;width:40px;height:40px;
-        border-top:3px solid #c8a050;border-right:3px solid #c8a050;border-radius:0 3px 0 0;"></div>
-    <!-- canto inf esq -->
-    <div style="position:absolute;bottom:8px;left:8px;width:40px;height:40px;
-        border-bottom:3px solid #c8a050;border-left:3px solid #c8a050;border-radius:0 0 0 3px;"></div>
-    <!-- canto inf dir -->
-    <div style="position:absolute;bottom:8px;right:8px;width:40px;height:40px;
-        border-bottom:3px solid #c8a050;border-right:3px solid #c8a050;border-radius:0 0 3px 0;"></div>
-
-    <!-- rodapé -->
-    <div style="
-        position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
-        color: rgba(200,160,80,0.6);
-        font-size: 11px;
-        letter-spacing: 4px;
-        text-shadow: 1px 1px 0 #000;
-        white-space: nowrap;
-    ">[ M ] FECHAR MAPA</div>
-`;
-document.body.appendChild(_mapaOverlay);
+const _mapaBg = new THREE.Color(0x6b4c2a);
 
 export const minimapCamera = new THREE.OrthographicCamera(-8, 8, 8, -8, 1, 100);
 minimapCamera.layers.enable(1);
@@ -104,7 +38,6 @@ export function renderizarMinimapa(renderer, scene, windowWidth, windowHeight, p
 
     if (mapaAberto) {
         if (border) border.style.display = 'none';
-        _mapaOverlay.style.display = 'block';
 
         // Ocupa o ecrã inteiro mantendo a relação de aspecto do mundo:
         // expandimos o frustum ortográfico no eixo mais comprido do
@@ -131,17 +64,19 @@ export function renderizarMinimapa(renderer, scene, windowWidth, windowHeight, p
         minimapCamera.position.set(centerX, 50, centerZ);
         minimapCamera.lookAt(centerX, 0, centerZ);
 
+        const _prevBgMapa = scene.background;
+        scene.background = _mapaBg;
+
         renderer.setViewport(0, 0, windowWidth, windowHeight);
         renderer.setScissor(0, 0, windowWidth, windowHeight);
         renderer.setScissorTest(false);
-        // Força o shadow pass — sem render principal neste frame, o shadow map
-        // estaria stale e mostraria sombras inconsistentes / em falta.
         renderer.shadowMap.needsUpdate = true;
         renderer.render(scene, minimapCamera);
 
+        scene.background = _prevBgMapa;
+
     } else {
         if (border) border.style.display = 'block';
-        _mapaOverlay.style.display = 'none';
 
         const viewSize = 22;
         minimapCamera.left   = -viewSize;
