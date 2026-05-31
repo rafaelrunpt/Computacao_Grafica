@@ -280,6 +280,8 @@ function updateProjectile(pr, deltaTime) {
                 pararFaseDesvio();
                 if (_onPlayerDerrotado) _onPlayerDerrotado();
             }
+        } else {
+            if (_onAtaqueEvitado) _onAtaqueEvitado();
         }
     }
 }
@@ -316,6 +318,9 @@ function _flashRed() {
 // desvio. Combate.js liga-o a `finalizarDerrota`.
 let _onPlayerDerrotado = null;
 export function setOnPlayerDerrotado(fn) { _onPlayerDerrotado = fn; }
+
+let _onAtaqueEvitado = null;
+export function setOnAtaqueEvitado(fn) { _onAtaqueEvitado = fn; }
 
 /** Activa a fase de desvio — chamar quando o turno do jogador começa. */
 export function iniciarFaseDesvio() {

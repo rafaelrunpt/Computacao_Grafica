@@ -5,7 +5,7 @@ import { entrarCombate, sairCombate, getMundoSnapshot, sairBossParaCastelo } fro
 import { notificarVitoria as notificarVitoriaQuest } from './merchant-quest.js';
 import { setBossMode, isBossMode, setTipoInimigo, getInimigoActivo } from '../world/combate-scene.js';
 import { getBossRoot } from '../entities/boss.js';
-import { iniciarFaseDesvio, pararFaseDesvio, atualizarFaseDesvio, isFaseDesvioActiva, setOnPlayerDerrotado, setBossHpFrac } from './boss-attacks.js';
+import { iniciarFaseDesvio, pararFaseDesvio, atualizarFaseDesvio, isFaseDesvioActiva, setOnPlayerDerrotado, setBossHpFrac, setOnAtaqueEvitado } from './boss-attacks.js';
 import { settings } from './settings.js';
 
 // quando o player morre durante a fase de desvio, encerrar o combate
@@ -531,7 +531,7 @@ function acaoFugir() {
 
 function _devolverTurnoAoPlayer() {
     _tickItemCooldowns();
-    setBotoesAtivos(true);
+    if (!_tutorialMode || _tutorialDodges >= 20) setBotoesAtivos(true);
     _atualizarPresagio();
     if (isBossMode() && !playerStats.derrotado && inimigoAtual.hp > 0) {
         iniciarFaseDesvio();
@@ -925,9 +925,8 @@ function finalizarVitoria() {
     // as runas/olhos. No combate normal usamos o fade de opacidade do wraith.
     let f = 1;
     if (boss) {
-        // pára a música do boss e toca a fanfarra de vitória
         stopMusic(0.6);
-        tocarFanfarraVitoria();
+        if (!_tutorialMode) tocarFanfarraVitoria();
         const root = getBossRoot();
         const fadeId = setInterval(() => {
             f -= 0.05;
@@ -936,10 +935,15 @@ function finalizarVitoria() {
                 clearInterval(fadeId);
                 ganharXP(inimigoAtual.xpDrop);
                 if (cintilasGanhas > 0) ganharCintilas(cintilasGanhas);
-                setTimeout(() => {
-                    mostrarEcraVitoriaFinal();
-                    // mantém-se na cena de combate em fundo escuro com o overlay
-                }, 500);
+                if (_tutorialMode) {
+                    _tutorialMode = false;
+                    _tutorialDodges = 0;
+                    setOnAtaqueEvitado(null);
+                    setLog(`Guardião derrotado! +${cintilasGanhas} cintilas. Podes continuar.`);
+                    setTimeout(() => sairDaArena(), 800);
+                } else {
+                    setTimeout(() => mostrarEcraVitoriaFinal(), 500);
+                }
             }
         }, 60);
         return;
@@ -1030,13 +1034,17 @@ function sairDaArena() {
         setBossMode(false);
         const root = getBossRoot();
         if (root) root.scale.setScalar(1);
-        _bossFightTriggered = false; // permite re-tentar
-        // cura o jogador para a próxima tentativa
+        _bossFightTriggered = false;
         recuperarTotal();
         playerStats.derrotado = false;
-        sairBossParaCastelo(() => {
-            switchMusic('castle', 1.5);
-        });
+        if (_tutorialMode) {
+            _tutorialMode = false;
+            _tutorialDodges = 0;
+            setOnAtaqueEvitado(null);
+            sairCombate(() => switchMusic(player.position.z < -3 ? 'dark' : 'mundo', 1.5));
+            return;
+        }
+        sairBossParaCastelo(() => { switchMusic('castle', 1.5); });
         return;
     }
     sairCombate(() => {
@@ -1108,6 +1116,81 @@ const BOSS_DEFS = {
     cintilasDrop: 250,
 };
 let _bossFightTriggered = false;
+let _tutorialMode = false;
+let _tutorialDodges = 0;
+
+export function iniciarEmboscadaTutorial() {
+    if (estadoJogo.emCombate || playerStats.derrotado) return;
+    if (_bossFightTriggered) return;
+    _bossFightTriggered = true;
+    _tutorialMode = true;
+    _tutorialDodges = 0;
+
+    estadoJogo.emCombate = true;
+    inimigoAtual = { nome: 'GUARDIÃO SPECTRAL', hp: 9999, maxHp: 9999, atk: 0, xpDrop: 0, cintilasDrop: 50, tipo: 'boss' };
+    _setEnfraquecido(false);
+    recuperarTotal();
+    setBossHpFrac(1.0);
+    setBossMode(true);
+
+    setOnAtaqueEvitado(() => {
+        if (!_tutorialMode) return;
+        _tutorialDodges++;
+        if (_tutorialDodges >= 20) {
+            inimigoAtual.hp = 1;
+            inimigoAtual.maxHp = 1;
+            setHpInimigo(1, 1);
+            pararFaseDesvio();
+            setBotoesAtivos(true);
+            setLog('⚔ O Guardião fraquejou! Ataca agora para o finalizar!');
+        } else {
+            setLog(`Desvio! ${_tutorialDodges}/20 ataques evitados.`);
+        }
+    });
+
+    setOnPlayerDerrotado(() => {
+        setBotoesAtivos(false);
+        setLog('Caíste... O Guardião aguarda a próxima tentativa.');
+        setTimeout(() => {
+            stopMusic(0.3);
+            mostrarTelaDerrotaBoss(
+                () => {
+                    pararFaseDesvio();
+                    recuperarTotal();
+                    playerStats.derrotado = false;
+                    estadoJogo.emCombate = false;
+                    _bossFightTriggered = false;
+                    _tutorialMode = false;
+                    esconderCombateUI();
+                    iniciarEmboscadaTutorial();
+                },
+                () => sairDaArena()
+            );
+        }, 1200);
+    });
+
+    playSFX('transicao_batalha');
+    startGlitch(1.25, () => {
+        switchMusic('batalha', 0.5);
+        entrarCombate(() => {
+            player.rotation.y = Math.PI;
+            resetCooldowns();
+            mostrarCombateUI(inimigoAtual.nome);
+            refreshHpUI();
+            setLog('Um Guardião Spectral surge das sombras! Esquiva 20 ataques para o vencer!');
+            setCombateHandlers({
+                onAtacarSlot: acaoAtacarSlot,
+                onItem:       acaoItem,
+                onFugir:      () => setLog('Não podes fugir do Guardião.'),
+            });
+            atualizarSlotsUI();
+            preencherItens(getItens(), acaoItem);
+            setBotoesAtivos(false);
+            iniciarFaseDesvio();
+        });
+    });
+    setTimeout(() => startGlitch(0.5), 1750);
+}
 
 export function iniciarBossFight() {
     if (estadoJogo.emCombate || playerStats.derrotado) return;
