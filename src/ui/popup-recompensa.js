@@ -256,7 +256,7 @@ export function mostrarRecompensa({
     nome: nm,
     descricao: desc,
     cintilas = 0,
-    duracao = 3500,
+    duracao = 1750,
     titulo: customTitulo = '⚜ Novo Equipamento Desbloqueado ⚜',
     dica: customDica = 'Consultai o vosso inventário (I) para o empunhar',
     som = false,
