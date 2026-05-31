@@ -607,9 +607,11 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
             `
         });
 
+        // Som do trovão 1 segundo mais cedo (no início da animação)
+        tocarSomTrovaoPlayer();
+
         // Clarão e tremor no impacto
         setTimeout(() => {
-            tocarSomTrovaoPlayer(); // Som do trovão (mesmo do castelo)
             makeFlash({ cor: '#7ad8ff', cx: ai.x, cy: ai.y, dur: 450, delay: 0, intensidade: 1.0 });
             screenShake(20, 600);
         }, 350);

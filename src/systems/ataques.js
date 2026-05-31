@@ -187,7 +187,8 @@ export function aplicarCooldown(idx) {
     const at = ATAQUES[id];
     if (at.cooldown > 0) {
         // Aplica redução de equipamento (ex.: Óculos do Vidente: −1).
-        const cd = Math.max(0, at.cooldown - getReducaoCooldown());
+        // Cap máximo de 2 rounds de espera.
+        const cd = Math.min(2, Math.max(0, at.cooldown - getReducaoCooldown()));
         if (cd > 0) {
             ataqueState.cooldowns[id] = cd;
             _justApplied.add(id);
