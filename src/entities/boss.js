@@ -253,6 +253,8 @@ const _anim = {
     eyeLeft:  null,
     eyeRight: null,
     cape:     null,
+    capePivot: null,
+    head:     null,
     runes:    [],
     halo:     null,
     crown:    null,
@@ -267,6 +269,26 @@ const _anim = {
     }
 };
 
+// ---- curvas de easing para dar "game feel" às animações de ataque ----
+function _smooth(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
+
+// Curva de golpe: antecipação (recua a -1), golpe rápido com overshoot
+// (+1.15) e recuperação suave até 0. Dá peso e snap aos braços.
+//   p:0 ─▶ 0   p:0.30 ─▶ -1 (recuo)   p:0.46 ─▶ +1.15 (impacto)   p:1 ─▶ 0
+function _strike(p) {
+    if (p < 0.30) return -_smooth(p / 0.30);
+    if (p < 0.46) return -1 + _smooth((p - 0.30) / 0.16) * 2.15;
+    return 1.15 * (1 - _smooth((p - 0.46) / 0.54));
+}
+
+// Curva de salto: agacha (-) na antecipação, sobe forte no golpe, cai e
+// assenta. Pico em ~0.5.
+function _leap(p) {
+    if (p < 0.26) return -0.35 * _smooth(p / 0.26);      // agacha
+    if (p < 0.55) return -0.35 + _smooth((p - 0.26) / 0.29) * 1.35; // sobe a +1.0
+    return 1.0 * (1 - _smooth((p - 0.55) / 0.45));       // desce
+}
+
 /**
  * Dispara uma animação de ataque no boss.
  * @param {string} type Tipo de ataque ('aereo', 'rasante', 'lateral', 'varredura')
@@ -280,6 +302,7 @@ export function triggerBossAttackAnim(type, duration = 1.0, opts = {}) {
     _anim.attack.duration = duration;
     _anim.attack.timer = 0;
     _anim.attack.side = opts.side || (Math.random() < 0.5 ? -1 : 1);
+    _anim.attack.baseZ = _boss.position.z; // para a carga avançar relativa à base
 }
 
 export function criarBoss(scene, posicao = new THREE.Vector3(0, 0, 0), {
@@ -406,6 +429,7 @@ export function criarBoss(scene, posicao = new THREE.Vector3(0, 0, 0), {
     cabeca.position.y = 2.96;
     cabeca.castShadow = true;
     _boss.add(cabeca);
+    _anim.head = cabeca;
 
     const olhoGeo = new THREE.SphereGeometry(0.075, 10, 8);
     const olhoL = new THREE.Mesh(olhoGeo, matBossEye);
@@ -433,6 +457,7 @@ export function criarBoss(scene, posicao = new THREE.Vector3(0, 0, 0), {
     cape.castShadow = true;
     capePivot.add(cape);
     _anim.cape = cape;
+    _anim.capePivot = capePivot;
 
     const lining = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.45), matBossCapeLining);
     lining.position.set(0, -2.32, 0.03); // forro interior, junto à base da capa
@@ -507,62 +532,82 @@ export function updateBoss(deltaTime) {
     }
     matBossRune.emissiveIntensity = 1.8 + Math.sin(_t * 3.2) * 0.6;
 
-    // ANIMAÇÕES DE ATAQUE COMPLEXAS
+    // reset da cabeça (animada só nos ataques)
+    if (_anim.head) _anim.head.rotation.set(0, 0, 0);
+
+    // ANIMAÇÕES DE ATAQUE — com antecipação, golpe rápido (overshoot) e
+    // recuperação + movimento secundário (lean do corpo, cabeça, capa).
     if (_anim.attack.active) {
         _anim.attack.timer += deltaTime;
-        const progress = Math.min(1, _anim.attack.timer / _anim.attack.duration);
-        const ease = Math.sin(progress * Math.PI); // Curva 0 -> 1 -> 0
+        const p = Math.min(1, _anim.attack.timer / _anim.attack.duration);
+        const s = _strike(p);                 // -1 → +1.15 → 0 (snap)
+        const sPos = Math.max(0, s);           // só a parte positiva do golpe
+        const armL = _anim.armL, armR = _anim.armR;
+        const head = _anim.head, cape = _anim.capePivot;
 
         switch (_anim.attack.type) {
-            case 'aereo':
-                // Salto épico com braços erguidos
-                _boss.position.y += ease * 1.6;
-                if (_anim.armL) _anim.armL.rotation.x = -ease * 2.2;
-                if (_anim.armR) _anim.armR.rotation.x = -ease * 2.2;
+            case 'aereo': {
+                // Recua, agacha e dispara num salto com os dois braços a
+                // descer num smash sobre a cabeça.
+                const j = _leap(p);
+                _boss.position.y += j * 1.7;
+                _boss.rotation.x = -s * 0.12;                 // inclina ao saltar/cair
+                // braços: recuam para cima (antecipação) e batem para baixo
+                if (armL) { armL.rotation.x = -2.6 + sPos * 3.4; armL.rotation.z = -0.12; }
+                if (armR) { armR.rotation.x = -2.6 + sPos * 3.4; armR.rotation.z = 0.12; }
+                if (head) head.rotation.x = -s * 0.35;          // olha para cima e baixa
+                if (cape) cape.rotation.x = 0.24 - j * 0.5;     // capa esvoaça no salto
                 break;
+            }
 
-            case 'rasante':
-                // Slam no chão / Agachado
-                _boss.position.y -= ease * 0.6;
-                _boss.rotation.x = ease * 0.3;
-                if (_anim.armL) {
-                    _anim.armL.rotation.x = ease * 1.2;
-                    _anim.armL.rotation.z = -0.12 - ease * 0.5;
-                }
-                if (_anim.armR) {
-                    _anim.armR.rotation.x = ease * 1.2;
-                    _anim.armR.rotation.z = 0.12 + ease * 0.5;
-                }
+            case 'rasante': {
+                // Carga: recua o tronco, mergulha em frente e dá um slam
+                // baixo com ambas as garras.
+                _boss.position.z = _anim.attack.baseZ + sPos * 0.7; // avança (+z = para o player)
+                _boss.position.y -= sPos * 0.35;
+                _boss.rotation.x = s * 0.45;                    // mergulho para a frente
+                if (armL) { armL.rotation.x = -0.5 + sPos * 1.9; armL.rotation.z = -0.12 - sPos * 0.35; }
+                if (armR) { armR.rotation.x = -0.5 + sPos * 1.9; armR.rotation.z = 0.12 + sPos * 0.35; }
+                if (head) head.rotation.x = s * 0.4;
+                if (cape) cape.rotation.x = 0.24 + s * 0.4;
                 break;
+            }
 
-            case 'varredura':
-                // Braços abertos em cruz (horizontal sweep)
-                _boss.rotation.y = Math.sin(progress * Math.PI * 2) * 0.2;
-                if (_anim.armL) {
-                    _anim.armL.rotation.x = -0.5;
-                    _anim.armL.rotation.z = -0.12 - ease * 1.5;
-                }
-                if (_anim.armR) {
-                    _anim.armR.rotation.x = -0.5;
-                    _anim.armR.rotation.z = 0.12 + ease * 1.5;
-                }
+            case 'varredura': {
+                // Wind-up rotacional para um lado e varrimento horizontal
+                // largo com os dois braços abertos em cruz.
+                _boss.rotation.y = -s * 0.55;                   // roda o torso no swing
+                if (armL) { armL.rotation.x = -0.6; armL.rotation.z = -0.12 - sPos * 1.7; }
+                if (armR) { armR.rotation.x = -0.6; armR.rotation.z = 0.12 + sPos * 1.7; }
+                if (head) head.rotation.y = -s * 0.5;
+                if (cape) cape.rotation.z = -s * 0.3;
                 break;
+            }
 
-            case 'lateral':
-                // Apontar e varrer com um braço lateralmente
-                _boss.rotation.y = -_anim.attack.side * ease * 0.4;
-                if (_anim.attack.side === -1 && _anim.armL) {
-                    _anim.armL.rotation.x = -1.2;
-                    _anim.armL.rotation.y = -ease * 1.5;
-                } else if (_anim.attack.side === 1 && _anim.armR) {
-                    _anim.armR.rotation.x = -1.2;
-                    _anim.armR.rotation.y = ease * 1.5;
+            case 'lateral': {
+                const side = _anim.attack.side;
+                // Recolhe o braço (antecipação) e desfere um jab lateral.
+                _boss.rotation.y = -side * s * 0.5;
+                const arm = side === -1 ? armL : armR;
+                if (arm) {
+                    arm.rotation.x = -0.4 - sPos * 0.9;
+                    arm.rotation.y = side * (-0.3 + sPos * 2.0);
+                    arm.rotation.z = side * -0.12;
                 }
+                // braço oposto contrabalança
+                const other = side === -1 ? armR : armL;
+                if (other) other.rotation.x = -sPos * 0.5;
+                if (head) head.rotation.y = side * s * 0.4;
+                if (cape) cape.rotation.z = side * s * 0.25;
                 break;
+            }
         }
 
-        if (progress >= 1) {
+        if (p >= 1) {
             _anim.attack.active = false;
+            // repõe a capa e a posição base (a carga move o z)
+            if (cape) cape.rotation.set(0.24, 0, 0);
+            _boss.position.z = _anim.attack.baseZ;
         }
     }
 }
