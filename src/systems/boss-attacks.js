@@ -501,6 +501,18 @@ export function pararFaseDesvio() {
 
 export function isFaseDesvioActiva() { return _active; }
 
+// Dispara a animação de ataque do boss com atraso, de modo a que o "golpe"
+// (pico da curva ~46% da duração) caia perto do lançamento do projéctil e
+// se estenda pela fase de impacto — o boss bate enquanto o ataque chega.
+function _animarComDelay(pr, opts) {
+    const delayMs = pr.teleDur * 0.45 * 1000;          // espera ~45% do aviso
+    const duracao = pr.teleDur * 0.55 + pr.impactDur;  // cobre o resto + impacto
+    setTimeout(() => {
+        if (!_active) return; // a luta pode ter terminado/pausado entretanto
+        triggerBossAttackAnim(pr.type, duracao, opts);
+    }, delayMs);
+}
+
 /** Update por frame — chamar de dentro do animateCombate. */
 export function atualizarFaseDesvio(deltaTime) {
     if (!_active) return;
@@ -520,11 +532,13 @@ export function atualizarFaseDesvio(deltaTime) {
         const pr = FACTORIES[idx1]();
         _projectiles.push(pr);
 
-        // Gatilho de animação no boss sincronizado com o tempo de aviso (telegraph)
-        // Passa o tipo exacto para animações elaboradas (salto, slam, sweep, etc)
+        // Animação atrasada: em vez de animar logo no início do telegraph
+        // (terminando antes do projéctil chegar), espera ~45% do aviso e
+        // estende-se até à fase de impacto — assim o GOLPE do boss coincide
+        // com o projéctil a vir/atingir.
         const opts = {};
         if (pr.type === 'lateral') opts.side = pr.fromLeft ? -1 : 1;
-        triggerBossAttackAnim(pr.type, pr.teleDur, opts);
+        _animarComDelay(pr, opts);
         tocarSomMovimentoBoss(pr.type); // Som do movimento físico (preparação)
 
         // Fase 2 (rage mode, abaixo de 25% HP): dispara um segundo projéctil
@@ -538,7 +552,7 @@ export function atualizarFaseDesvio(deltaTime) {
             _projectiles.push(pr2);
             const opts2 = {};
             if (pr2.type === 'lateral') opts2.side = pr2.fromLeft ? -1 : 1;
-            triggerBossAttackAnim(pr2.type, pr2.teleDur, opts2);
+            _animarComDelay(pr2, opts2);
         }
 
         const base = SPAWN_MIN + Math.random() * (SPAWN_MAX - SPAWN_MIN);
