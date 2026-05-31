@@ -115,7 +115,7 @@ export function saltarParaClimaxMusical() {
     }
 }
 
-export function playSFX(name, delay = 0, forceRestart = true, loop = false) {
+export function playSFX(name, delay = 0, forceRestart = true, loop = false, volMult = 1.0) {
     const s = _sfx[name];
     if (!s || !s.buffer) return;
 
@@ -126,7 +126,7 @@ export function playSFX(name, delay = 0, forceRestart = true, loop = false) {
         }
 
         s.setLoop(loop);
-        s.setVolume(getSfxTargetVolume());
+        s.setVolume(getSfxTargetVolume() * volMult);
         s.play();
     };
 
@@ -389,6 +389,7 @@ export function tocarSomAtaquePlayer(ataqueId) {
         case 'golpe_rapido':       // estocada veloz — swish curto e agudo
             _whoosh(ctx, master, now, { dur: 0.22, f0: 2600, f1: 700, q: 1.4, vol: 0.55 });
             _tone(ctx, master, now + 0.15, { dur: 0.10, f0: 3100, type: 'triangle', vol: 0.18 });
+            playSFX('swipe', 0, true, false, 0.4);
             break;
         case 'golpe_pesado':       // talho profundo — whoosh grave + impacto
             _whoosh(ctx, master, now, { dur: 0.40, f0: 900, f1: 160, q: 0.8, vol: 0.6 });
@@ -399,8 +400,8 @@ export function tocarSomAtaquePlayer(ataqueId) {
             _thud(ctx, master, now + 0.48, { dur: 0.40, f0: 200, f1: 40, vol: 0.85 });
             break;
         case 'combo_duplo':        // dança das lâminas — dois cortes encadeados
-            playSFX('swipe', 0);
-            playSFX('swipe', 0.3);
+            playSFX('swipe', 0,   true, false, 0.4);
+            playSFX('swipe', 300, true, false, 0.4);
             break;
         case 'golpe_giratorio':    // tornado — três swishes rápidos
             _whoosh(ctx, master, now,        { dur: 0.16, f0: 1700, f1: 950,  q: 1.7, vol: 0.40 });
