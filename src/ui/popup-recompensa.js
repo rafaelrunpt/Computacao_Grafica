@@ -251,14 +251,15 @@ function pararFogos() {
 }
 
 // --- API pública ---
-export function mostrarRecompensa({ 
-    icone: ic, 
-    nome: nm, 
-    descricao: desc, 
-    cintilas = 0, 
+export function mostrarRecompensa({
+    icone: ic,
+    nome: nm,
+    descricao: desc,
+    cintilas = 0,
     duracao = 3500,
     titulo: customTitulo = '⚜ Novo Equipamento Desbloqueado ⚜',
-    dica: customDica = 'Consultai o vosso inventário (I) para o empunhar'
+    dica: customDica = 'Consultai o vosso inventário (I) para o empunhar',
+    som = false,
 }) {
     titulo.textContent = customTitulo;
     dica.textContent = customDica;
@@ -290,7 +291,7 @@ export function mostrarRecompensa({
     });
 
     dispararFogos();
-    playSFX('heart_collect');
+    if (som) playSFX('heart_collect');
 
     setTimeout(() => {
         card.style.transform = 'scale(0.85)';

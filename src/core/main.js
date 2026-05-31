@@ -726,7 +726,8 @@ function animateMundo(deltaTime) {
                                 nome: 'Bênção de Vigor',
                                 descricao: 'O teu espírito fortalece-se (+5 HP máximo permanentemente).',
                                 dica: 'A tua alma transborda vitalidade',
-                                duracao: 3500
+                                duracao: 3500,
+                                som: true,
                             });
                         }, 2000);
                     }

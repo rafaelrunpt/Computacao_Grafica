@@ -531,7 +531,7 @@ export function tocarSomAmbienteRio(playerZ, riverZ = 0) {
     norm = Math.max(0, Math.min(1, norm));
     
     // Curva suave (quadrática) para o volume
-    const vol = norm * norm * getSfxTargetVolume() * 0.85;
+    const vol = norm * norm * getSfxTargetVolume() * 0.35;
     _riverSfx.setVolume(vol);
 }
 
