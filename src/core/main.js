@@ -303,6 +303,10 @@ scene.add(playerSpot, playerSpot.target);
 // ----------------------------------------------------------------------
 let _luzSpotOn = true; // o playerSpot é controlado no loop; usamos esta flag
 
+// Centros das arenas (para a vista de topo ortográfica no combate).
+const _CENTRO_COMBATE = new THREE.Vector3(0.1, 0, 0);   // player ~-2.6, inimigo ~2.8
+const _CENTRO_BOSS    = new THREE.Vector3(0, 0, -0.75);  // player ~+2, boss ~-3.5
+
 function _toast(msg) {
     let t = document.getElementById('cg-toast');
     if (!t) {
@@ -1623,10 +1627,12 @@ function animateCombate(deltaTime) {
     renderer.setScissorTest(false);
     const camCombate = isBossMode() ? combateBossCamera : combateCamera;
     // Suporte a câmara ortográfica no combate (teclas C/Z). A arena do boss
-    // é maior, por isso usa um enquadramento ortográfico mais amplo.
+    // é maior, por isso usa um enquadramento ortográfico mais amplo. O centro
+    // da arena difere entre boss e combate normal (vista de topo, modo C).
+    const centroArena = isBossMode() ? _CENTRO_BOSS : _CENTRO_COMBATE;
     const camFinal = moderator.freeCam
         ? mainCamera
-        : getActiveCombatCamera(camCombate, isBossMode() ? 7 : 5);
+        : getActiveCombatCamera(camCombate, isBossMode() ? 7 : 5, centroArena);
     renderer.render(combateScene, camFinal);
 }
 

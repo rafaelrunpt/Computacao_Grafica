@@ -113,7 +113,10 @@ export function getActiveWorldCamera(target = null) {
 // ----------------------------------------------------------------------
 export const combatOrthoCamera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 200);
 
-export function getActiveCombatCamera(perspCam, viewSize = 5) {
+// `perspCam` — câmara cinematográfica de combate (usada no modo Z/ângulo).
+// `viewSize` — meia-altura do enquadramento ortográfico.
+// `center`   — centro da arena (usado no modo C/topo, vista de cima).
+export function getActiveCombatCamera(perspCam, viewSize = 5, center = null) {
     if (_camMode === 0) return perspCam;
     const aspect = window.innerWidth / window.innerHeight;
     combatOrthoCamera.left   = -viewSize * aspect;
@@ -122,8 +125,18 @@ export function getActiveCombatCamera(perspCam, viewSize = 5) {
     combatOrthoCamera.bottom = -viewSize;
     combatOrthoCamera.near   = perspCam.near;
     combatOrthoCamera.far    = perspCam.far;
-    combatOrthoCamera.position.copy(perspCam.position);
-    combatOrthoCamera.quaternion.copy(perspCam.quaternion);
+
+    if (_camMode === 1 && center) {
+        // Modo C — vista de topo a olhar para baixo sobre a arena.
+        combatOrthoCamera.position.set(center.x, 40, center.z);
+        combatOrthoCamera.up.set(0, 0, -1); // "norte" da arena fica para cima no ecrã
+        combatOrthoCamera.lookAt(center.x, 0, center.z);
+    } else {
+        // Modo Z — copia o ângulo cinematográfico da câmara de combate.
+        combatOrthoCamera.up.set(0, 1, 0);
+        combatOrthoCamera.position.copy(perspCam.position);
+        combatOrthoCamera.quaternion.copy(perspCam.quaternion);
+    }
     combatOrthoCamera.updateProjectionMatrix();
     return combatOrthoCamera;
 }
