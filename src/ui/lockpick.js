@@ -21,10 +21,9 @@ overlay.style.cssText = `
     position: fixed; inset: 0;
     display: none;
     align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.62);
+    background: rgba(0,0,0,0.75);
     z-index: 300;
     font-family: 'Courier New', monospace;
-    backdrop-filter: blur(2px);
 `;
 document.body.appendChild(overlay);
 
@@ -49,7 +48,7 @@ panel.innerHTML = `
 
     <div id="lp-bar" style="position:relative;height:38px;background:rgba(0,0,0,0.65);border:1px solid #6a4818;border-radius:6px;overflow:hidden;box-shadow:inset 0 2px 6px rgba(0,0,0,0.6);transition:box-shadow 0.18s;">
         <div id="lp-sweet" style="position:absolute;top:0;bottom:0;background:linear-gradient(90deg,rgba(255,200,80,0.0),rgba(255,210,90,0.85) 35%,rgba(255,210,90,0.85) 65%,rgba(255,200,80,0.0));box-shadow:inset 0 0 10px rgba(255,200,80,0.5);"></div>
-        <div id="lp-cursor" style="position:absolute;top:-2px;bottom:-2px;width:3px;background:#fff;box-shadow:0 0 8px #fff,0 0 14px #ffcc66;border-radius:2px;"></div>
+        <div id="lp-cursor" style="position:absolute;top:-2px;bottom:-2px;width:3px;left:0;background:#fff;box-shadow:0 0 8px #fff,0 0 14px #ffcc66;border-radius:2px;will-change:transform;"></div>
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;">
@@ -94,7 +93,6 @@ function pinDot(filled) {
         border:2px solid ${filled ? '#ffd060' : '#7a5818'};
         background:${filled ? 'radial-gradient(circle,#ffe080,#a07020)' : 'rgba(0,0,0,0.45)'};
         box-shadow:${filled ? '0 0 12px #ffd060' : 'inset 0 1px 2px rgba(0,0,0,0.55)'};
-        transition: all 0.2s;
     `;
     return d;
 }
@@ -106,7 +104,6 @@ function attDot(active) {
         background:${active ? 'radial-gradient(circle,#ff7090,#601020)' : 'rgba(0,0,0,0.4)'};
         border:1px solid ${active ? '#ff8090' : '#603030'};
         box-shadow:${active ? '0 0 6px #ff4060' : 'none'};
-        transition: all 0.2s;
     `;
     return d;
 }
@@ -141,7 +138,8 @@ function tick(now) {
     if (state.cursorX >= 1) { state.cursorX = 1; state.cursorDir = -1; }
     if (state.cursorX <= 0) { state.cursorX = 0; state.cursorDir =  1; }
 
-    elCursor.style.left = `${state.cursorX * 100}%`;
+    const barW = elBar.clientWidth || 480;
+    elCursor.style.transform = `translateX(${state.cursorX * (barW - 3)}px)`;
     raf = requestAnimationFrame(tick);
 }
 
