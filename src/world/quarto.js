@@ -151,7 +151,7 @@ function stoneCourse(orient, length, height, baseX, baseZ, faceNormal, gapY = 0)
 wallSlab(W + 0.4, H, 0.2, 0, H / 2, -D / 2 - 0.1);
 stoneCourse('x', W, H, 0, -D / 2, 1);
 // parede esquerda (oeste, x = -W/2) — janela
-wallSlab(0.2, H, D + 0.4, -W / 2 - 0.1, H / 2, 0);
+wallSlab(0.25, H, D + 0.4, -W / 2 - 0.13, H / 2, 0);
 stoneCourse('z', D, H, -W / 2, 0, 1);
 
 // pequenos cotos de pedra nas paredes removidas — só a base, dão a
