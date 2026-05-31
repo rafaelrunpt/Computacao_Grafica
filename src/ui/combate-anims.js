@@ -664,7 +664,7 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
                 transform: translate(-30%, -100%);
                 filter: brightness(1.2);
                 margin-top: -60vh;
-                transition: margin-top 350ms cubic-bezier(.2,.8,.3,1);
+                transition: margin-top 500ms cubic-bezier(.2,.8,.3,1);
             `
         });
 
