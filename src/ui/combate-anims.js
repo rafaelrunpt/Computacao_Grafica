@@ -668,12 +668,14 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
             `
         });
 
-        // Trigger slide down
-        requestAnimationFrame(() => {
+        // Trigger slide down after 1 sec delay so last frame shows for 1 sec
+        setTimeout(() => {
             requestAnimationFrame(() => {
-                if (el) el.style.marginTop = '40vh';
+                requestAnimationFrame(() => {
+                    if (el) el.style.marginTop = '40vh';
+                });
             });
-        });
+        }, 1000);
         
         makeFlash({ cor: '#ff3050', cx: ai.x, cy: yBase, dur: 460, delay: 220, intensidade: 0.95 });
     } else if (tipo === 'carga') {
