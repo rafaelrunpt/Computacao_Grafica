@@ -13,6 +13,7 @@ setOnPlayerDerrotado(() => {
     setBotoesAtivos(false);
     setLog('Caíste perante o Soberano...');
     setTimeout(() => {
+        stopMusic(0.3);
         mostrarTelaDerrotaBoss(
             () => {
                 pararFaseDesvio();
@@ -991,6 +992,7 @@ function finalizarDerrota() {
 
     if (isBossMode()) {
         setTimeout(() => {
+            stopMusic(0.3);
             mostrarTelaDerrotaBoss(
                 () => {
                     // Retry
