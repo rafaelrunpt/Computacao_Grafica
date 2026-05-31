@@ -440,8 +440,9 @@ inicializarAudio(mainCamera, {
     step_stone: 'assets/sounds/footsteps/stone.mp3',
     ui_pop:        'assets/sounds/ui/pop_3.wav',
     heart_collect: 'assets/sounds/ui/heart_collect.wav',
-    map_open:      'assets/sounds/ui/map_open.wav',
-    map_close:     'assets/sounds/ui/map_close.wav',
+    map_open:        'assets/sounds/ui/map_open.wav',
+    map_close:       'assets/sounds/ui/map_close.wav',
+    brass_negative:  'assets/sounds/brass_negative.wav',
 });
 
 // --------------------------------------------------------

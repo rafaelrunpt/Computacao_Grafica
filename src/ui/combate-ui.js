@@ -1181,3 +1181,44 @@ export function setHpPlayer(atual, max) {
     if (fill) fill.style.width = Math.max(0, (atual / max) * 100) + '%';
     if (label) label.textContent = `HP ${Math.max(0, atual)} / ${max}`;
 }
+
+export function mostrarTelaDerrotaBoss(onRetry, onReturn) {
+    const o = document.createElement('div');
+    o.id = 'boss-defeat-screen';
+    o.style.cssText = `
+        position: fixed; inset: 0;
+        background: radial-gradient(circle, rgba(40,0,0,0.8), rgba(10,0,0,0.98));
+        z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        opacity: 0; transition: opacity 1s ease-in;
+    `;
+    o.innerHTML = `
+        <div style="font-family:'Pixelify Sans', 'Courier New', monospace; font-size:48px; color:#ff4040; text-shadow:0 0 20px rgba(255,0,0,0.8); margin-bottom:10px; letter-spacing:8px; text-transform:uppercase;">FOSTE DERROTADO</div>
+        <div style="font-family:'Pixelify Sans', 'Courier New', monospace; font-size:18px; color:#c8a96e; margin-bottom:50px; letter-spacing:2px;">A tua luz apagou-se perante o Soberano...</div>
+        <div style="display:flex; gap:20px;">
+            <button id="btn-boss-retry" class="pix-btn" style="padding:14px 28px; font-size:18px;">⟲ Repetir Batalha</button>
+            <button id="btn-boss-return" class="pix-btn" style="padding:14px 28px; font-size:18px;">⌂ Voltar ao Castelo</button>
+        </div>
+    `;
+    document.body.appendChild(o);
+    
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            o.style.opacity = '1';
+        });
+    });
+
+    const closeScreen = () => {
+        o.style.opacity = '0';
+        setTimeout(() => o.remove(), 1000);
+    };
+
+    o.querySelector('#btn-boss-retry').onclick = () => {
+        closeScreen();
+        if (onRetry) onRetry();
+    };
+
+    o.querySelector('#btn-boss-return').onclick = () => {
+        closeScreen();
+        if (onReturn) onReturn();
+    };
+}

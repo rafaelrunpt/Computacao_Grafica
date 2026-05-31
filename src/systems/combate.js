@@ -12,7 +12,20 @@ import { settings } from './settings.js';
 setOnPlayerDerrotado(() => {
     setBotoesAtivos(false);
     setLog('Caíste perante o Soberano...');
-    setTimeout(() => sairDaArena(), 1200);
+    setTimeout(() => {
+        mostrarTelaDerrotaBoss(
+            () => {
+                pararFaseDesvio();
+                recuperarTotal();
+                playerStats.derrotado = false;
+                estadoJogo.emCombate = false;
+                _bossFightTriggered = false;
+                esconderCombateUI();
+                iniciarBossFight();
+            },
+            () => sairDaArena()
+        );
+    }, 1200);
 });
 import { getItens, usarItem, adicionarItem, CATALOGO, quantidade as qtdItem } from './inventario.js';
 import { playSFX, switchMusic, stopMusic, tocarFanfarraVitoria, tocarSomAtaquePlayer, tocarSomAtaqueInimigo, tocarSomSpikeBoss, tocarSomShockBoss } from './audio.js';
@@ -21,7 +34,8 @@ import { player, setEspadaMaoVisivel } from '../entities/jogador.js';
 import {
     mostrarCombateUI, esconderCombateUI, setCombateHandlers,
     setHpInimigo, setHpPlayer, setLog, setBotoesAtivos, preencherItens,
-    setAtaqueSlots, setPresagio, setStatusPlayer, mostrarDanoFlutuante
+    setAtaqueSlots, setPresagio, setStatusPlayer, mostrarDanoFlutuante,
+    mostrarTelaDerrotaBoss
 } from '../ui/combate-ui.js';
 import {
     getSlotAtaque, getCooldownSlot, podeUsarSlot,
@@ -972,7 +986,31 @@ function finalizarVitoria() {
 function finalizarDerrota() {
     setLog('Caíste em combate. Vais recuperar...');
     setBotoesAtivos(false);
-    setTimeout(() => sairDaArena(), 1200);
+
+    if (!isBossMode()) playSFX('brass_negative');
+
+    if (isBossMode()) {
+        setTimeout(() => {
+            mostrarTelaDerrotaBoss(
+                () => {
+                    // Retry
+                    pararFaseDesvio();
+                    recuperarTotal();
+                    playerStats.derrotado = false;
+                    estadoJogo.emCombate = false;
+                    _bossFightTriggered = false;
+                    esconderCombateUI();
+                    iniciarBossFight();
+                },
+                () => {
+                    // Return to castle
+                    sairDaArena();
+                }
+            );
+        }, 1200);
+    } else {
+        setTimeout(() => sairDaArena(), 1200);
+    }
 }
 
 function finalizarFuga() {
