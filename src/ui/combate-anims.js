@@ -659,19 +659,19 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
             fps: 15,
             x: ai.x, y: yBase, size: 50,
             extraCss: `
-                mix-blend-mode: screen; 
+                mix-blend-mode: screen;
                 transform-origin: bottom center;
                 transform: translate(-30%, -100%);
                 filter: brightness(1.2);
-                margin-top: -30vh;
-                transition: margin-top 200ms cubic-bezier(.2,.8,.3,1);
+                margin-top: -60vh;
+                transition: margin-top 350ms cubic-bezier(.2,.8,.3,1);
             `
         });
 
         // Trigger slide down
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                if (el) el.style.marginTop = '0vh';
+                if (el) el.style.marginTop = '15vh';
             });
         });
         

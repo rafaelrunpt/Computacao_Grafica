@@ -1570,19 +1570,19 @@ function _updatePlayerSpot() {
 let _prevCena = null;
 let _lastFrameTime = performance.now();
 function animate() {
+    requestAnimationFrame(animate);
+
     const now = performance.now();
     const maxFpsMs = 1000 / (settings.maxFps || 60);
     const elapsedMs = now - _lastFrameTime;
 
     if (elapsedMs < maxFpsMs) {
-        requestAnimationFrame(animate);
         return;
     }
 
-    _lastFrameTime = now;
-    requestAnimationFrame(animate);
+    _lastFrameTime = now - (elapsedMs % maxFpsMs);
     _frameCount++;
-    let deltaTime = clock.getDelta();
+    let deltaTime = Math.min(elapsedMs / 1000, 0.033);
     tickFps();
 
     pollGamepad();
