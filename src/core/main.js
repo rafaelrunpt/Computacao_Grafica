@@ -432,6 +432,7 @@ inicializarAudio(mainCamera, {
     step_grass: 'assets/sounds/footsteps/relva.mp3',
     step_wood:  'assets/sounds/footsteps/wood.mp3',
     step_stone: 'assets/sounds/footsteps/stone.mp3',
+    ui_pop:     'assets/sounds/ui/pop_3.wav',
 });
 
 // --------------------------------------------------------

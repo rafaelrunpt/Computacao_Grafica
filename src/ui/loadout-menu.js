@@ -9,6 +9,7 @@
 // --------------------------------------------------------
 
 import { ATAQUES, ataqueState, equiparAtaque } from '../systems/ataques.js';
+import { playSFX } from '../systems/audio.js';
 
 // ---- fontes pixel (carrega 1 vez ao importar o módulo) ----
 (function _injectFonts() {
@@ -475,6 +476,7 @@ function renderCatalogo() {
             } else {
                 equiparAtaque(_slotSel, id);
             }
+            playSFX('ui_pop');
             renderSlots();
             renderCatalogo();
         });

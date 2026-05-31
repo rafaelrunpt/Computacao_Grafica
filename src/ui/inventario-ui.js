@@ -10,6 +10,7 @@ import { getItens, usarItem, registarOnChange, CATALOGO } from '../systems/inven
 import { playerStats } from '../systems/player-stats.js';
 import { atualizarHUD } from './hud.js';
 import { limparTutoriais } from './tutorial.js';
+import { playSFX } from '../systems/audio.js';
 
 let _aberto = false;
 let _bloqueado = false;
@@ -287,6 +288,7 @@ function renderItens() {
         const handleUse = (e) => {
             if (e) e.stopPropagation();
             const r = usarItem(item.id);
+            if (r.ok && equipavel) playSFX('ui_pop');
             flashEl.textContent = r.mensagem || '';
             flashEl.classList.toggle('erro', !r.ok);
             renderItens();
