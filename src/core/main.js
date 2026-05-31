@@ -445,6 +445,7 @@ inicializarAudio(mainCamera, {
     brass_negative:  'assets/sounds/brass_negative.wav',
     brass_defeated:  'assets/sounds/brass_defeated.wav',
     swipe:           'assets/sounds/Attacks/swipe.wav',
+    boss_rage:       'assets/sounds/boss_rage.mp3',
 });
 
 // --------------------------------------------------------

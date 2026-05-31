@@ -29,7 +29,8 @@ import { combateScene, posPlayerCombate, isBossMode } from '../world/combate-sce
 import { keys } from '../core/input.js';
 import { receberDano, playerStats } from './player-stats.js';
 import { setHpPlayer, setLog, mostrarDanoFlutuante } from '../ui/combate-ui.js';
-import { tocarSomAtaqueBoss, tocarRugidoBoss, tocarSomMovimentoBoss } from './audio.js';
+import { tocarSomAtaqueBoss, tocarRugidoBoss, tocarSomMovimentoBoss, playSFX, setMusicPlaybackRate } from './audio.js';
+import { matBossAura, matBossEye, matBossRune } from '../entities/boss.js';
 import { BossVFX } from './boss-vfx.js';
 
 // ----------------------------------------------------------------------
@@ -63,10 +64,31 @@ export function setBossHpFrac(frac) {
 
 // Transição visível para o "rage mode" — dispara uma única vez, quando o
 // boss cai abaixo dos 25% de vida.
+let _rageGlitchInterval = null;
+
 function _entrarRageMode() {
     setLog('⚠ O SOBERANO ENTRA EM FÚRIA! Os golpes aceleram e ardem em corrupção!');
     tocarRugidoBoss();
+    playSFX('boss_rage');
+    setMusicPlaybackRate(1.5);
     _flashRage();
+
+    // Aura roxa mais intensa
+    matBossAura.opacity = 1.0;
+    matBossAura.color.setHex(0x9900ff);
+
+    // Glitch de cores nos olhos e runas
+    const eyeColors  = [0xff0000, 0xff00ff, 0x00ffff, 0xffff00, 0xff4400];
+    const runeColors = [0xaa00ff, 0xff00aa, 0x00ffcc, 0xff6600, 0xcc00ff];
+    let _gi = 0;
+    if (_rageGlitchInterval) clearInterval(_rageGlitchInterval);
+    _rageGlitchInterval = setInterval(() => {
+        matBossEye.emissive.setHex(eyeColors[_gi % eyeColors.length]);
+        matBossEye.color.setHex(eyeColors[_gi % eyeColors.length]);
+        matBossRune.emissive.setHex(runeColors[_gi % runeColors.length]);
+        matBossRune.color.setHex(runeColors[_gi % runeColors.length]);
+        _gi++;
+    }, 120);
 }
 
 // Clarão roxo intenso a cobrir o ecrã.
@@ -330,6 +352,17 @@ export function iniciarFaseDesvio() {
     _smoothX.value = posPlayerCombate.x;
     // posiciona o player na lane do meio
     _aplicarPos();
+}
+
+export function pararRageEfeitos() {
+    if (_rageGlitchInterval) { clearInterval(_rageGlitchInterval); _rageGlitchInterval = null; }
+    setMusicPlaybackRate(1.0);
+    matBossAura.opacity = 0.55;
+    matBossAura.color.setHex(0x6020c0);
+    matBossEye.emissive.setHex(0xff2010);
+    matBossEye.color.setHex(0xff3030);
+    matBossRune.emissive.setHex(0x8800cc);
+    matBossRune.color.setHex(0xaa44ff);
 }
 
 /** Pára a fase de desvio — chamar quando o jogador ataca/usa item. */

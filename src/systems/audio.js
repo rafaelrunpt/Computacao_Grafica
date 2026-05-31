@@ -142,6 +142,12 @@ export function stopSFX(name) {
     }
 }
 
+export function setMusicPlaybackRate(rate) {
+    if (!_currentTrack) return;
+    const a = _sounds[_currentTrack];
+    if (a) a.setPlaybackRate(rate);
+}
+
 export function stopMusic(fadeTime = 0.6) {
     if (!_currentTrack) return;
     const audio = _sounds[_currentTrack];

@@ -5,7 +5,7 @@ import { entrarCombate, sairCombate, getMundoSnapshot, sairBossParaCastelo } fro
 import { notificarVitoria as notificarVitoriaQuest } from './merchant-quest.js';
 import { setBossMode, isBossMode, setTipoInimigo, getInimigoActivo } from '../world/combate-scene.js';
 import { getBossRoot } from '../entities/boss.js';
-import { iniciarFaseDesvio, pararFaseDesvio, atualizarFaseDesvio, isFaseDesvioActiva, setOnPlayerDerrotado, setBossHpFrac } from './boss-attacks.js';
+import { iniciarFaseDesvio, pararFaseDesvio, atualizarFaseDesvio, isFaseDesvioActiva, setOnPlayerDerrotado, setBossHpFrac, pararRageEfeitos } from './boss-attacks.js';
 import { settings } from './settings.js';
 
 // quando o player morre durante a fase de desvio, encerrar o combate
@@ -919,7 +919,7 @@ function finalizarVitoria() {
     const xpGanho = inimigoAtual.xpDrop || 0;
     setLog(`Venceste! ${inimigoAtual.nome} foi destruído. (+${xpGanho} XP, +${cintilasGanhas} ✦)`);
     setBotoesAtivos(false);
-    if (boss) pararFaseDesvio();
+    if (boss) { pararFaseDesvio(); pararRageEfeitos(); }
 
     // Animação de desaparecimento. No boss, encolhemos o root + escurecemos
     // as runas/olhos. No combate normal usamos o fade de opacidade do wraith.
