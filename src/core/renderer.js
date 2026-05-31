@@ -75,13 +75,17 @@ export function setCameraMode(mode) {
 
 // Vista de topo (C): ângulo picado, enquadramento mais apertado.
 const _orthoTopo = { offset: new THREE.Vector3(0, 48, 22), view: 13 };
-// Vista em ângulo (Z): frustum vertical de 14 (versão original).
-const ORTHO_VIEW_ANGULO = 14;
+// Vista em ângulo (Z): mesmo ângulo da perspetiva (~24°) mas na altura
+// MÍNIMA (y=15) para o fundo do frustum (view 14) não ficar enterrado —
+// abaixo disto reaparece a faixa de céu. Fica à frente da montanha do sul.
+const _orthoAngulo = { offset: new THREE.Vector3(0, 15, 34), view: 14 };
+
+function _cfgAtual() { return _camMode === 1 ? _orthoTopo : _orthoAngulo; }
 
 function _aplicarFrustumOrtho() {
     if (_camMode === 0) return;
     const aspect = window.innerWidth / window.innerHeight;
-    const v = _camMode === 1 ? _orthoTopo.view : ORTHO_VIEW_ANGULO;
+    const v = _cfgAtual().view;
     worldOrthoCamera.left   = -v * aspect;
     worldOrthoCamera.right  =  v * aspect;
     worldOrthoCamera.top    =  v;
@@ -89,18 +93,12 @@ function _aplicarFrustumOrtho() {
     worldOrthoCamera.updateProjectionMatrix();
 }
 
-// Devolve a câmara activa do mundo.
-//   Modo 1 (C): vista de topo, posicionada sobre o jogador.
-//   Modo 2 (Z): mesma posição/orientação da perspetiva (versão original).
+// Devolve a câmara activa do mundo, posicionada sobre o `target` (jogador)
+// com o offset do modo escolhido (topo ou ângulo).
 export function getActiveWorldCamera(target = null) {
     if (_camMode === 0) return mainCamera;
-    if (_camMode === 2) {
-        worldOrthoCamera.position.copy(mainCamera.position);
-        worldOrthoCamera.quaternion.copy(mainCamera.quaternion);
-        return worldOrthoCamera;
-    }
     if (target) {
-        const off = _orthoTopo.offset;
+        const off = _cfgAtual().offset;
         worldOrthoCamera.position.set(target.x + off.x, off.y, target.z + off.z);
         worldOrthoCamera.lookAt(target.x, 0, target.z);
     }
