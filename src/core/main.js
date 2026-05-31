@@ -1576,11 +1576,13 @@ function animate() {
     const maxFpsMs = 1000 / (settings.maxFps || 60);
     const elapsedMs = now - _lastFrameTime;
 
+    clock.getDelta(); // manter relógio sincronizado em todos os frames
+
     if (elapsedMs < maxFpsMs) return;
 
     _lastFrameTime = now;
     _frameCount++;
-    let deltaTime = clock.getDelta();
+    const deltaTime = 1 / 60; // física sempre a 60fps independente do FPS de render
     tickFps();
 
     pollGamepad();
