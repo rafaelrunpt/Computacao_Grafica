@@ -148,8 +148,8 @@ export const bartenderIntroBox = new THREE.Box3(
     new THREE.Vector3(6.1, 3, 6.6),
 );
 export let bartenderVendorBox = new THREE.Box3(
-    new THREE.Vector3(-5.77 - 1.0, 0, -4.54 - 1.0),
-    new THREE.Vector3(-5.77 + 1.0, 2.4, -4.54 + 1.0),
+    new THREE.Vector3(-5.77 - 2.5, 0, -4.54 - 2.5),
+    new THREE.Vector3(-5.77 + 2.5, 2.4, -4.54 + 2.5),
 );
 
 criarEstalajadeiro(tavernScene, tavernBarmanPos);

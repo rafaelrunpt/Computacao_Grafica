@@ -602,8 +602,8 @@ doorKnob.position.set(-1.05, 1.1, D / 2 - 0.1);
 quartoScene.add(doorKnob);
 
 export const quartoSaidaBox = new THREE.Box3(
-    new THREE.Vector3(-2.2, 0, D / 2 - 0.6),
-    new THREE.Vector3(-0.8, 2.4, D / 2 + 0.2),
+    new THREE.Vector3(-W / 2, 0, D / 2 - 1.0),
+    new THREE.Vector3( W / 2, 2.4, D / 2 + 0.5),
 );
 
 // caixa de interacção com a cama — em frente ao colchão (lado sul)
