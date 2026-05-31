@@ -13,7 +13,7 @@ const POSICOES = [
     { id: 's_ne', x:  62, z:  52 },   // canto NE — depois das zonas norte
     { id: 's_se', x:  54, z: -72 },   // canto SE — perto do bau da máscara
     { id: 's_so', x: -68, z: -64 },   // canto SO — entre wraith zones
-    { id: 's_no', x: -68, z:  58 },   // canto NO — afastado da vila
+    { id: 's_no', x: -73, z:  53 },   // canto NO — afastado da vila
 ];
 
 const RUNA_COR_ATIVA   = 0xc080ff;
