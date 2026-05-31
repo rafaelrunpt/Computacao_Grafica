@@ -37,10 +37,34 @@ const defaults = {
     inputAsked: false,
 };
 
+// Deteta GPUs integradas / fracas / software a partir da string do driver.
+// Devolve 'baixa' para essas; 'media' caso contrário (ou se não der para ler).
+function _detectarTierGPU() {
+    try {
+        const cv = document.createElement('canvas');
+        const gl = cv.getContext('webgl') || cv.getContext('experimental-webgl');
+        if (!gl) return 'baixa'; // sem WebGL acelerado → assume fraco
+        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+        const nome = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
+        // perde o contexto temporário de imediato
+        gl.getExtension('WEBGL_lose_context')?.loseContext();
+        if (!nome) return 'media';
+        // Integradas Intel, GPUs móveis e renderers de software → baixa.
+        const fraco = /(intel|hd graphics|uhd graphics|iris|mali|adreno|powervr|videocore|llvmpipe|swiftshader|microsoft basic|softwarerasterizer)/i;
+        return fraco.test(nome) ? 'baixa' : 'media';
+    } catch {
+        return 'media';
+    }
+}
+
 function load() {
     try {
         const raw = localStorage.getItem(KEY);
-        if (!raw) return { ...defaults };
+        if (!raw) {
+            // Primeiro arranque: escolhe a qualidade conforme a GPU detectada.
+            // O jogador pode subir manualmente no menu de pausa (fica gravado).
+            return { ...defaults, quality: _detectarTierGPU() };
+        }
         return { ...defaults, ...JSON.parse(raw) };
     } catch { return { ...defaults }; }
 }
