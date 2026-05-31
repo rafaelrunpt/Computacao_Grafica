@@ -323,9 +323,9 @@ let _onAtaqueEvitado = null;
 export function setOnAtaqueEvitado(fn) { _onAtaqueEvitado = fn; }
 
 /** Activa a fase de desvio — chamar quando o turno do jogador começa. */
-export function iniciarFaseDesvio() {
+export function iniciarFaseDesvio(force = false) {
     if (_active) return;
-    if (!isBossMode()) return;
+    if (!isBossMode() && !force) return;
     _active = true;
     _laneIdx = 1;
     _yState = 'ground';

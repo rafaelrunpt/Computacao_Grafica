@@ -1119,77 +1119,118 @@ let _bossFightTriggered = false;
 let _tutorialMode = false;
 let _tutorialDodges = 0;
 
+// ---- Tela de tutorial da emboscada ----
+function _mostrarTutorialDesvio(onClose) {
+    const o = document.createElement('div');
+    o.id = 'tutorial-desvio';
+    o.style.cssText = `
+        position:fixed;inset:0;z-index:500;
+        background:radial-gradient(ellipse at center,rgba(10,6,20,0.92),rgba(0,0,0,0.97));
+        display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+        font-family:'Georgia',serif;color:#f0d080;
+        animation:tutFadeIn 0.4s ease-out;
+    `;
+    o.innerHTML = `
+        <style>@keyframes tutFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}</style>
+        <div style="font-size:22px;font-weight:bold;letter-spacing:6px;text-shadow:0 0 14px #a07020;">⚔ TREINO DE COMBATE ⚔</div>
+        <div style="font-size:13px;color:#c8a96e;letter-spacing:2px;margin-bottom:8px;">Um guardião surge para te testar. Esquiva os seus ataques!</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 28px;background:rgba(0,0,0,0.4);border:1px solid #6a5020;border-radius:8px;padding:18px 28px;font-size:14px;line-height:1.7;">
+            <div><b style="color:#ffe080;">A / D</b> — Mover para esquerda / direita</div>
+            <div><b style="color:#ffe080;">W</b> — Saltar (evita ataques rasantes)</div>
+            <div><b style="color:#ffe080;">S</b> — Agachar (evita ataques de varredura)</div>
+            <div><b style="color:#ffe080;">Muda de lane</b> — evita ataques aéreos e laterais</div>
+        </div>
+        <div style="margin-top:8px;background:rgba(0,0,0,0.4);border:1px solid #6a5020;border-radius:6px;padding:12px 24px;font-size:13px;color:#c8a96e;text-align:center;line-height:1.6;">
+            Esquiva <b style="color:#f0d080;">20 ataques</b> para o guardião ficar vulnerável.<br>
+            Depois ataca uma vez para o derrotar e ganhar <b style="color:#ffe080;">50 Cintilas</b>.
+        </div>
+        <div style="font-size:12px;color:#8a7050;letter-spacing:3px;margin-top:6px;animation:tutFadeIn 1s ease-out infinite alternate;">PRESSIONA QUALQUER TECLA PARA COMEÇAR</div>
+    `;
+    document.body.appendChild(o);
+    const handler = () => {
+        o.style.transition = 'opacity 0.3s';
+        o.style.opacity = '0';
+        setTimeout(() => { o.remove(); onClose(); }, 300);
+        window.removeEventListener('keydown', handler);
+    };
+    setTimeout(() => window.addEventListener('keydown', handler), 300);
+}
+
 export function iniciarEmboscadaTutorial() {
     if (estadoJogo.emCombate || playerStats.derrotado) return;
     if (_bossFightTriggered) return;
-    _bossFightTriggered = true;
-    _tutorialMode = true;
-    _tutorialDodges = 0;
 
-    estadoJogo.emCombate = true;
-    inimigoAtual = { nome: 'GUARDIÃO SPECTRAL', hp: 9999, maxHp: 9999, atk: 0, xpDrop: 0, cintilasDrop: 50, tipo: 'boss' };
-    _setEnfraquecido(false);
-    recuperarTotal();
-    setBossHpFrac(1.0);
-    setBossMode(true);
+    _mostrarTutorialDesvio(() => {
+        _bossFightTriggered = true;
+        _tutorialMode = true;
+        _tutorialDodges = 0;
 
-    setOnAtaqueEvitado(() => {
-        if (!_tutorialMode) return;
-        _tutorialDodges++;
-        if (_tutorialDodges >= 20) {
-            inimigoAtual.hp = 1;
-            inimigoAtual.maxHp = 1;
-            setHpInimigo(1, 1);
-            pararFaseDesvio();
-            setBotoesAtivos(true);
-            setLog('⚔ O Guardião fraquejou! Ataca agora para o finalizar!');
-        } else {
-            setLog(`Desvio! ${_tutorialDodges}/20 ataques evitados.`);
-        }
-    });
+        estadoJogo.emCombate = true;
+        setNivelInimigo(nivelDificuldade());
+        inimigoAtual = escalarStats({ ...inimigoBase, nome: 'GUARDIÃO SPECTRAL', hp: 9999, maxHp: 9999, atk: 0, xpDrop: 0, cintilasDrop: 50 });
+        inimigoAtual.hp = 9999; inimigoAtual.maxHp = 9999;
+        _setEnfraquecido(false);
+        recuperarTotal();
+        setBossHpFrac(1.0);
+        setBossMode(true);
 
-    setOnPlayerDerrotado(() => {
-        setBotoesAtivos(false);
-        setLog('Caíste... O Guardião aguarda a próxima tentativa.');
-        setTimeout(() => {
-            stopMusic(0.3);
-            mostrarTelaDerrotaBoss(
-                () => {
-                    pararFaseDesvio();
-                    recuperarTotal();
-                    playerStats.derrotado = false;
-                    estadoJogo.emCombate = false;
-                    _bossFightTriggered = false;
-                    _tutorialMode = false;
-                    esconderCombateUI();
-                    iniciarEmboscadaTutorial();
-                },
-                () => sairDaArena()
-            );
-        }, 1200);
-    });
-
-    playSFX('transicao_batalha');
-    startGlitch(1.25, () => {
-        switchMusic('batalha', 0.5);
-        entrarCombate(() => {
-            player.rotation.y = Math.PI;
-            resetCooldowns();
-            mostrarCombateUI(inimigoAtual.nome);
-            refreshHpUI();
-            setLog('Um Guardião Spectral surge das sombras! Esquiva 20 ataques para o vencer!');
-            setCombateHandlers({
-                onAtacarSlot: acaoAtacarSlot,
-                onItem:       acaoItem,
-                onFugir:      () => setLog('Não podes fugir do Guardião.'),
-            });
-            atualizarSlotsUI();
-            preencherItens(getItens(), acaoItem);
-            setBotoesAtivos(false);
-            iniciarFaseDesvio();
+        setOnAtaqueEvitado(() => {
+            if (!_tutorialMode) return;
+            _tutorialDodges++;
+            if (_tutorialDodges >= 20) {
+                inimigoAtual.hp = 1; inimigoAtual.maxHp = 1;
+                setHpInimigo(1, 1);
+                pararFaseDesvio();
+                setBotoesAtivos(true);
+                setLog('⚔ O Guardião fraquejou! Ataca para o finalizar!');
+            } else {
+                setLog(`Desvio ${_tutorialDodges}/20 — continua!`);
+            }
         });
+
+        setOnPlayerDerrotado(() => {
+            setBotoesAtivos(false);
+            setLog('Caíste... tenta de novo.');
+            setTimeout(() => {
+                stopMusic(0.3);
+                mostrarTelaDerrotaBoss(
+                    () => {
+                        pararFaseDesvio();
+                        recuperarTotal();
+                        playerStats.derrotado = false;
+                        estadoJogo.emCombate = false;
+                        _bossFightTriggered = false;
+                        _tutorialMode = false;
+                        esconderCombateUI();
+                        iniciarEmboscadaTutorial();
+                    },
+                    () => sairDaArena()
+                );
+            }, 1200);
+        });
+
+        playSFX('transicao_batalha');
+        startGlitch(1.25, () => {
+            switchMusic('batalha', 0.5);
+            entrarCombate(() => {
+                player.rotation.y = Math.PI;
+                resetCooldowns();
+                mostrarCombateUI(inimigoAtual.nome);
+                refreshHpUI();
+                setLog('O Guardião avança! Esquiva os seus ataques!');
+                setCombateHandlers({
+                    onAtacarSlot: acaoAtacarSlot,
+                    onItem:       acaoItem,
+                    onFugir:      () => setLog('Não podes fugir do Guardião.'),
+                });
+                atualizarSlotsUI();
+                preencherItens(getItens(), acaoItem);
+                setBotoesAtivos(false);
+                iniciarFaseDesvio(true);
+            });
+        });
+        setTimeout(() => startGlitch(0.5), 1750);
     });
-    setTimeout(() => startGlitch(0.5), 1750);
 }
 
 export function iniciarBossFight() {
