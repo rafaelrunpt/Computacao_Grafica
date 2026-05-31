@@ -664,14 +664,14 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
                 transform: translate(-30%, -100%);
                 filter: brightness(1.2);
                 margin-top: -60vh;
-                transition: margin-top 500ms cubic-bezier(.2,.8,.3,1);
+                transition: margin-top 1000ms cubic-bezier(.2,.8,.3,1);
             `
         });
 
         // Trigger slide down
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                if (el) el.style.marginTop = '15vh';
+                if (el) el.style.marginTop = '40vh';
             });
         });
         
