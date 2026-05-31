@@ -265,10 +265,6 @@ function renderVideo() {
     r4.appendChild(toggle(settings.showFps, v => setSetting('showFps', v)));
     conteudo.appendChild(r4);
 
-    const r4b = row(); r4b.appendChild(labelLine('Limitar Cadência de Imagens'));
-    r4b.appendChild(select([[60,'60 FPS'],[30,'30 FPS']], settings.maxFps, v => setSetting('maxFps', Number(v))));
-    conteudo.appendChild(r4b);
-
     const r5 = row(); r5.appendChild(labelLine('Modo Depuração VFX (Frame a Frame)'));
     r5.appendChild(toggle(settings.vfxDebug, v => setSetting('vfxDebug', v)));
     conteudo.appendChild(r5);

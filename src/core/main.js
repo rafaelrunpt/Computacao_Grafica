@@ -1568,21 +1568,10 @@ function _updatePlayerSpot() {
 }
 
 let _prevCena = null;
-let _lastFrameTime = performance.now();
 function animate() {
     requestAnimationFrame(animate);
-
-    const now = performance.now();
-    const maxFpsMs = 1000 / (settings.maxFps || 60);
-    const elapsedMs = now - _lastFrameTime;
-
-    clock.getDelta(); // manter relógio sincronizado em todos os frames
-
-    if (elapsedMs < maxFpsMs) return;
-
-    _lastFrameTime = now;
     _frameCount++;
-    const deltaTime = 1 / 60; // física sempre a 60fps independente do FPS de render
+    let deltaTime = clock.getDelta();
     tickFps();
 
     pollGamepad();
