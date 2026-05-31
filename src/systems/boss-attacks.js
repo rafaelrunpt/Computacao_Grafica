@@ -256,7 +256,7 @@ function updateProjectile(pr, deltaTime) {
     // -------- TELEGRAPH / IMPACT (delegado ao VFX) --------
     if (inImpact && !pr.launched) {
         pr.launched = true;
-        if (!_silentMode) tocarSomAtaqueBoss(pr.type);
+        tocarSomAtaqueBoss(pr.type);   // som do ataque, ao lançar o projéctil
         BossVFX.criarProjectil(pr);
     }
 
@@ -280,8 +280,6 @@ function updateProjectile(pr, deltaTime) {
                 pararFaseDesvio();
                 if (_onPlayerDerrotado) _onPlayerDerrotado();
             }
-        } else {
-            if (_onAtaqueEvitado) _onAtaqueEvitado();
         }
     }
 }
@@ -319,24 +317,10 @@ function _flashRed() {
 let _onPlayerDerrotado = null;
 export function setOnPlayerDerrotado(fn) { _onPlayerDerrotado = fn; }
 
-let _onAtaqueEvitado = null;
-export function setOnAtaqueEvitado(fn) { _onAtaqueEvitado = fn; }
-
-let _silentMode = false;
-export function setSilentMode(on) { _silentMode = !!on; }
-
-export function dispararAtaqueImediato() {
-    if (!_active) return;
-    const idx = Math.floor(Math.random() * FACTORIES.length);
-    const pr = FACTORIES[idx]();
-    _projectiles.push(pr);
-    _spawnTimer = SPAWN_MIN + Math.random() * (SPAWN_MAX - SPAWN_MIN);
-}
-
 /** Activa a fase de desvio — chamar quando o turno do jogador começa. */
-export function iniciarFaseDesvio(force = false) {
+export function iniciarFaseDesvio() {
     if (_active) return;
-    if (!isBossMode() && !force) return;
+    if (!isBossMode()) return;
     _active = true;
     _laneIdx = 1;
     _yState = 'ground';
@@ -390,8 +374,8 @@ export function atualizarFaseDesvio(deltaTime) {
         // Passa o tipo exacto para animações elaboradas (salto, slam, sweep, etc)
         const opts = {};
         if (pr.type === 'lateral') opts.side = pr.fromLeft ? -1 : 1;
-        if (!_silentMode) triggerBossAttackAnim(pr.type, pr.teleDur, opts);
-        if (!_silentMode) tocarSomMovimentoBoss(pr.type);
+        triggerBossAttackAnim(pr.type, pr.teleDur, opts);
+        tocarSomMovimentoBoss(pr.type); // Som do movimento físico (preparação)
 
         // Fase 2 (rage mode, abaixo de 25% HP): dispara um segundo projéctil
         // simultaneamente, evitando o par saltar+agachar.

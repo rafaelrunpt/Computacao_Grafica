@@ -4,7 +4,7 @@ import { player, updatePlayerAnimation, setCoroaVisivel, setBrincosVisivel, setO
 import { adicionarItem, registarOnEquipChange, CATALOGO, usarItem, temItem } from '../systems/inventario.js';
 import { ganharCintilas } from '../systems/currency.js';
 import { mostrarRecompensa } from '../ui/popup-recompensa.js';
-import { verificarEncontro, estadoJogo, zonaBatalhaProximoCentro, iniciarCombateEm, iniciarBossFight, iniciarEmboscadaTutorial } from '../systems/combate.js';
+import { verificarEncontro, estadoJogo, zonaBatalhaProximoCentro, iniciarCombateEm, iniciarBossFight } from '../systems/combate.js';
 import { atualizarFaseDesvio } from '../systems/boss-attacks.js';
 import { renderizarMinimapa } from '../world/minimapa.js';
 import '../ui/compass-frame.js'; // instala moldura pixel prateada no #minimap-border
@@ -668,7 +668,6 @@ function animateMundo(deltaTime) {
                                 cintilas: 40,
                             });
                             hidePrompt();
-                            setTimeout(() => iniciarEmboscadaTutorial(), 4000);
                         }
                     }
                 }

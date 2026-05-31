@@ -3,9 +3,9 @@ import { ganharXP, playerStats, receberDano, curar, recuperarTotal, getAtkEfetiv
 import { ganharCintilas } from './currency.js';
 import { entrarCombate, sairCombate, getMundoSnapshot, sairBossParaCastelo } from '../core/transicoes.js';
 import { notificarVitoria as notificarVitoriaQuest } from './merchant-quest.js';
-import { setBossMode, isBossMode, setTipoInimigo, getInimigoActivo, setBandidoVisivel } from '../world/combate-scene.js';
+import { setBossMode, isBossMode, setTipoInimigo, getInimigoActivo } from '../world/combate-scene.js';
 import { getBossRoot } from '../entities/boss.js';
-import { iniciarFaseDesvio, pararFaseDesvio, atualizarFaseDesvio, isFaseDesvioActiva, setOnPlayerDerrotado, setBossHpFrac, setOnAtaqueEvitado, setSilentMode, dispararAtaqueImediato } from './boss-attacks.js';
+import { iniciarFaseDesvio, pararFaseDesvio, atualizarFaseDesvio, isFaseDesvioActiva, setOnPlayerDerrotado, setBossHpFrac } from './boss-attacks.js';
 import { settings } from './settings.js';
 
 // quando o player morre durante a fase de desvio, encerrar o combate
@@ -531,7 +531,7 @@ function acaoFugir() {
 
 function _devolverTurnoAoPlayer() {
     _tickItemCooldowns();
-    if (!_tutorialMode || _tutorialDodges >= 20) setBotoesAtivos(true);
+    setBotoesAtivos(true);
     _atualizarPresagio();
     if (isBossMode() && !playerStats.derrotado && inimigoAtual.hp > 0) {
         iniciarFaseDesvio();
@@ -925,8 +925,9 @@ function finalizarVitoria() {
     // as runas/olhos. No combate normal usamos o fade de opacidade do wraith.
     let f = 1;
     if (boss) {
+        // pára a música do boss e toca a fanfarra de vitória
         stopMusic(0.6);
-        if (!_tutorialMode) tocarFanfarraVitoria();
+        tocarFanfarraVitoria();
         const root = getBossRoot();
         const fadeId = setInterval(() => {
             f -= 0.05;
@@ -935,17 +936,10 @@ function finalizarVitoria() {
                 clearInterval(fadeId);
                 ganharXP(inimigoAtual.xpDrop);
                 if (cintilasGanhas > 0) ganharCintilas(cintilasGanhas);
-                if (_tutorialMode) {
-                    _tutorialMode = false;
-                    _tutorialDodges = 0;
-                    setOnAtaqueEvitado(null);
-                    setBandidoVisivel(false);
-                    setSilentMode(false);
-                    setLog(`Bandido derrotado! +${cintilasGanhas} cintilas.`);
-                    setTimeout(() => sairDaArena(), 800);
-                } else {
-                    setTimeout(() => mostrarEcraVitoriaFinal(), 500);
-                }
+                setTimeout(() => {
+                    mostrarEcraVitoriaFinal();
+                    // mantém-se na cena de combate em fundo escuro com o overlay
+                }, 500);
             }
         }, 60);
         return;
@@ -1036,19 +1030,13 @@ function sairDaArena() {
         setBossMode(false);
         const root = getBossRoot();
         if (root) root.scale.setScalar(1);
-        _bossFightTriggered = false;
+        _bossFightTriggered = false; // permite re-tentar
+        // cura o jogador para a próxima tentativa
         recuperarTotal();
         playerStats.derrotado = false;
-        if (_tutorialMode) {
-            _tutorialMode = false;
-            _tutorialDodges = 0;
-            setOnAtaqueEvitado(null);
-            setBandidoVisivel(false);
-            setSilentMode(false);
-            sairCombate(() => switchMusic(player.position.z < -3 ? 'dark' : 'mundo', 1.5));
-            return;
-        }
-        sairBossParaCastelo(() => { switchMusic('castle', 1.5); });
+        sairBossParaCastelo(() => {
+            switchMusic('castle', 1.5);
+        });
         return;
     }
     sairCombate(() => {
@@ -1120,146 +1108,6 @@ const BOSS_DEFS = {
     cintilasDrop: 250,
 };
 let _bossFightTriggered = false;
-let _tutorialMode = false;
-let _tutorialDodges = 0;
-
-function _keyBtn(k, desc) {
-    return `<div style="display:flex;align-items:center;gap:10px;">
-        <span style="display:inline-flex;align-items:center;justify-content:center;
-            width:32px;height:32px;background:#1a1208;border:2px solid #c8a96e;
-            border-radius:5px;border-bottom-width:4px;font-weight:bold;
-            font-size:15px;color:#f0d080;font-family:'Courier New',monospace;">${k}</span>
-        <span style="color:#c8a96e;font-size:13px;">${desc}</span>
-    </div>`;
-}
-
-function _mostrarTutorialDesvio(onClose) {
-    const o = document.createElement('div');
-    o.id = 'tutorial-desvio';
-    o.style.cssText = `
-        position:fixed;inset:0;z-index:500;
-        display:flex;align-items:center;justify-content:center;
-        pointer-events:auto;
-    `;
-    o.innerHTML = `
-        <div style="
-            background:linear-gradient(160deg,rgba(12,8,4,0.96),rgba(6,4,2,0.98));
-            border:2px solid #c8a050;border-radius:10px;
-            box-shadow:0 0 40px rgba(0,0,0,0.9),inset 0 0 20px rgba(0,0,0,0.5);
-            padding:28px 36px;max-width:420px;width:90%;
-            display:flex;flex-direction:column;gap:14px;
-            font-family:'Georgia',serif;color:#f0d080;
-            animation:tutPop .3s cubic-bezier(.2,1.4,.3,1);
-        ">
-            <style>@keyframes tutPop{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}</style>
-            <div style="text-align:center;font-size:17px;font-weight:bold;letter-spacing:5px;text-shadow:0 0 10px #a07020;">⚔ DESVIO DE ATAQUES ⚔</div>
-            <div style="height:1px;background:linear-gradient(90deg,transparent,#c8a050,transparent);"></div>
-            <div style="display:flex;flex-direction:column;gap:10px;">
-                ${_keyBtn('A','Mover para a lane esquerda')}
-                ${_keyBtn('D','Mover para a lane direita')}
-                ${_keyBtn('W','Saltar — evita ataques rasantes')}
-                ${_keyBtn('S','Agachar — evita ataques de varredura')}
-            </div>
-            <div style="height:1px;background:linear-gradient(90deg,transparent,#6a5020,transparent);"></div>
-            <div style="font-size:12px;color:#a08050;text-align:center;line-height:1.6;">
-                Esquiva <b style="color:#f0d080;">20 ataques</b> para o bandido ficar vulnerável.<br>
-                Um único golpe o derrota e ganhas <b style="color:#ffe080;">50 Cintilas</b>.
-            </div>
-            <div style="font-size:11px;color:#6a5030;text-align:center;letter-spacing:3px;margin-top:4px;">
-                PRESSIONA QUALQUER TECLA
-            </div>
-        </div>
-    `;
-    document.body.appendChild(o);
-    const handler = (e) => {
-        window.removeEventListener('keydown', handler);
-        o.style.transition = 'opacity 0.2s';
-        o.style.opacity = '0';
-        setTimeout(() => { o.remove(); onClose(); }, 200);
-    };
-    setTimeout(() => window.addEventListener('keydown', handler), 400);
-}
-
-export function iniciarEmboscadaTutorial() {
-    if (estadoJogo.emCombate || playerStats.derrotado) return;
-    if (_bossFightTriggered) return;
-    _bossFightTriggered = true;
-    _tutorialMode = true;
-    _tutorialDodges = 0;
-
-    estadoJogo.emCombate = true;
-    inimigoAtual = { nome: 'BANDIDO', hp: 9999, maxHp: 9999, atk: 0, xpDrop: 0, cintilasDrop: 50, tipo: 'wraith' };
-    _setEnfraquecido(false);
-    recuperarTotal();
-    setBossHpFrac(1.0);
-    setBossMode(false);
-    setTipoInimigo('wraith');
-    setSilentMode(true);
-
-    setOnAtaqueEvitado(() => {
-        if (!_tutorialMode) return;
-        _tutorialDodges++;
-        if (_tutorialDodges >= 20) {
-            inimigoAtual.hp = 1; inimigoAtual.maxHp = 1;
-            setHpInimigo(1, 1);
-            pararFaseDesvio();
-            setBotoesAtivos(true);
-            setLog('⚔ O Bandido fraquejou! Ataca para o finalizar!');
-        } else {
-            setLog(`Desvio ${_tutorialDodges}/20 — continua!`);
-        }
-    });
-
-    setOnPlayerDerrotado(() => {
-        setBotoesAtivos(false);
-        setLog('Caíste... tenta de novo.');
-        setTimeout(() => {
-            stopMusic(0.3);
-            mostrarTelaDerrotaBoss(
-                () => {
-                    pararFaseDesvio();
-                    recuperarTotal();
-                    playerStats.derrotado = false;
-                    estadoJogo.emCombate = false;
-                    _bossFightTriggered = false;
-                    _tutorialMode = false;
-                    setBandidoVisivel(false);
-                    setSilentMode(false);
-                    esconderCombateUI();
-                    iniciarEmboscadaTutorial();
-                },
-                () => sairDaArena()
-            );
-        }, 1200);
-    });
-
-    playSFX('transicao_batalha');
-    startGlitch(1.25, () => {
-        switchMusic('batalha', 0.5);
-        entrarCombate(() => {
-            setBandidoVisivel(true);
-            resetCooldowns();
-            mostrarCombateUI('BANDIDO');
-            refreshHpUI();
-            setCombateHandlers({
-                onAtacarSlot: acaoAtacarSlot,
-                onItem:       acaoItem,
-                onFugir:      () => setLog('Não podes fugir do Bandido.'),
-            });
-            atualizarSlotsUI();
-            preencherItens(getItens(), acaoItem);
-            setBotoesAtivos(false);
-
-            // mostra popup de tutorial sobre a arena já carregada
-            _mostrarTutorialDesvio(() => {
-                iniciarFaseDesvio(true);
-                setTimeout(() => dispararAtaqueImediato(), 100);
-                setLog('O Bandido ataca! Esquiva-te!');
-            });
-        });
-    });
-    setTimeout(() => startGlitch(0.5), 1750);
-}
 
 export function iniciarBossFight() {
     if (estadoJogo.emCombate || playerStats.derrotado) return;
