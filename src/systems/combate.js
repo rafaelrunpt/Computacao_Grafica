@@ -860,9 +860,9 @@ function turnoInimigo() {
                 
                 const posBase = toPos;
                 const offsets = [
-                    { dx: 0, dy: 5, size: 45 },
-                    { dx: -12, dy: 8, size: 35 },
-                    { dx: 12, dy: 8, size: 35 }
+                    { dx: 0, dy: 5, size: 22 },
+                    { dx: -12, dy: 8, size: 17 },
+                    { dx: 12, dy: 8, size: 17 }
                 ];
 
                 offsets.forEach(off => {

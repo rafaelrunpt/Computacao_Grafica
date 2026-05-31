@@ -651,15 +651,17 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
         // Em BossMode, o chão está numa posição ligeiramente diferente.
         // A âncora 'ai.y' aponta ao centro/peito do inimigo. Vamos somar
         // uma percentagem de viewport para alinhar a base do sprite com o "chão".
-        const yBase = ai.y + (isBossMode() ? 8 : 12);
+        const yBase = ai.y + (isBossMode() ? 58 : 62);
 
         const el = playSpriteFX({
             url: 'assets/vfx/player/heavy.png',
-            cols: 4, rows: 2, frames: 5,
+            cols: 4, rows: 2,
             fps: 15,
+            // frames 0-4 normais, depois frame 4 repetido 15x = 1 segundo
+            frameOrder: [0, 1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
             x: ai.x, y: yBase, size: 50,
             extraCss: `
-                mix-blend-mode: screen; 
+                mix-blend-mode: screen;
                 transform-origin: bottom center;
                 transform: translate(-45%, -100%);
                 filter: brightness(1.2);
