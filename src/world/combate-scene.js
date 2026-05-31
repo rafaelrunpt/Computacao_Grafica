@@ -241,6 +241,48 @@ combateNucleo.position.copy(posInimigoCombate);
 combateNucleo.visible = false;
 combateScene.add(combateNucleo);
 
+// ---- Bandido (inimigo tutorial) — humanóide simples sem cabelo ----
+function _criarBandido() {
+    const g = new THREE.Group();
+    const skin = new THREE.MeshStandardMaterial({ color: 0xc8845a, roughness: 0.8 });
+    const cloth = new THREE.MeshStandardMaterial({ color: 0x2a1e12, roughness: 0.9 });
+    const dark  = new THREE.MeshStandardMaterial({ color: 0x1a1010, roughness: 0.9 });
+    // cabeça (careca)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 10), skin);
+    head.position.set(0, 1.62, 0);
+    // tronco
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.52, 0.22), cloth);
+    torso.position.set(0, 1.08, 0);
+    // braço esq
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.44, 0.12), cloth);
+    armL.position.set(-0.26, 1.06, 0);
+    // braço dir
+    const armR = armL.clone();
+    armR.position.set(0.26, 1.06, 0);
+    // perna esq
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.46, 0.14), dark);
+    legL.position.set(-0.12, 0.56, 0);
+    // perna dir
+    const legR = legL.clone();
+    legR.position.set(0.12, 0.56, 0);
+    g.add(head, torso, armL, armR, legL, legR);
+    return g;
+}
+const _bandido = _criarBandido();
+_bandido.position.copy(_posInimigoNormal);
+_bandido.rotation.y = Math.PI;
+_bandido.visible = false;
+combateScene.add(_bandido);
+
+export function setBandidoVisivel(on) {
+    _bandido.visible = !!on;
+    if (on) {
+        combateInimigo.visible = false;
+        combateNucleo.visible = false;
+    }
+}
+export function getBandido() { return _bandido; }
+
 // Tipo de inimigo activo em combate normal (não-boss): 'wraith' | 'nucleo'
 let _tipoInimigo = 'wraith';
 export function setTipoInimigo(tipo) {
