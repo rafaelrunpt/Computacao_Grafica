@@ -105,6 +105,29 @@ export function getActiveWorldCamera(target = null) {
     return worldOrthoCamera;
 }
 
+// ----------------------------------------------------------------------
+// CÂMARA ORTOGRÁFICA DE COMBATE — espelha a câmara de combate activa
+// (normal ou boss) e aplica projeção ortográfica. As câmaras de combate já
+// estão em ângulos cinematográficos fixos, por isso basta copiar a sua
+// transformação e enquadrar a arena. `viewSize` controla o zoom.
+// ----------------------------------------------------------------------
+export const combatOrthoCamera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 200);
+
+export function getActiveCombatCamera(perspCam, viewSize = 5) {
+    if (_camMode === 0) return perspCam;
+    const aspect = window.innerWidth / window.innerHeight;
+    combatOrthoCamera.left   = -viewSize * aspect;
+    combatOrthoCamera.right  =  viewSize * aspect;
+    combatOrthoCamera.top    =  viewSize;
+    combatOrthoCamera.bottom = -viewSize;
+    combatOrthoCamera.near   = perspCam.near;
+    combatOrthoCamera.far    = perspCam.far;
+    combatOrthoCamera.position.copy(perspCam.position);
+    combatOrthoCamera.quaternion.copy(perspCam.quaternion);
+    combatOrthoCamera.updateProjectionMatrix();
+    return combatOrthoCamera;
+}
+
 export const lojaCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
 export const caseloCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 200);
 export const tavernCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);

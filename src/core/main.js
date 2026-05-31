@@ -23,7 +23,7 @@ import { curar } from '../systems/player-stats.js';
 import { todasZonasLimpas } from '../world/mapa.js';
 import { combateScene, updateCombateScene } from '../world/combate-scene.js';
 import { skybox, starMat } from '../world/sky.js';
-import { renderer, mainCamera, lojaCamera, caseloCamera, tavernCamera, quartoCamera, combateCamera, combateBossCamera, getActiveWorldCamera, setCameraMode, isOrthoMode } from './renderer.js';
+import { renderer, mainCamera, lojaCamera, caseloCamera, tavernCamera, quartoCamera, combateCamera, combateBossCamera, getActiveWorldCamera, getActiveCombatCamera, setCameraMode, isOrthoMode } from './renderer.js';
 import { isBossMode, precarregarBoss } from '../world/combate-scene.js';
 import { keys, registarCallbackInput } from './input.js';
 import { pollGamepad, registarCallbacksGamepad } from './gamepad.js';
@@ -322,19 +322,26 @@ function _toast(msg) {
 }
 
 window.addEventListener('keydown', (e) => {
-    // Só fora de menus/combate, na exploração do mundo.
-    if (estadoJogo.emCombate || isInventarioAberto() || isPauseAberto() || isDialogoAberto()) return;
+    // Não actua com menus abertos.
+    if (isInventarioAberto() || isPauseAberto() || isDialogoAberto()) return;
     if (e.repeat) return;
     const k = e.key.toLowerCase();
+    // Toggles de câmara (C/Z) funcionam também durante o combate.
     if (k === 'c') {
         const m = setCameraMode(1);
-        setMontanhasVisiveis(!isOrthoMode());
+        setMontanhasVisiveis(!isOrthoMode()); // só relevante no mundo
         _toast(m === 1 ? 'Câmara: Ortográfica (topo)' : 'Câmara: Perspetiva');
-    } else if (k === 'z') {
+        return;
+    }
+    if (k === 'z') {
         const m = setCameraMode(2);
         setMontanhasVisiveis(!isOrthoMode());
         _toast(m === 2 ? 'Câmara: Ortográfica (ângulo)' : 'Câmara: Perspetiva');
-    } else if (k === '1') {
+        return;
+    }
+    // Toggles de luz só fora de combate (afectam as luzes do mundo).
+    if (estadoJogo.emCombate) return;
+    if (k === '1') {
         ambientLight.visible = !ambientLight.visible;
         _toast(`Luz Ambiente: ${ambientLight.visible ? 'Ligada' : 'Desligada'}`);
     } else if (k === '2') {
@@ -1615,7 +1622,12 @@ function animateCombate(deltaTime) {
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
     const camCombate = isBossMode() ? combateBossCamera : combateCamera;
-    renderer.render(combateScene, moderator.freeCam ? mainCamera : camCombate);
+    // Suporte a câmara ortográfica no combate (teclas C/Z). A arena do boss
+    // é maior, por isso usa um enquadramento ortográfico mais amplo.
+    const camFinal = moderator.freeCam
+        ? mainCamera
+        : getActiveCombatCamera(camCombate, isBossMode() ? 7 : 5);
+    renderer.render(combateScene, camFinal);
 }
 
 function animateBossDebug(deltaTime) {
