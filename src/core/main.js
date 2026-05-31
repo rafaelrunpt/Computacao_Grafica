@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { criarMapa, verificaColisao, shopDoorInteract, bruxaInteractBox, updateBruxaMapa, castleEnterBox, tavernEnterBox, guardianInteractBox, removerGuardiao, updateGuardiao, isGuardiaoPassagemConcedida, matWater, matBattleGrass, matBattleSky, matCorruptHalo, matContTrunk, matContLeaves, matContRock, zonasSulLimpas, isShopDesbloqueada, resetZonasBatalha, getBridgeHeight, getBauInteractBox, abrirBau, bauJaAberto, updateBau, bauJaColetado, coletarBau, getBauMascaraInteractBox, abrirBauMascara, bauMascaraJaAberto, updateBauMascara, bauMascaraJaColetado, coletarBauMascara, fadeables, cullables, worldParticles, updateZoneParticles, getSantuarios, ativarSantuario, updateSantuarios, updateCogumelos, updateVegetacao } from '../world/mapa.js';
+import { criarMapa, verificaColisao, shopDoorInteract, bruxaInteractBox, updateBruxaMapa, castleEnterBox, tavernEnterBox, guardianInteractBox, removerGuardiao, updateGuardiao, isGuardiaoPassagemConcedida, matWater, matBattleGrass, matBattleSky, matCorruptHalo, matContTrunk, matContLeaves, matContRock, zonasSulLimpas, isShopDesbloqueada, resetZonasBatalha, getBridgeHeight, getBauInteractBox, abrirBau, bauJaAberto, updateBau, bauJaColetado, coletarBau, getBauMascaraInteractBox, abrirBauMascara, bauMascaraJaAberto, updateBauMascara, bauMascaraJaColetado, coletarBauMascara, fadeables, cullables, worldParticles, updateZoneParticles, getSantuarios, ativarSantuario, updateSantuarios, updateCogumelos, updateVegetacao, setMontanhasVisiveis } from '../world/mapa.js';
 import { player, updatePlayerAnimation, setCoroaVisivel, setBrincosVisivel, setOculosVisivel, setAureolaVisivel, setMascaraVisivel, setTochaVisivel, updateCoroaAnimacao } from '../entities/jogador.js';
 import { adicionarItem, registarOnEquipChange, CATALOGO, usarItem, temItem } from '../systems/inventario.js';
 import { ganharCintilas } from '../systems/currency.js';
@@ -328,9 +328,11 @@ window.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     if (k === 'c') {
         const m = setCameraMode(1);
+        setMontanhasVisiveis(!isOrthoMode());
         _toast(m === 1 ? 'Câmara: Ortográfica (topo)' : 'Câmara: Perspetiva');
     } else if (k === 'z') {
         const m = setCameraMode(2);
+        setMontanhasVisiveis(!isOrthoMode());
         _toast(m === 2 ? 'Câmara: Ortográfica (ângulo)' : 'Câmara: Perspetiva');
     } else if (k === '1') {
         ambientLight.visible = !ambientLight.visible;

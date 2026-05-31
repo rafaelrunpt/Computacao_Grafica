@@ -1017,11 +1017,20 @@ function criarMontanhas(scene) {
     const meshM = new THREE.Mesh(mergedM, matMountain);
     meshM.receiveShadow = true; // Montanhas de perímetro não precisam de castShadow
     scene.add(meshM);
+    montanhasMeshes.push(meshM);
 
     const mergedS = BufferGeometryUtils.mergeGeometries(snowGeos);
     const meshS = new THREE.Mesh(mergedS, matSnow);
     meshS.receiveShadow = true;
     scene.add(meshS);
+    montanhasMeshes.push(meshS);
+}
+
+// Montanhas de perímetro — referências para poder escondê-las (modo
+// ortográfico, onde aparecem/desaparecem na borda e causam lag).
+export const montanhasMeshes = [];
+export function setMontanhasVisiveis(v) {
+    for (const m of montanhasMeshes) m.visible = v;
 }
 
 const SHOP_CX = -30, SHOP_CZ = 25;
