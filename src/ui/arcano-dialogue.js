@@ -98,6 +98,7 @@
     display: flex; align-items: center; justify-content: center;
     position: relative; overflow: hidden;
     background-size: cover; background-position: center;
+    image-rendering: pixelated;
   }
   .arc-portrait::after {
     content: ''; position: absolute; inset: 0;
@@ -577,7 +578,7 @@
         const btn = el('button', 'arc-choice');
         btn.innerHTML =
           '<span class="arc-choice-arrow">▸</span><span style="flex:1">' +
-          c.label.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span>' +
+          c.label + '</span>' +
           (i < 9 ? '<span style="opacity:.4;font-size:11px">' + (i + 1) + '</span>' : '');
         btn.addEventListener('click', (e) => {
           e.stopPropagation();

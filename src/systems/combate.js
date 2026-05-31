@@ -15,7 +15,7 @@ setOnPlayerDerrotado(() => {
     setTimeout(() => sairDaArena(), 1200);
 });
 import { getItens, usarItem, adicionarItem, CATALOGO, quantidade as qtdItem } from './inventario.js';
-import { playSFX, switchMusic, stopMusic, tocarFanfarraVitoria, tocarSomAtaquePlayer, tocarSomAtaqueInimigo } from './audio.js';
+import { playSFX, switchMusic, stopMusic, tocarFanfarraVitoria, tocarSomAtaquePlayer, tocarSomAtaqueInimigo, tocarSomSpikeBoss, tocarSomShockBoss } from './audio.js';
 import { mostrarRecompensa } from '../ui/popup-recompensa.js';
 import { player, setEspadaMaoVisivel } from '../entities/jogador.js';
 import {
@@ -25,7 +25,7 @@ import {
 } from '../ui/combate-ui.js';
 import {
     getSlotAtaque, getCooldownSlot, podeUsarSlot,
-    aplicarCooldown, tickCooldowns, resetCooldowns, resolverAtaque,
+    aplicarCooldown, tickCooldowns, resetCooldowns, resolverAtaque, getAfinidade,
 } from './ataques.js';
 import { lancarAnimacaoAtaque, lancarEfeitoBuff, dispararProjetilSprite, playFramesFX, playSpriteFX } from '../ui/combate-anims.js';
 import { animarAtaqueWraith } from '../entities/inimigo-wraith.js';
@@ -171,10 +171,11 @@ export function iniciarCombateEm(x, z, tipo = 'wraith') {
 // aumentados (mais HP, mais drops) já que é o único inimigo dessas zonas.
 const inimigoBase = {
     nome: 'SHACO CORROMPIDO',
-    hp: 48, maxHp: 48,
+    hp: 46, maxHp: 46,
     atk: 5,
     xpDrop: 45,
-    cintilasDrop: 24,
+    cintilasDrop: 30,
+    tipo: 'wraith',
 };
 // Inimigo fraco (Núcleo Corrompido) — manifesta-se nas terras a sul, junto à loja.
 // Drops e vida reduzidos para servir de "treino" no início.
@@ -183,7 +184,8 @@ const nucleoBase = {
     hp: 18, maxHp: 18,
     atk: 3,
     xpDrop: 40,
-    cintilasDrop: 12,
+    cintilasDrop: 16,
+    tipo: 'nucleo',
 };
 let inimigoAtual = { ...inimigoBase };
 let _tipoEncontro = 'wraith';
@@ -371,6 +373,14 @@ function acaoAtacarSlot(idx) {
     // jogador executa o seu ataque (assim os projécteis não dão pausa).
 
     const resultado = resolverAtaque(idx, getAtkEfetivo());
+    // Afinidade elemental: certos ataques são fortes/fracos contra cada inimigo.
+    const tipoAlvo = isBossMode() ? 'boss' : _tipoEncontro;
+    const afinidade = getAfinidade(at.elemento, tipoAlvo);
+    let afinidadeLabel = '';
+    if (resultado && !resultado.falhou && afinidade !== 1) {
+        resultado.totalDano = Math.max(1, Math.round(resultado.totalDano * afinidade));
+        afinidadeLabel = afinidade > 1 ? ' ⚡ Eficaz!' : ' 🛡 Resistente.';
+    }
     // Sopro Corrompido: o próximo golpe do jogador sai enfraquecido (−30%).
     if (_playerEnfraquecido && resultado && !resultado.falhou) {
         resultado.totalDano = Math.max(1, Math.round(resultado.totalDano * 0.7));
@@ -397,11 +407,12 @@ function acaoAtacarSlot(idx) {
         }
         inimigoAtual.hp = Math.max(0, inimigoAtual.hp - parcial);
         const ai = _ancoraCombatente('inimigo');
-        mostrarDanoFlutuante(ai.x, ai.y, `-${parcial}`, '#ffe070');
+        const corDano = afinidade > 1 ? '#8effa0' : (afinidade < 1 ? '#ffe070' : '#ffe070');
+        mostrarDanoFlutuante(ai.x, ai.y, `-${parcial}`, corDano);
         if (resultado.hitsTotais > 1) {
-            setLog(`${at.nome}! ${resultado.hitsAcertos}/${resultado.hitsTotais} acertos — ${danoTotal} dano.`);
+            setLog(`${at.nome}! ${resultado.hitsAcertos}/${resultado.hitsTotais} acertos — ${danoTotal} dano.${afinidadeLabel}`);
         } else {
-            setLog(`${at.nome}! ${danoTotal} de dano.`);
+            setLog(`${at.nome}! ${danoTotal} de dano.${afinidadeLabel}`);
         }
         refreshHpUI();
         // Notifica a fase de desvio do novo HP — projécteis aceleram e
@@ -412,15 +423,17 @@ function acaoAtacarSlot(idx) {
     };
 
     tocarSomAtaquePlayer(at.id);
+    const danoBaseHit = Math.floor(danoTotal / Math.max(1, resultado.hitsTotais));
     lancarAnimacaoAtaque(at, resultado.falhou, {
         onImpacto1: () => {
             if (resultado.hitsTotais > 1) {
-                aplicarImpacto(danoPorHit);
+                aplicarImpacto(danoBaseHit);
             } else {
                 aplicarImpacto(danoTotal);
             }
         },
-        onImpacto2: resultado.hitsTotais > 1 ? () => aplicarImpacto(danoTotal - danoPorHit) : null,
+        onImpacto2: resultado.hitsTotais > 1 ? () => aplicarImpacto(resultado.hitsTotais > 2 ? danoBaseHit : danoTotal - danoBaseHit) : null,
+        onImpacto3: resultado.hitsTotais > 2 ? () => aplicarImpacto(danoTotal - (danoBaseHit * 2)) : null,
     });
 
     bloquearTurno(animDur + 100, vaiVencer ? finalizarVitoria : turnoInimigo);
@@ -671,7 +684,7 @@ function turnoInimigo() {
         const toPos = { x: (_v.x * 0.5 + 0.5) * 100, y: (-_v.y * 0.5 + 0.5) * 100 };
 
         if (at.nome === 'Praga Rúnica') {
-            // Praga Rúnica: Sinalizador (Múltiplas Runas em Órbita) -> Névoa -> Debuff
+            // Praga Rúnica: Ritual (Órbita) -> Névoa -> Debuff
             const signalDur = 1200;
             const fogDur    = (24 / 12) * 1000;
 
@@ -685,72 +698,55 @@ function turnoInimigo() {
             // Container para a órbita
             const container = document.createElement('div');
             container.style.cssText = `
-                position: fixed;
-                left: ${toPos.x}vw; top: ${toPos.y}vh;
-                width: 1px; height: 1px;
-                pointer-events: none; z-index: 243;
+                position: fixed; left: ${toPos.x}vw; top: ${toPos.y}vh;
+                width: 1px; height: 1px; pointer-events: none; z-index: 243;
                 display: flex; align-items: center; justify-content: center;
                 transition: opacity 300ms, transform ${signalDur}ms cubic-bezier(0.4, 0, 0.2, 1);
                 opacity: 0;
             `;
 
-            // Adicionar 6 runas pequenas em círculo
             const numRunes = 6;
-            const radius = 10; // vh
+            const radius = 10;
             for (let i = 0; i < numRunes; i++) {
                 const r = document.createElement('img');
                 r.src = 'assets/vfx/nucleo_ataques/rune.png';
                 const angle = (i / numRunes) * Math.PI * 2;
                 const lx = Math.cos(angle) * radius;
                 const ly = Math.sin(angle) * radius;
-                
-                // Intercalar cores: Roxo (original/png) vs Azul
                 const isPurple = (i % 2 === 0);
                 const filter = isPurple 
-                    ? 'drop-shadow(0 0 8px rgba(180,80,255,0.9)) hue-rotate(280deg)' // Roxo
-                    : 'drop-shadow(0 0 8px rgba(60,180,255,0.9)) hue-rotate(180deg)';  // Azul
+                    ? 'drop-shadow(0 0 8px rgba(180,80,255,0.9)) hue-rotate(280deg)'
+                    : 'drop-shadow(0 0 8px rgba(60,180,255,0.9)) hue-rotate(180deg)';
                 
                 r.style.cssText = `
-                    position: absolute;
-                    width: 5vh; height: 5vh;
+                    position: absolute; width: 5vh; height: 5vh;
                     left: calc(50% + ${lx}vh); top: calc(50% + ${ly}vh);
-                    transform: translate(-50%, -50%);
-                    filter: ${filter};
+                    transform: translate(-50%, -50%); filter: ${filter};
                 `;
                 container.appendChild(r);
             }
-
             document.body.appendChild(container);
 
-            // Injetar animação de rotação se não existir
             if (!document.getElementById('anim-runa-orbita')) {
                 const style = document.createElement('style');
                 style.id = 'anim-runa-orbita';
-                style.textContent = `
-                    @keyframes orbitaRuna {
-                        from { transform: rotate(0deg) scale(0.8); }
-                        to { transform: rotate(360deg) scale(1.2); }
-                    }
-                `;
+                style.textContent = `@keyframes orbitaRuna { from { transform: rotate(0deg) scale(0.8); } to { transform: rotate(360deg) scale(1.2); } }`;
                 document.head.appendChild(style);
             }
 
-            // Iniciar animação
             container.style.opacity = '1';
             container.style.animation = `orbitaRuna ${signalDur}ms infinite linear`;
 
             setTimeout(() => {
-                // Desvanecer órbita e disparar névoa
+                // 2. Névoa
                 container.style.opacity = '0';
                 container.style.transform = 'scale(2.0)';
                 setTimeout(() => container.remove(), 300);
 
-                // 2. Áudio Explosão
                 const explAudio = new Audio('assets/sounds/Attacks/nucleo/explosion.mp3');
                 explAudio.volume = 0.7;
                 explAudio.play().catch(() => {});
 
-                // 2. Névoa direta no player
                 playSpriteFX({
                     url: 'assets/vfx/nucleo_ataques/nevoa_debuff.png',
                     cols: 6, rows: 4, frames: 24, fps: 12,
@@ -758,43 +754,26 @@ function turnoInimigo() {
                     extraCss: 'mix-blend-mode: screen; filter: brightness(1.5) contrast(1.2); opacity: 0.9;',
                 });
 
-                // 3. Setas de Enfraquecimento (após o início da névoa)
                 setTimeout(() => {
-                    // Áudio Debuff
+                    // 3. Debuff (Setas)
                     const debuffAudio = new Audio('assets/sounds/Attacks/nucleo/defuff.mp3');
                     debuffAudio.volume = 0.6;
                     debuffAudio.play().catch(() => {});
 
                     const arrowContainer = document.createElement('div');
-                    arrowContainer.style.cssText = `
-                        position: fixed; left: ${toPos.x}vw; top: ${toPos.y}vh;
-                        width: 1px; height: 1px; pointer-events: none; z-index: 245;
-                    `;
-                    
+                    arrowContainer.style.cssText = `position: fixed; left: ${toPos.x}vw; top: ${toPos.y}vh; width: 1px; height: 1px; pointer-events: none; z-index: 245;`;
                     for (let i = 0; i < 3; i++) {
                         const arrow = document.createElement('img');
                         arrow.src = 'assets/vfx/nucleo_ataques/arrrow.png';
-                        const offsetX = (i - 1) * 5; // espalhar horizontalmente
-                        
-                        arrow.style.cssText = `
-                            position: absolute; width: 4vh; height: auto;
-                            left: ${offsetX}vh; top: -12vh;
-                            opacity: 0; transform: translate(-50%, -50%) rotate(90deg);
-                            filter: hue-rotate(300deg) brightness(1.5) drop-shadow(0 0 8px #0088ff);
-                            transition: transform 600ms ease-in, opacity 300ms;
-                        `;
+                        const offsetX = (i - 1) * 5;
+                        arrow.style.cssText = `position: absolute; width: 4vh; height: auto; left: ${offsetX}vh; top: -12vh; opacity: 0; transform: translate(-50%, -50%) rotate(90deg); filter: hue-rotate(300deg) brightness(1.5) drop-shadow(0 0 8px #0088ff); transition: transform 600ms ease-in, opacity 300ms;`;
                         arrowContainer.appendChild(arrow);
-                        
-                        // Gatilho imediato (todas ao mesmo tempo)
-                        requestAnimationFrame(() => {
-                            setTimeout(() => {
-                                arrow.style.opacity = '1';
-                                arrow.style.transform = `translate(-50%, 5vh) rotate(90deg)`;
-                                setTimeout(() => { arrow.style.opacity = '0'; }, 400);
-                            }, 50);
-                        });
+                        requestAnimationFrame(() => setTimeout(() => {
+                            arrow.style.opacity = '1';
+                            arrow.style.transform = `translate(-50%, 5vh) rotate(90deg)`;
+                            setTimeout(() => { arrow.style.opacity = '0'; }, 400);
+                        }, 50));
                     }
-                    
                     document.body.appendChild(arrowContainer);
                     setTimeout(() => arrowContainer.remove(), 1500);
                 }, 1000);
@@ -805,15 +784,12 @@ function turnoInimigo() {
             bloquearTurno(signalDur + fogDur + 400, () => {});
         }
         else if (at.nome === 'Lascas do Vazio') {
-            // Lascas do Vazio: Projétil clássico com som de choque
+            // Lascas do Vazio: Projétil clássico
             const from = _ancoraCombatente('inimigo');
             const flightMs = 700;
 
             animarAtaqueNucleo(getInimigoActivo(), 'lascas', flightMs + 200);
-
-            const shockAudio = new Audio('assets/sounds/Attacks/shock.mp3');
-            shockAudio.volume = 0.3;
-            shockAudio.play().catch(() => {});
+            tocarSomShockBoss(); // Som do disparo
 
             const flash = document.createElement('div');
             flash.style.cssText = `
@@ -844,8 +820,10 @@ function turnoInimigo() {
             const dur = 1300;
             animarAtaqueNucleo(getInimigoActivo(), 'esmagamento', dur);
 
-            // Flash de ecrã a meio do slam
+            // Flash de ecrã e Impacto sincronizado com o slam (900ms)
             setTimeout(() => {
+                tocarSomSpikeBoss(); // Som dos picos
+
                 const flash = document.createElement('div');
                 flash.style.cssText = `
                     position: fixed; inset: 0; pointer-events: none; z-index: 244;
@@ -865,7 +843,6 @@ function turnoInimigo() {
                     'assets/vfx/boss/spikes/spike4.png'
                 ];
                 
-                // Três clusters de picos para cobrir a área
                 const posBase = toPos;
                 const offsets = [
                     { dx: 0, dy: 5, size: 45 },
@@ -885,7 +862,7 @@ function turnoInimigo() {
                 });
 
                 aplicarDano();
-            }, 800); // 800ms ≈ ponto de impacto do slam (1300 * 0.6)
+            }, 900);
 
             bloquearTurno(dur + 100, () => {});
         }
@@ -1171,7 +1148,7 @@ function mostrarEcraVitoriaFinal() {
         </div>
         <div style="font-size:18px;color:#cde2ff;max-width:680px;line-height:1.55;">
             O Soberano tombou. A luz volta a bafejar as terras outrora consumidas pelo nevoeiro.
-            <br>O vosso nome será entoado em cânticos até onde a maré alcança.
+            <br>O teu nome será lembrado até onde a maré alcança.
         </div>
         <div style="font-size:14px;color:#a08060;margin-top:14px;">— FIM —</div>
     `;

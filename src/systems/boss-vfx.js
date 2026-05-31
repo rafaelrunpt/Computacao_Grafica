@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { combateScene } from '../world/combate-scene.js';
+import { tocarSomSpikeBoss, tocarSomShockBoss } from './audio.js';
 
 // ---- Sprite-sheet 3D helpers ----------------------------------------------
 // Cria um THREE.Sprite com uma textura de sheet (cols×rows). Para animar,
@@ -158,6 +159,7 @@ export const BossVFX = {
             pr.sprite.visible = false;
             combateScene.add(pr.sprite);
             pr.light = new THREE.PointLight(0xff5050, 0, 4, 2);
+            tocarSomShockBoss(); // Som quando o projéctil entra em cena
         } else if (pr.type === 'rasante') {
             // 3 filas × 3 lanes (9 espinhos). Cada fila aparece mais tarde e mais
             // perto do player, dando a leitura de "espinhos a chegar". Não fazem
@@ -200,6 +202,7 @@ export const BossVFX = {
             pr.sprite.visible = false;
             combateScene.add(pr.sprite);
             pr.light = new THREE.PointLight(0xc080ff, 0, 5, 2);
+            tocarSomShockBoss(); // Som quando o projéctil entra em cena
         } else if (pr.type === 'varredura') {
             pr.proj = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.65, 0.7), matProjVarredura);
             pr.proj.position.set(pr.x, pr.beamY, pr.z - 4);
@@ -239,22 +242,23 @@ export const BossVFX = {
             setSheetFrame(pr.sprite, Math.floor(u * (pr.sprite.userData.totalFrames - 0.001)));
             if (pr.ring) pr.ring.material.opacity = 0.6 * (1 - u);
         } else if (pr.type === 'rasante') {
-            // Cada fila erupta no seu startU; a animação 1→N dura ROW_ANIM_DUR
-            // (em fracção de u). Cada fila tem um max-frame diferente, dando
-            // espinhos progressivamente mais altos perto do player:
-            //   fila 0 (longe, boss)  → pára no frame 2
-            //   fila 1 (meio)         → pára no frame 3
-            //   fila 2 (perto player) → pára no frame 4 (full erupt)
             const frames = pr.spikeFrames;
             const ROW_ANIM_DUR = 0.40;
-            // Crescimento monotónico: mais alto no player, mais baixo longe.
-            //   fila 0 (no player / origem) → idx 3 = frame 4 (full erupt)
-            //   fila 1 (meio)               → idx 2 = frame 3
-            //   fila 2 (junto ao boss)      → idx 1 = frame 2 (mais curto)
             const ROW_MAX_FRAME = [3, 2, 1];
+
+            // Iniciar registo de sons se não existir
+            if (!pr.soundsFired) pr.soundsFired = new Set();
+
             for (const s of pr.sprites) {
                 const localU = (u - s.userData.startU) / ROW_ANIM_DUR;
                 if (localU < 0) continue;
+
+                // Som dispara apenas uma vez por fila (quando localU cruza 0)
+                if (!pr.soundsFired.has(s.userData.row)) {
+                    tocarSomSpikeBoss();
+                    pr.soundsFired.add(s.userData.row);
+                }
+
                 s.visible = true;
                 const maxIdx = ROW_MAX_FRAME[s.userData.row];
                 const raw = Math.floor(Math.max(0, localU) * (maxIdx + 1));

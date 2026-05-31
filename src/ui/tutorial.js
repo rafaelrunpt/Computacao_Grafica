@@ -142,11 +142,11 @@ const PASSOS = {
         dismissOnUse: true,
     },
     inventario: {
-        titulo: 'OS VOSSOS HAVERES',
+        titulo: 'O TEU INVENTÁRIO',
         teclas: ['I'],
         botoes: ['triangle'],
-        texto: 'Premi I para abrir a bolsa e usar os vossos elixires e haveres.',
-        textoGamepad: 'Premi △ para abrir a bolsa e usar os vossos elixires e haveres.',
+        texto: 'Prime I para abrir a bolsa e usar os teus elixires e itens.',
+        textoGamepad: 'Prime △ para abrir a bolsa e usar os teus elixires e itens.',
         rodape: 'Premi I ou interagi com algo para dispensar',
         rodapeGamepad: 'Premi △ ou interagi com algo para dispensar',
         persistente: true,
@@ -299,7 +299,3 @@ function _render(passo, onClose, onReady) {
         setTimeout(fechar, DURACAO);
     }
 }
-
-// As dicas fecham-se assim que a acção é usada — ver descartarTutorialPorAccao,
-// chamado a cada frame pelo loop principal a partir do estado `keys` (que
-// reflecte teclado e comando).

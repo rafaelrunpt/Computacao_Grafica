@@ -12,10 +12,11 @@
 //   B (1)                       → Esc (pausa)
 //   Y (3)                       → I  (inventário)
 //   X (2)                       → B  (livro de missões)
-//   LB (4)                      → V  (loadout)
+//   L1 (4)                      → N  (tocha)
+//   L2 (6)                      → V  (loadout)
 //   RB (5)                      → M  (mapa)
 //   Start (9)                   → P  (pausa)
-//   Back/Select (8)             → N  (tocha)
+//   Back/Select (8)             → N  (tocha, alternativa)
 
 import { keys } from './input.js';
 import { settings, onSettingChange } from '../systems/settings.js';
@@ -194,9 +195,13 @@ export function pollGamepad() {
         if (_onToggleInventario) _onToggleInventario();
     });                                                                    // △ → I
     _edge(4, gp.buttons[4]?.pressed, () => {
+        keys.n = true;
+        if (_onToggleTocha) _onToggleTocha();
+    });                                                                    // L1 → N (tocha)
+    _edge(6, gp.buttons[6]?.pressed, () => {
         keys.v = true;
         if (_onToggleLoadout) _onToggleLoadout();
-    });                                                                    // LB → V
+    });                                                                    // L2 → V (loadout)
     _edge(5, gp.buttons[5]?.pressed, () => {
         keys.m = true;
         if (_onToggleMapa) _onToggleMapa();
@@ -207,7 +212,7 @@ export function pollGamepad() {
     _edge(8, gp.buttons[8]?.pressed, () => {
         keys.n = true;
         if (_onToggleTocha) _onToggleTocha();
-    });                                                                    // Back → N
+    });                                                                    // Back → N (alternativa)
 }
 
 // Stick em UI: usa magnitude para determinar direcção dominante (4 vias) com

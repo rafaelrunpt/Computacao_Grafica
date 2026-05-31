@@ -5,13 +5,87 @@ import { getNightT } from '../world/night-mode.js';
 // ---------------------------------------------------------
 // 1. MATERIAIS 
 // ---------------------------------------------------------
+const loader = new THREE.TextureLoader();
+
+// Carregamento de texturas do cabelo (Stylized Hair 001)
+const texHairCol = loader.load('assets/textures/player/hair_basecolor_1k.webp');
+texHairCol.colorSpace = THREE.SRGBColorSpace;
+texHairCol.wrapS = texHairCol.wrapT = THREE.RepeatWrapping;
+texHairCol.repeat.set(1, 1); // Reduzido para 1 para os detalhes serem máximos à distância
+
+const texHairNorm = loader.load('assets/textures/player/hair_normal_1k.webp');
+texHairNorm.wrapS = texHairNorm.wrapT = THREE.RepeatWrapping;
+texHairNorm.repeat.set(1, 1);
+
+const texHairRough = loader.load('assets/textures/player/hair_roughness_1k.webp');
+texHairRough.wrapS = texHairRough.wrapT = THREE.RepeatWrapping;
+texHairRough.repeat.set(1, 1);
+
+// Textura do Chapéu e Roupa (Fabric016)
+const texFabricCol = loader.load('assets/textures/castelo/tapete/Fabric016_1K-PNG/Fabric016_1K-PNG_Color.webp');
+texFabricCol.colorSpace = THREE.SRGBColorSpace;
+texFabricCol.wrapS = texFabricCol.wrapT = THREE.RepeatWrapping;
+
+const texFabricNorm = loader.load('assets/textures/castelo/tapete/Fabric016_1K-PNG/Fabric016_1K-PNG_NormalGL.webp');
+texFabricNorm.wrapS = texFabricNorm.wrapT = THREE.RepeatWrapping;
+
+const texFabricRough = loader.load('assets/textures/castelo/tapete/Fabric016_1K-PNG/Fabric016_1K-PNG_Roughness.webp');
+texFabricRough.wrapS = texFabricRough.wrapT = THREE.RepeatWrapping;
+
+// Nova Textura da Camisola (Fabric023 - Azul Original)
+const texShirtCol = loader.load('assets/textures/player/shirt_basecolor.webp');
+texShirtCol.colorSpace = THREE.SRGBColorSpace;
+texShirtCol.wrapS = texShirtCol.wrapT = THREE.RepeatWrapping;
+texShirtCol.repeat.set(2, 2);
+
+const texShirtNorm = loader.load('assets/textures/player/shirt_normal.webp');
+texShirtNorm.wrapS = texShirtNorm.wrapT = THREE.RepeatWrapping;
+texShirtNorm.repeat.set(2, 2);
+
+const texShirtRough = loader.load('assets/textures/player/shirt_roughness.webp');
+texShirtRough.wrapS = texShirtRough.wrapT = THREE.RepeatWrapping;
+texShirtRough.repeat.set(2, 2);
+
 const matPele = new THREE.MeshStandardMaterial({ color: 0xffccaa, roughness: 0.5 });
-const matCabelo = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 }); 
-const matCamisa = new THREE.MeshStandardMaterial({ color: 0x2b529f, roughness: 0.7 }); // Casaco Azul
-const matCalcas = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.8 }); // Calças Escuras
-const matChapeu = new THREE.MeshStandardMaterial({ color: 0x9e3b45, roughness: 0.6 }); // Boné Vermelho
+const matCabelo = new THREE.MeshStandardMaterial({ 
+    map: texHairCol,
+    normalMap: texHairNorm,
+    roughnessMap: texHairRough,
+    color: 0x8b5a2b, // Castanho Claro (Tan/Light Brown)
+    roughness: 0.7 
+}); 
+
+// Casaco Azul com a nova textura (já azul)
+const matCamisa = new THREE.MeshStandardMaterial({ 
+    map: texShirtCol,
+    normalMap: texShirtNorm,
+    roughnessMap: texShirtRough,
+    color: 0xffffff, // Branco para não tingir a textura que já é azul
+    roughness: 0.8 
+}); 
+// Calças Pretas com textura de tecido (Fabric016)
+const matCalcas = new THREE.MeshStandardMaterial({ 
+    map: texFabricCol,
+    normalMap: texFabricNorm,
+    roughnessMap: texFabricRough,
+    color: 0x050505, 
+    roughness: 0.85 
+}); 
+// Boné com textura de tecido (Fabric016)
+const matChapeu = new THREE.MeshStandardMaterial({ 
+    map: texFabricCol,
+    normalMap: texFabricNorm,
+    roughnessMap: texFabricRough,
+    color: 0x9e3b45, 
+    roughness: 0.8 
+}); 
 const matAba = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }); // Aba Branca
 const matOlhos = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1 });
+
+// Aplicar repetições específicas para as outras partes
+texFabricCol.repeat.set(2, 2); 
+texFabricNorm.repeat.set(2, 2);
+texFabricRough.repeat.set(2, 2);
 
 export const player = new THREE.Group();
 
@@ -341,40 +415,56 @@ headGroup.add(aureolaGroup);
 export function setAureolaVisivel(v) { aureolaGroup.visible = !!v; }
 
 // ---------------------------------------------------------
-// 4f. MÁSCARA DO ECLIPSE (acessório — bandolete sobre os olhos)
+// 4f. MÁSCARA DA LUA (Versão "Lua de Obsidiana" — Negra & Contrastada)
+// Design: Uma máscara negra sólida que cobre a face,
+// com um crescente dourado vibrante e olhos de energia.
 // ---------------------------------------------------------
-const matMascaraBanda = new THREE.MeshStandardMaterial({
-    color: 0x0a0612, roughness: 0.7, metalness: 0.3,
-    emissive: 0x100020, emissiveIntensity: 0.4,
+const matMascaraNegra = new THREE.MeshStandardMaterial({
+    color: 0x0a0a0a, roughness: 0.8, metalness: 0.2,
+    emissive: 0x000000
 });
-const matMascaraRuna = new THREE.MeshStandardMaterial({
-    color: 0xa84bff, emissive: 0xa040ff, emissiveIntensity: 2.2,
-    roughness: 0.3, metalness: 0.2,
+const matEclipseCrescente = new THREE.MeshStandardMaterial({
+    color: 0xfff0c0, emissive: 0xffd080, emissiveIntensity: 1.5,
+    roughness: 0.4
 });
 
 export const mascaraGroup = new THREE.Group();
 mascaraGroup.name = 'mascaraGroup';
 mascaraGroup.visible = false;
 
-// tira horizontal que envolve a frente da cabeça
-const banda = new THREE.Mesh(
-    new THREE.CylinderGeometry(raioCabeca + 0.012, raioCabeca + 0.012, 0.10, 32, 1, true, -Math.PI * 0.55, Math.PI * 1.1),
-    matMascaraBanda
-);
-banda.position.set(0, 0.08, 0);
-banda.rotation.y = Math.PI / 2;  // abertura para trás, frente coberta
-mascaraGroup.add(banda);
+// O centro da face está em +Z (phi = PI/2)
+const phiCenter = Math.PI * 0.5;
+const raioM = raioCabeca * 1.03; // Ligeiramente mais afastado para evitar clipping
 
-// runa central a brilhar na testa (octaedro)
-const runaTestal = new THREE.Mesh(
-    new THREE.OctahedronGeometry(0.05, 0),
-    matMascaraRuna
-);
-runaTestal.position.set(0, 0.08, raioCabeca + 0.012);
-mascaraGroup.add(runaTestal);
+// 1. Base Negra (A Lua)
+const baseWidth = Math.PI * 0.65;
+const baseGeo = new THREE.SphereGeometry(raioM, 32, 16, phiCenter - baseWidth/2, baseWidth, Math.PI * 0.28, Math.PI * 0.45);
+const baseMesh = new THREE.Mesh(baseGeo, matMascaraNegra);
+mascaraGroup.add(baseMesh);
+
+// 2. Crescente de Luz Mística (Sobreposto à base)
+const crescWidth = Math.PI * 0.52;
+const crescenteGeo = new THREE.SphereGeometry(raioM + 0.005, 32, 16, phiCenter - crescWidth/2 + 0.15, crescWidth, Math.PI * 0.3, Math.PI * 0.4);
+const crescente = new THREE.Mesh(crescenteGeo, matEclipseCrescente);
+mascaraGroup.add(crescente);
+
+// 3. Olhos Etéreos (Fendas de energia ciano)
+const matOlhoGlow = new THREE.MeshStandardMaterial({
+    color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 3.5
+});
+const olhoGeo = new THREE.BoxGeometry(0.12, 0.012, 0.02);
+const olhoEsq = new THREE.Mesh(olhoGeo, matOlhoGlow);
+olhoEsq.position.set(-0.07, 0.04, raioCabeca * 0.96);
+olhoEsq.rotation.y = -0.2;
+mascaraGroup.add(olhoEsq);
+
+const olhoDir = new THREE.Mesh(olhoGeo, matOlhoGlow);
+olhoDir.position.set(0.07, 0.04, raioCabeca * 0.96);
+olhoDir.rotation.y = 0.2;
+mascaraGroup.add(olhoDir);
 
 mascaraGroup.userData.t = 0;
-mascaraGroup.userData.runa = matMascaraRuna;
+mascaraGroup.userData.crescente = matEclipseCrescente;
 headGroup.add(mascaraGroup);
 export function setMascaraVisivel(v) { mascaraGroup.visible = !!v; }
 
@@ -536,8 +626,11 @@ export function updateCoroaAnimacao(deltaTime) {
     }
     if (mascaraGroup.visible) {
         mascaraGroup.userData.t += deltaTime;
-        const pulse = 0.5 + Math.sin(mascaraGroup.userData.t * 2.5) * 0.5;
-        mascaraGroup.userData.runa.emissiveIntensity = 1.5 + 1.2 * pulse;
+        // Pulsar místico do crescente (lento e etéreo)
+        const pulse = 0.5 + Math.sin(mascaraGroup.userData.t * 1.5) * 0.5;
+        if (mascaraGroup.userData.crescente) {
+            mascaraGroup.userData.crescente.emissiveIntensity = 0.8 + 0.8 * pulse;
+        }
     }
     if (_tochaEquipada) {
         tochaGroup.userData.t += deltaTime;

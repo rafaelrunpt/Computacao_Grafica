@@ -6,7 +6,7 @@ const LINHAS = [
     '"Encontrámos-vos à beira do rio meridional, em farrapos, mas com o sopro da vida — tivestes mais mercê que outrora muitos outros."',
     '"Estas terras apodrecem a olhos vistos. Manchas de trevas engolem a relva, os arvoredos e até a própria luz divina."',
     '"Nós, os Goblins, tomámos a liberdade de vos recolher e providenciar estes aposentos. Não aguardeis mais dádivas sem custo."',
-    '"Quando as vossas forças permitirem, vinde falar comigo. Vendo elixires e posso ensinar-vos a arte da lâmina — ser-vos-ão de grande serventia."',
+    '"Quando as tuas forças permitirem, vem falar comigo. Vendo elixires e posso ensinar-te a usar a espada — vão ser-te muito úteis."',
     '"E escutai este conselho: repousai antes de partirdes. As bestas despertam sempre que o sol se põe além do horizonte."',
 ];
 

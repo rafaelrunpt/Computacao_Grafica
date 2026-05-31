@@ -260,7 +260,7 @@ export function getInimigoActivo() {
 // (~125 MB de VRAM) e dezenas de meshes. Em vez de o criar ao importar
 // este módulo (que acontece logo no arranque), criamo-lo só na primeira
 // vez que se entra em modo boss. Os jogadores que nunca cheguem a essa
-// peleja não pagam o custo. Em placas integradas é a maior poupança
+// batalha não pagam o custo. Em placas integradas é a maior poupança
 // individual de memória.
 // ----------------------------------------------------------------------
 let _bossRoot = null;

@@ -249,9 +249,17 @@ export function atualizarVegetacaoZonas(activeZonesBoxes) {
     }
 }
 
-export function updateVegetacao(dt) {
+export function updateVegetacao(dt, playerPos) {
     const currentTime = performance.now() * 0.001;
-    if (_instancedGrass && _instancedGrass.material.userData.shader) {
-        _instancedGrass.material.userData.shader.uniforms.uTime.value = currentTime;
+    if (_instancedGrass) {
+        if (_instancedGrass.material.userData.shader) {
+            _instancedGrass.material.userData.shader.uniforms.uTime.value = currentTime;
+        }
+        // Centrar a bounding sphere no jogador para o frustum culling ser eficaz 
+        // à medida que ele se move pelo mapa.
+        if (playerPos) {
+            _instancedGrass.geometry.boundingSphere.center.copy(playerPos);
+            if (_instancedFlowers) _instancedFlowers.geometry.boundingSphere.center.copy(playerPos);
+        }
     }
 }

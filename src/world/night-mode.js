@@ -200,11 +200,12 @@ function _applyEnvironment(t) {
     _sunLight.intensity = _orig.sunIntensity * (1 - 0.68 * t);
 
     _ambientLight.color.copy(_ambDay).lerp(_ambNight, t);
-    // preenchimento ambiente sobe um pouco (era 75% → agora 88%).
-    _ambientLight.intensity = _orig.ambIntensity * (1 - 0.12 * t);
+    // Mais luz ambiente à noite: em vez de baixar, sobe ~30% no pico nocturno
+    // para a cena não ficar tão escura (era *0.88 → agora *1.30 a t=1).
+    _ambientLight.intensity = _orig.ambIntensity * (1 + 0.30 * t);
 
-    // Hemisférica também reforçada (era 0.75 → agora 1.0).
-    if (_hemiLight) _hemiLight.intensity = 1.0 * t;
+    // Hemisférica reforçada à noite (era 1.0 → agora 1.6).
+    if (_hemiLight) _hemiLight.intensity = 1.6 * t;
 
     // Densidade do nevoeiro também sobe gradualmente
     if (_scene.fog && _scene.fog.isFogExp2) {
@@ -256,30 +257,11 @@ function _createMoon() {
     _hemiLight = new THREE.HemisphereLight(0x4060a0, 0x101830, 0);
     _nightGroup.add(_hemiLight);
 
-    const moonTex = _crescentTexture('#ffffff', '#cfd8f5');
-    const haloTex = _radialTexture('#ffffff', '#cfd8f5');
-    _moonSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: moonTex, transparent: true, opacity: 0,
-        depthWrite: false, depthTest: false,
-        blending: THREE.AdditiveBlending,
-    }));
-    // A lua fica bem acima do topo de qualquer câmara — incluindo a do
-    // cutscene das amostras estelares (câmara sobe até y≈86), para nunca
-    // entrar em quadro acidentalmente.
-    _moonSprite.position.set(-80, 150, -40);
-    _moonSprite.scale.set(20, 20, 1);
-    _moonSprite.renderOrder = -1;
-    _nightGroup.add(_moonSprite);
-
-    _moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: haloTex, color: 0x6080c0, transparent: true, opacity: 0,
-        depthWrite: false, depthTest: false,
-        blending: THREE.AdditiveBlending,
-    }));
-    _moonHalo.position.copy(_moonSprite.position);
-    _moonHalo.scale.set(42, 42, 1);
-    _moonHalo.renderOrder = -2;
-    _nightGroup.add(_moonHalo);
+    // Lua: desenhada pelo shader do skybox (sky.js, lua amarela em quarto
+    // minguante). O sprite azul + halo deste módulo foi removido para não
+    // haver duas luas no céu ao mesmo tempo.
+    _moonSprite = null;
+    _moonHalo = null;
 }
 
 // ===========================================================
@@ -477,7 +459,7 @@ const TORCH_POSITIONS = [
     // pequenos braseiros junto à loja, taberna e bruxa para reforçar o ambiente
     { x: -32, z:  18 }, { x: -32, z:  32 },
     { x: -48, z:  28 }, { x: -42, z:  42 },
-    { x: -23, z: -38 }, { x: -13, z: -38 },
+    { x: -24, z: -48 }, { x: -12, z: -48 },
 ];
 
 function _createTorches() {

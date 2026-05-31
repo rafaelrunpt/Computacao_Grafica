@@ -498,12 +498,66 @@ export function tocarSomMovimentoBoss(tipo) {
             _tone(ctx, master, now + 0.05, { dur: 0.3, f0: 120, f1: 120, type: 'sawtooth', vol: 0.2 });
             break;
         case 'varredura':
+            _whoosh(ctx, master, now, { dur: 0.7, f0: 400, f1: 150, q: 0.8, vol: 0.4 });
+            break;
         case 'lateral': // GESTOS/SWEEP: whoosh longo
             _whoosh(ctx, master, now, { dur: 0.7, f0: 400, f1: 150, q: 0.8, vol: 0.4 });
             break;
         default:
             _whoosh(ctx, master, now, { dur: 0.4, f0: 300, f1: 100, q: 1.0, vol: 0.3 });
     }
+}
+
+// --- Som ambiente do rio (attenuação por distância ao eixo Z) ---
+let _riverSfx = null;
+export function tocarSomAmbienteRio(playerZ, riverZ = 0) {
+    if (!_sfx['river'] || !_sfx['river'].buffer) return;
+    
+    if (!_riverSfx) {
+        _riverSfx = _sfx['river'];
+        _riverSfx.setLoop(true);
+        _riverSfx.setVolume(0);
+        _riverSfx.play();
+    }
+
+    // Distância ao "eixo" do rio (Z=0)
+    const dist = Math.abs(playerZ - riverZ);
+    
+    // Raio de audição: começa a ouvir aos 40m, volume máximo aos 5m
+    const maxDist = 40;
+    const minDist = 5;
+    
+    let norm = 1.0 - (dist - minDist) / (maxDist - minDist);
+    norm = Math.max(0, Math.min(1, norm));
+    
+    // Curva suave (quadrática) para o volume
+    const vol = norm * norm * getSfxTargetVolume() * 0.85;
+    _riverSfx.setVolume(vol);
+}
+
+// --- Som dos picos do boss (ataque rasante) ---
+export function tocarSomSpikeBoss() {
+    // Usamos Audio nativo para permitir overlap (3 vezes rápido)
+    const a = new Audio('assets/sounds/Attacks/boss/spike_s.mp3');
+    a.volume = getSfxTargetVolume() * 0.7;
+    a.playbackRate = 1.3;
+    a.play().catch(() => {});
+}
+
+// --- Som de choque do boss (lançamento de projéctil) ---
+export function tocarSomShockBoss() {
+    const a = new Audio('assets/sounds/Attacks/shock.mp3');
+    a.volume = getSfxTargetVolume() * 0.35;
+    a.play().catch(() => {});
+}
+
+// --- Som de trovão do player (Relâmpago Arcano) ---
+export function tocarSomTrovaoPlayer() {
+    const a = new Audio('assets/sounds/trovao.mp3');
+    // Aumentado para 1.2 para ser mais impactante que os outros sons
+    a.volume = Math.min(1.0, getSfxTargetVolume() * 1.2);
+    a.currentTime = 1.0; // Pula 1 segundo de silêncio inicial
+    a.play().catch(() => {});
 }
 
 // --- rugido do boss ao entrar em fúria (abaixo dos 25% de vida) ---

@@ -11,7 +11,10 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 // baixar ainda mais a resolução em GPUs fracas.
 function _applyPixelRatio() {
     const scale = settings.renderScale ?? 1.0;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, scale));
+    // Cap de 1.5 para média/baixa e 2.0 para alta. 
+    // Ecrãs Retina chegam a 3.0-4.0, o que mata a performance sem ganho visual real.
+    const maxPR = settings.quality === 'alta' ? 2.0 : 1.5;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPR * scale));
 }
 _applyPixelRatio();
 onSettingChange('renderScale', _applyPixelRatio);

@@ -943,92 +943,85 @@ const matSnow = new THREE.MeshLambertMaterial({
     flatShading: true
 });
 
-function criarPico(scene, x, z, h, r, rand) {
-    const rotY = rand() * Math.PI;
-    // corpo principal — cone facetado (6 lados, baixo poly mas estiliza bem)
-    const cone = new THREE.Mesh(
-        new THREE.ConeGeometry(r, h, 6, 1),
-        matMountain
-    );
-    cone.position.set(x, h / 2, z);
-    cone.rotation.y = rotY;
-    // Montanhas no perímetro do mapa: as sombras delas caem fora da área
-    // de jogo. Desligar castShadow tira ~280 meshes do shadow pass.
-    cone.castShadow = false;
-    cone.receiveShadow = false;
-    scene.add(cone);
-    fadeables.push(cone);
-    cullables.push(cone);
-
-    // neve no topo: como na realidade, é só uma fina camada sobre o cume e
-    // acompanha o afunilamento da montanha (NÃO pode ser mais larga que a
-    // rocha por baixo). Como o cone tapera linearmente, o raio da montanha à
-    // cota da base da neve é r*snowFrac; usamos uma margem mínima (1.06) só
-    // para a neve assentar por cima sem z-fighting com a vertente.
-    const snowFrac = 0.30;                 // fracção da altura coberta por neve
-    const snowH = h * snowFrac;
-    const snow = new THREE.Mesh(
-        // mesmos 6 lados e mesma rotação que a montanha → facetas alinhadas
-        new THREE.ConeGeometry(r * snowFrac * 1.06, snowH, 6, 1),
-        matSnow
-    );
-    // ápice da neve coincide com o ápice da montanha
-    snow.position.set(x, h - snowH / 2, z);
-    snow.rotation.y = rotY;
-    snow.castShadow = false;
-    scene.add(snow);
-    cullables.push(snow);
-
-    // colisor — caixa larga o suficiente para bloquear o jogador
-    addCollider(new THREE.Box3(
-        new THREE.Vector3(x - r * 0.75, 0, z - r * 0.75),
-        new THREE.Vector3(x + r * 0.75, h, z + r * 0.75)
-    ));
-}
-
 function criarMontanhas(scene) {
     const rand = seededRand(777);
-    const BORDA = 98;   // onde começam as montanhas
-    const PASSO = 9;    // espaçamento base entre picos
-    const JITTER = 3.5; // variação aleatória de posição
-    const RIO_GAP = 6;  // não coloca picos em |z| < RIO_GAP nos lados E/W (passagem do rio)
+    const BORDA = 98;   
+    const PASSO = 9;    
+    const JITTER = 3.5; 
+    const RIO_GAP = 6;  
 
     const pontos = [];
+    const mountainGeos = [];
+    const snowGeos = [];
 
     // lado norte (z = +BORDA)
     for (let x = -BORDA; x <= BORDA; x += PASSO)
         pontos.push([x + (rand() - 0.5) * JITTER, BORDA + rand() * 4]);
-
     // lado sul (z = -BORDA)
     for (let x = -BORDA; x <= BORDA; x += PASSO)
         pontos.push([x + (rand() - 0.5) * JITTER, -BORDA - rand() * 4]);
-
-    // lado este (x = +BORDA) — salta os picos que tapariam o rio
+    // lado este (x = +BORDA)
     for (let z = -BORDA + PASSO; z < BORDA; z += PASSO) {
         if (Math.abs(z) < RIO_GAP) continue;
         pontos.push([BORDA + rand() * 4, z + (rand() - 0.5) * JITTER]);
     }
-
-    // lado oeste (x = -BORDA) — salta os picos que tapariam o rio
+    // lado oeste (x = -BORDA)
     for (let z = -BORDA + PASSO; z < BORDA; z += PASSO) {
         if (Math.abs(z) < RIO_GAP) continue;
         pontos.push([-BORDA - rand() * 4, z + (rand() - 0.5) * JITTER]);
     }
 
-    for (const [px, pz] of pontos) {
-        const h = 10 + rand() * 16;   // altura entre 10 e 26
-        const r = 6  + rand() * 6;    // raio entre 6 e 12
-        criarPico(scene, px, pz, h, r, rand);
+    const _addPico = (px, pz, h, r) => {
+        const rotY = rand() * Math.PI;
+        const matrix = new THREE.Matrix4().compose(
+            new THREE.Vector3(px, h / 2, pz),
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY),
+            new THREE.Vector3(1, 1, 1)
+        );
+        const geo = new THREE.ConeGeometry(r, h, 6, 1);
+        geo.applyMatrix4(matrix);
+        mountainGeos.push(geo);
 
-        // pico secundário menor ao lado para dar volume irregular
+        const snowFrac = 0.30;
+        const snowH = h * snowFrac;
+        const matrixSnow = new THREE.Matrix4().compose(
+            new THREE.Vector3(px, h - snowH / 2, pz),
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY),
+            new THREE.Vector3(1, 1, 1)
+        );
+        const sGeo = new THREE.ConeGeometry(r * snowFrac * 1.06, snowH, 6, 1);
+        sGeo.applyMatrix4(matrixSnow);
+        snowGeos.push(sGeo);
+
+        addCollider(new THREE.Box3(
+            new THREE.Vector3(px - r * 0.75, 0, pz - r * 0.75),
+            new THREE.Vector3(px + r * 0.75, h, pz + r * 0.75)
+        ));
+    };
+
+    for (const [px, pz] of pontos) {
+        const h = 10 + rand() * 16;
+        const r = 6  + rand() * 6;
+        _addPico(px, pz, h, r);
+
         if (rand() > 0.4) {
             const ox = (rand() - 0.5) * r * 1.2;
             const oz = (rand() - 0.5) * r * 1.2;
             const h2 = h * (0.45 + rand() * 0.35);
             const r2 = r * (0.4 + rand() * 0.3);
-            criarPico(scene, px + ox, pz + oz, h2, r2, rand);
+            _addPico(px + ox, pz + oz, h2, r2);
         }
     }
+
+    const mergedM = BufferGeometryUtils.mergeGeometries(mountainGeos);
+    const meshM = new THREE.Mesh(mergedM, matMountain);
+    meshM.receiveShadow = true; // Montanhas de perímetro não precisam de castShadow
+    scene.add(meshM);
+
+    const mergedS = BufferGeometryUtils.mergeGeometries(snowGeos);
+    const meshS = new THREE.Mesh(mergedS, matSnow);
+    meshS.receiveShadow = true;
+    scene.add(meshS);
 }
 
 const SHOP_CX = -30, SHOP_CZ = 25;

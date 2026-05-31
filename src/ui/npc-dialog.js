@@ -6,6 +6,7 @@ import {
     getFase as getFetchFase, getProgresso as getFetchProgresso,
     aceitarFetchQuest, entregarFetchQuest,
 } from '../systems/merchant-fetch-quest.js';
+import { limparTutoriais } from './tutorial.js';
 
 // ==========================================
 //  Dados do diálogo (Guardião)
@@ -14,24 +15,24 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
 const ABERTURA = {
     fraco: [
-        'Alto! Esta ponte não é para qualquer caminhante. Retornai quando o vosso poder for digno de nota.',
-        'Parai! Sinto em vós a inexperiência de um aprendiz. Esta travessia não vos pertence... ainda.',
-        'Ninguém passa sem provar o seu valor. Vós, estranho, ainda não o fizestes.',
+        'Alto! Esta ponte não é para qualquer um. Volta quando fores mais forte.',
+        'Para! Sinto que ainda és um principiante. Esta travessia não é para ti... ainda.',
+        'Ninguém passa sem provar o seu valor. Tu ainda não o fizestes.',
     ],
     forte: [
-        'Aproximai-vos com o peso de muitas batalhas nos vossos passos. Talvez sejais digno desta travessia.',
-        'Reconheço a têmpera de um guerreiro provado. Esta ponte pode ser vossa... se assim o desejardes.',
-        'Detenho-vos por tradição, não por dúvida. Vejo em vós um espírito forjado em combate.',
+        'Aproxima-te. Pareces ter o peso de muitas batalhas. Talvez sejas digno de passar.',
+        'Reconheço um verdadeiro guerreiro. Esta ponte pode ser tua... se quiseres.',
+        'Paro-te por tradição, não por dúvida. Vejo que tens um espírito forjado em combate.',
     ],
     posPassagem: [
-        'A ponte está aberta para vós, viajante. Em que vos posso ser útil?',
-        'Retornastes. Dizei-me — o que vos traz por estas bandas?',
-        'A passagem é vossa. Falai, se for do vosso desejo.',
+        'A ponte está aberta para ti, viajante. Como posso ajudar?',
+        'Voltaste. Diz-me — o que te traz por aqui?',
+        'A passagem é tua. Fala, se quiseres.',
     ],
     cedePassagem: [
-        'Sinto em vós um poder que antes não existia. A ponte é vossa, guerreiro — passai.',
-        'O vosso espírito mudou desde a última vez que aqui estivestes. Reconheço a força em vós. Passai.',
-        'Esta presença... carregais agora o fardo de verdadeiras pelejas. Não vos detenho mais. Ide.',
+        'Sinto em ti um poder que antes não tinhas. A ponte é tua, guerreiro — podes passar.',
+        'O teu espírito mudou desde a última vez. Reconheço a tua força. Passa.',
+        'Esta presença... carregas agora o fardo de verdadeiras lutas. Não te prendo mais. Podes ir.',
     ],
 };
 
@@ -39,62 +40,62 @@ const ESCOLHAS = {
     fraco: [
         {
             id: 'requisito',
-            label: 'O que devo fazer para atravessar?',
+            label: 'O que tenho de fazer para passar?',
             respostas: [
-                'Provai o vosso valor em combate. Regressai quando tiverdes colhido sabedoria e poder.',
-                'Enfrentai as bestas que assolam estas terras. Quando o vosso espírito for suficientemente temperado, eu o saberei.',
-                'Não existem atalhos para a glória. Combatei, aprendei, crescei. Depois voltaremos a parlamentar.',
+                'Prova o teu valor em combate. Volta quando tiveres mais sabedoria e poder.',
+                'Enfrenta as criaturas que andam por estas terras. Quando fores suficientemente forte, eu saberei.',
+                'Não há atalhos para a glória. Luta, aprende e cresce. Depois voltamos a falar.',
             ],
         },
         {
             id: 'norte_fraco',
-            label: 'Que perigos espreitam no norte?',
+            label: 'Que perigos existem no norte?',
             respostas: [
-                'Um baluarte sombrio, maculado por uma força ancestral. Criaturas que outrora foram homens.',
-                'O mal recrudesce a cada lua cheia nas terras setentrionais. O castelo é a verdadeira danação.',
-                'Terras corrompidas, feras sem discernimento. Mas para atravessar, primeiro deveis convencer-me com a vossa bravura.',
+                'Um forte sombrio, dominado por uma força antiga. Criaturas que antes eram homens.',
+                'O mal cresce a cada lua cheia nas terras do norte. O castelo é a verdadeira maldição.',
+                'Terras corrompidas e feras perigosas. Mas para passar, primeiro tens de me convencer com a tua coragem.',
             ],
         },
         {
             id: 'adeus',
-            label: 'Ficai em paz, guardião.',
+            label: 'Fica bem, guardião.',
             acao: 'fechar',
             repetivel: true,
             respostas: [
-                'Ide com cautela, jovem. E regressai mais robusto.',
-                'Que os ventos vos conduzam ao vosso destino, caminhante.',
-                'Retornai quando as vossas cicatrizes forem o vosso testemunho.',
+                'Vai com cuidado. E volta mais forte.',
+                'Que os ventos te levem ao teu destino.',
+                'Volta quando as tuas cicatrizes forem a tua prova.',
             ],
         },
     ],
     posPassagem: [
         {
             id: 'norte_pos',
-            label: 'O que me aguarda no norte?',
+            label: 'O que me espera no norte?',
             respostas: [
-                'Um castelo fustigado por sombras de eras idas. Criaturas que já foram homens. Ide devidamente preparado.',
-                'O mal viceja naquelas entranhas há décadas. O que encontrardes no castelo... não será fácil de subjugar.',
-                'Terras mártires e, no âmago, um cristal negro que pulsa como um coração enfermo.',
+                'Um castelo assombrado por sombras do passado. Criaturas que já foram homens. Vai bem preparado.',
+                'O mal vive ali há décadas. O que encontrares no castelo... não será fácil de derrotar.',
+                'Terras sofridas e, no centro, um cristal negro que pulsa como um coração doente.',
             ],
         },
         {
             id: 'identidade_pos',
-            label: 'Quem sois vós, guardião?',
+            label: 'Quem és tu, guardião?',
             respostas: [
-                'Um soldado que elegeu o dever em detrimento da glória. Trezentos anos cumpro este posto.',
-                'O último da Ordem da Ponte. Os meus irmãos tombaram. Eu permaneço até que alguém leve a contenda ao norte.',
-                'Apenas um velho arauto com uma missão. E hoje, antevejo em vós o que tanto busquei.',
+                'Um soldado que escolheu o dever em vez da glória. Cumpro este posto há trezentos anos.',
+                'O último da Ordem da Ponte. Os meus irmãos morreram. Eu fico aqui até que alguém leve a luta ao norte.',
+                'Apenas um velho com uma missão. E hoje, vejo em ti o que tanto procurei.',
             ],
         },
         {
             id: 'adeus_pos',
-            label: 'Ficai em paz, guardião.',
+            label: 'Fica bem, guardião.',
             acao: 'fechar',
             repetivel: true,
             respostas: [
-                'Que os vossos passos sejam firmes e o vosso aço incansável.',
-                'A ponte permanece aberta para vós. Atravessai quando vos sentirdes pronto.',
-                'Boa fortuna, guerreiro. Bem haveis de precisar dela.',
+                'Que os teus passos sejam firmes e a tua espada incansável.',
+                'A ponte continua aberta para ti. Passa quando te sentires pronto.',
+                'Boa sorte, guerreiro. Vais precisar dela.',
             ],
         },
     ],
@@ -518,6 +519,7 @@ window.addEventListener('keydown', (e) => {
 //  API genérica para abrir um diálogo
 // ==========================================
 function abrirDialogo(config) {
+    limparTutoriais();
     if (dialogoAberto) return;
     dialogoAberto = true;
     currentNpcConfig = config;
@@ -625,34 +627,34 @@ const MERCADOR_PRECOS = { pocao: 25, mega: 60, elixir: 140, oculos_carga: 20, re
 
 const MERCADOR_FALAS_OFERTA = {
     pocao: [
-        'Toma — {p} ✦. Um pouco de vitalidade líquida para as vossas andanças.',
-        '{p} ✦ bem investidos. Sinto que o vosso fôlego vos agradecerá mais tarde.',
-        'Aqui tens — destilada sob o luar, cura o corpo e acalma a alma. {p} ✦.',
+        'Aqui tens — {p} ✦. Um pouco de vida para as tuas andanças.',
+        '{p} ✦ bem investidos. Vais agradecer isto mais tarde.',
+        'Aqui tens — curada sob o luar, cura o corpo e acalma a alma. {p} ✦.',
     ],
     mega: [
-        'Esta é uma essência concentrada — {p} ✦. Senti o calor a percorrer-vos as veias.',
-        '{p} ✦ por este elixir. Quando o abismo vos olhar de volta, bebei disto.',
-        'Guardai-a para o momento em que a vossa luz parecer fraquejar. {p} ✦.',
+        'Esta é uma essência concentrada — {p} ✦. Sente o calor a percorrer-te as veias.',
+        '{p} ✦ por este elixir. Quando o perigo espreitar, bebe isto.',
+        'Guarda-a para o momento em que a tua luz parecer fraquejar. {p} ✦.',
     ],
     elixir: [
         'Este elixir é raro — {p} ✦. Dizem que contém o fôlego de estrelas que nunca morreram.',
-        'Uma oferenda de {p} ✦ por este frasco. Ele curará até a mais profunda ferida da alma.',
-        'O Elixir do Abismo. {p} ✦ e a vossa vitalidade será restaurada por completo.',
+        'Uma oferta de {p} ✦ por este frasco. Ele vai curar até a ferida mais profunda.',
+        'O Elixir do Abismo. {p} ✦ e a tua vida será restaurada por completo.',
     ],
     oculos_carga: [
-        'Olhai através destas lentes — {p} ✦. O tempo parece curvar-se, revelando o que está por vir.',
-        '{p} ✦. Com estes óculos, o fluxo da magia torna-se visível ao vosso olhar atento.',
+        'Olha através destas lentes — {p} ✦. O tempo parece parar, revelando o que está para vir.',
+        '{p} ✦. Com estes óculos, a magia torna-se visível ao teu olhar.',
         'Uma relíquia de tempos em que víamos mais longe. {p} ✦ e o mundo será diferente.',
     ],
     relampago_arcano: [
-        'Puro furor celeste capturado num frasco — {p} ✦. Libertai-o e vede a terra tremer.',
-        '{p} ✦. Não é mera magia; é a fúria das tempestades que assolam o vazio entre as estrelas.',
-        'Dizem que este raio foi roubado de um deus esquecido. {p} ✦ e o poder será vosso.',
+        'Puro furor celeste capturado num frasco — {p} ✦. Liberta-o e vê a terra tremer.',
+        '{p} ✦. Não é apenas magia; é a fúria das tempestades que andam entre as estrelas.',
+        'Dizem que este raio foi roubado de um deus esquecido. {p} ✦ e o poder será teu.',
     ],
     semCintilas: [
         'As estrelas não brilham para quem tem os bolsos vazios, viajante.',
-        'Voltai quando a vossa fortuna for condizente com as minhas raridades.',
-        'Cintilas... precisais de mais delas para selarmos este pacto.',
+        'Volta quando tiveres dinheiro suficiente para as minhas raridades.',
+        'Cintilas... precisas de mais para fazermos negócio.',
     ],
 };
 
@@ -672,8 +674,8 @@ export function abrirDialogoMercador(themeKey = 'tavern') {
         getAbertura: () => {
             const c = getCintilas();
             return c > 0
-                ? `Ah, o vosso rasto brilha com ${c} ✦. Que curiosidades procurais no meu humilde entreposto?`
-                : 'Seja bem-vindo sob o teto da minha loja. Tenho ervas que curam e talismãs que sussurram... mas tudo requer o devido tributo.';
+                ? `Ah, o teu rasto brilha com ${c} ✦. Que curiosidades procuras no meu entreposto?`
+                : 'Bem-vindo à minha loja. Tenho ervas que curam e talismãs... mas tudo tem o seu preço.';
         },
         getEscolhas: () => {
             const c = getCintilas();
@@ -740,13 +742,13 @@ export function abrirDialogoMercador(themeKey = 'tavern') {
                 escolhaQuest,
                 {
                     id: 'adeus_mercador',
-                    label: 'Que as estrelas vos guiem, Alice.',
+                    label: 'Que as estrelas te guiem, Alice.',
                     acao: 'fechar',
                     repetivel: true,
                     respostas: [
-                        'E que o vosso caminho seja iluminado pelo fulgor eterno.',
-                        'Regressai quando o cansaço vos pesar ou a curiosidade vos espicaçar.',
-                        'Ficai em paz. As estrelas estão a observar, não o esqueçais.',
+                        'E que o teu caminho seja iluminado.',
+                        'Regressa quando estiveres cansado ou tiveres curiosidade.',
+                        'Fica em paz. As estrelas estão a observar, não te esqueças.',
                     ],
                 },
             ];
@@ -760,12 +762,12 @@ function construirEscolhaFetchQuest(fase) {
     if (fase === 'none') {
         return {
             id: 'fetch_oferta',
-            label: '✨  Pareceis preocupada com o firmamento...',
+            label: '✨  Pareces preocupada com o céu...',
             repetivel: true,
             respostas: [
-                'Os meus olhos... raramente se desviam do abismo lá em cima. Não sou uma simples mercadora de ervas; sou uma buscadora de verdades celestes. Creio, com cada fibra do meu ser, que a magia que flui nestas terras não nasceu do solo, mas sim do coração das estrelas moribundas.',
-                'Esta noite, o céu está inquieto. Sinto-o. Fragmentos do cosmos — Amostras Estelares — estão prestes a romper o véu e cair sobre o nosso mundo. Quando sairdes daqui, olhai para o horizonte; vereis a chuva de luz.',
-                'Peço-vos, viajante: recolhei esses fragmentos para a minha investigação. Quatro amostras deverão ser suficientes para provar a minha tese. O mundo pode ser vasto, mas o brilho delas guiar-vos-á.',
+                'Os meus olhos... raramente saem do céu lá em cima. Não sou apenas uma vendedora de ervas; procuro as verdades das estrelas. Acredito que a magia que corre nestas terras veio do coração de estrelas que morreram.',
+                'Esta noite, o céu está agitado. Sinto-o. Fragmentos do cosmos — Amostras Estelares — estão prestes a cair sobre o nosso mundo. Quando saíres daqui, olha para o horizonte; vais ver a chuva de luz.',
+                'Peço-te, viajante: recolhe esses fragmentos para a minha investigação. Quatro amostras deverão ser suficientes para provar a minha teoria. O mundo pode ser grande, mas o brilho delas vai guiar-te.',
             ],
             acaoApos: () => {
                 aceitarFetchQuest();
@@ -781,24 +783,24 @@ function construirEscolhaFetchQuest(fase) {
             respostas: () => {
                 const { coletados: c, meta: m } = getFetchProgresso();
                 if (c === 0) return [
-                    'Ainda nada? O cosmos não entrega os seus segredos facilmente. Procurai nos confins do mundo, onde a luz é mais pura.',
-                    'As quatro amostras esperam por vós. Não deixeis que o seu brilho se apague na vossa ausência.',
+                    'Ainda nada? O universo não entrega os seus segredos facilmente. Procura nos confins do mundo, onde a luz é mais pura.',
+                    'As quatro amostras esperam por ti. Não deixes que o brilho delas se apague.',
                 ];
                 if (c < m) return [
-                    `Sim... sinto a energia de ${c} fragmentos convosco. Já é um começo promissor, mas o padrão ainda está incompleto. Trazei-me os ${m} totais.`,
-                    `${c} de ${m}. O desenho das constelações começa a formar-se no meu mapa. Continuai a vossa busca, caminhante.`,
+                    `Sim... sinto a energia de ${c} fragmentos contigo. Já é um bom começo, mas ainda não chega. Traz-me os ${m} totais.`,
+                    `${c} de ${m}. O desenho das constelações começa a formar-se no meu mapa. Continua a procurar.`,
                 ];
-                return ['Sinto o calor do firmamento em vossas mãos! Trazei-mas, depressa, antes que a essência se dissipe!'];
+                return ['Sinto o calor do céu nas tuas mãos! Traz-me as amostras depressa!'];
             },
         };
     }
     if (fase === 'completa') {
         return {
             id: 'fetch_entregar',
-            label: '✅  Trago os fragmentos do céu que pedistes.',
+            label: '✅  Trago os fragmentos do céu que pediste.',
             repetivel: true,
             respostas: [
-                `Incrível... vedes como vibram ao toque? Centelhas, névoas, cristais... a prova é irrefutável! A magia é, de facto, poeira estelar aprisionada na matéria. Vós prestastes um serviço imenso à ciência e ao mistério. Tomai isto — ${FETCH_RECOMPENSA_CINTILAS} ✦ e um Elixir do Abismo. Que a vossa própria luz nunca se apague.`,
+                `Incrível... vê como vibram ao toque? A prova é clara! A magia é mesmo poeira das estrelas. Fizeste um serviço imenso à ciência. Toma isto — ${FETCH_RECOMPENSA_CINTILAS} ✦ e um Elixir do Abismo. Que a tua própria luz nunca se apague.`,
             ],
             acaoApos: () => {
                 if (entregarFetchQuest()) {
@@ -813,8 +815,8 @@ function construirEscolhaFetchQuest(fase) {
         label: '⚜  O que revelaram as estrelas?',
         repetivel: true,
         respostas: [
-            'As amostras que trouxestes confirmam os meus cálculos mais ousados. Estamos todos ligados ao infinito, viajante. A magia é apenas a linguagem que o universo usa para falar connosco.',
-            'Graças a vós, o meu observatório improvisado floresce. Se o céu voltar a chorar luz, estarei aqui para a decifrar.',
+            'As amostras que trouxeste confirmam os meus cálculos. Estamos todos ligados ao infinito, viajante. A magia é a linguagem que o universo usa para falar connosco.',
+            'Graças a ti, o meu observatório está a crescer. Se o céu voltar a brilhar, estarei aqui para perceber porquê.',
         ],
     };
 }

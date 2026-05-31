@@ -8,6 +8,7 @@ import { bossDebugScene, initBossDebug } from '../world/boss-debug-scene.js';
 import { combateScene, posPlayerCombate, resetCombateScene, isBossMode } from '../world/combate-scene.js';
 import { hidePrompt } from '../ui/hud.js';
 import { switchMusic } from '../systems/audio.js';
+import { limparTutoriais } from '../ui/tutorial.js';
 
 // ---- estado da cena ----
 export const estado = { cena: 'quarto', ePressBloqueado: false };
@@ -59,6 +60,7 @@ export function setWorldScene(scene) { _worldScene = scene; }
 
 // ---- entrar / sair loja ----
 export function entrarLoja() {
+    limparTutoriais();
     if (estado.ePressBloqueado) return;
     estado.ePressBloqueado = true;
     hidePrompt();
@@ -75,6 +77,7 @@ export function entrarLoja() {
 }
 
 export function sairLoja(onComplete) {
+    limparTutoriais();
     if (estado.ePressBloqueado) return;
     estado.ePressBloqueado = true;
     hidePrompt();
@@ -227,6 +230,7 @@ function iniciarTransicaoCastelo(onEnd) {
 
 // ---- entrar / sair castelo ----
 export function entrarCaselo() {
+    limparTutoriais();
     if (estado.ePressBloqueado) return;
     estado.ePressBloqueado = true;
     hidePrompt();
@@ -249,6 +253,7 @@ export function entrarCaselo() {
 }
 
 export function sairCaselo() {
+    limparTutoriais();
     if (estado.ePressBloqueado) return;
     estado.ePressBloqueado = true;
     hidePrompt();
@@ -265,6 +270,7 @@ export function sairCaselo() {
 
 // ---- entrar / sair taverna (Gobble Inn) ----
 export function entrarTavern() {
+    limparTutoriais();
     if (estado.ePressBloqueado) return;
     estado.ePressBloqueado = true;
     hidePrompt();
@@ -282,6 +288,7 @@ export function entrarTavern() {
 }
 
 export function sairTavern() {
+    limparTutoriais();
     if (estado.ePressBloqueado) return;
     estado.ePressBloqueado = true;
     hidePrompt();
@@ -299,6 +306,7 @@ export function sairTavern() {
 
 // ---- entrar / sair quarto (a partir da taverna) ----
 export function entrarQuarto() {
+    limparTutoriais();
     if (estado.ePressBloqueado) return;
     estado.ePressBloqueado = true;
     hidePrompt();
@@ -316,6 +324,7 @@ export function entrarQuarto() {
 }
 
 export function sairQuarto() {
+    limparTutoriais();
     if (estado.ePressBloqueado) return;
     estado.ePressBloqueado = true;
     hidePrompt();
@@ -337,6 +346,7 @@ export function sairQuarto() {
 // COMBATE
 // --------------------------------------------------------
 export function entrarCombate(onAfterEnter) {
+    limparTutoriais();
     if (estado.cena === 'combate') return;
     hidePrompt();
     _mundoSnapshot.x    = player.position.x;
@@ -359,6 +369,7 @@ export function entrarCombate(onAfterEnter) {
 }
 
 export function sairCombate(onAfterExit) {
+    limparTutoriais();
     if (estado.cena !== 'combate') return;
     fade(1, () => {
         if (player.parent) player.parent.remove(player);
@@ -373,6 +384,7 @@ export function sairCombate(onAfterExit) {
 // Saída específica do boss fight: em vez de regressar ao mundo, devolve
 // o jogador ao castelo, em frente ao cristal, para poder tentar de novo.
 export function sairBossParaCastelo(onAfterExit) {
+    limparTutoriais();
     if (estado.cena !== 'combate') return;
     fade(1, () => {
         if (player.parent) player.parent.remove(player);

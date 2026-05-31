@@ -6,6 +6,7 @@ import { getCintilas, gastarCintilas, onCintilasChange } from '../systems/curren
 import { ATAQUES, ataqueState, desbloquearAtaque, equiparAtaque } from '../systems/ataques.js';
 import { pushNavContext, popNavContext } from '../core/gamepad.js';
 import { settings } from '../systems/settings.js';
+import { notificarCompraAtaque } from './tutorial.js';
 
 const POCOES = [
     { id: 'pocao',  preco: 25, nome: 'Poção de Cura', desc: 'Recupera 15 HP.',           icone: 'assets/icones/small_potion.png' },
@@ -152,6 +153,8 @@ function renderListas() {
                 // se houver slot livre, equipa automaticamente
                 const slotLivre = ataqueState.slots.indexOf(null);
                 if (slotLivre !== -1) equiparAtaque(slotLivre, a.id);
+                // Conta a compra de golpes; à 3ª, ensina o arsenal (tecla V).
+                notificarCompraAtaque();
                 renderListas();
             },
         }));

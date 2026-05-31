@@ -15,24 +15,24 @@ const POCOES = [
 ];
 
 const ATAQUES_VENDA = [
-    { id: 'escudo_mistico', preco: 180 },
+    { id: 'veu', preco: 180 },
 ];
 
 const ABERTURAS = [
-    'Os filtros fervilham, os astros sussurram. Que desejais, alma errante?',
-    'Aproximai-vos do caldeirão. Tenho elixires que enganam a morte... e segredos que afastam o dano.',
-    'Sinto-vos cansado, viajante. Posso oferecer remédio — por uma pequena oferenda em cintilas, claro.',
+    'As poções fervem, os astros sussurram. O que desejas, alma errante?',
+    'Aproxima-te do caldeirão. Tenho elixires que enganam a morte... e segredos que afastam o perigo.',
+    'Pareces cansado, viajante. Posso oferecer-te um remédio — por algumas cintilas, claro.',
 ];
 
 const RECUSAS = [
-    'Cintilas não bastam, viajante. Voltai quando o bolso pesar mais.',
-    'Os astros não cedem sem oferenda. Trazei mais cintilas.',
+    'Não tens cintilas suficientes, viajante. Volta quando tiveres mais.',
+    'Os astros não cedem sem oferta. Traz mais cintilas.',
 ];
 
 const DESPEDIDAS = [
-    'Que a Lua proteja os vossos passos. (Pressione Enter)',
-    'Ide, e regressai quando a noite vos morder. (Pressione Enter)',
-    'O caldeirão fervilha em vossa ausência. Boa caça. (Pressione Enter)',
+    'Que a Lua proteja os teus passos. (Pressione Enter)',
+    'Vai, e volta quando a noite te morder. (Pressione Enter)',
+    'O caldeirão ferve na tua ausência. Boa caça. (Pressione Enter)',
 ];
 
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -45,7 +45,7 @@ const NPC_ID = 'bruxa';
 // emoji em string.
 function _iconHtml(ic, size = 16) {
     if (ic && (ic.endsWith('.png') || ic.endsWith('.jpg') || ic.includes('/'))) {
-        return `<img src="${ic}" style="width:${size}px;height:${size}px;object-fit:contain;vertical-align:middle;margin-right:4px;">`;
+        return `<img src="${ic}" style="width:${size}px;height:${size}px;object-fit:contain;vertical-align:middle;margin-right:4px;image-rendering:pixelated;">`;
     }
     return ic || '';
 }
@@ -145,7 +145,7 @@ function ensureDialogue() {
                 const slotLivre = ataqueState.slots.indexOf(null);
                 if (slotLivre !== -1) equiparAtaque(slotLivre, a.id);
                 npc.nodes[choice.to] = {
-                    text: `O ${a.at.nome} é agora vosso. Sussurrai o nome e o véu erguer-se-á. (Pressione Enter)`,
+                    text: `O ${a.at.nome} é agora teu. Diz o nome e o véu erguer-se-á. (Pressione Enter)`,
                     next: 'menu',
                 };
             } else {
@@ -165,10 +165,10 @@ export function abrirBruxaArcano() {
     ensureDialogue();
 
     const npc = {
-        name: 'Bruxa',
-        title: 'do Covil',
-        mono: 'B',
-        portraitUrl: 'assets/textures/avatares/bruxa.png',
+        name: 'Mago',
+        title: 'do Vazio',
+        mono: 'M',
+        portraitUrl: 'assets/textures/avatares/mage_avatar.png',
         portrait: { hue: 285, secondHue: 200 },
         start: 'menu',
         nodes: {},
@@ -181,3 +181,4 @@ export function abrirBruxaArcano() {
 export function isBruxaArcanoAberto() {
     return dialogoAberto;
 }
+

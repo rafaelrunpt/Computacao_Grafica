@@ -181,14 +181,12 @@ export function criarRio(scene, colliders, fadeables, cullables) {
     bridgeWood.castShadow = true; bridgeWood.receiveShadow = true;
     scene.add(bridgeWood);
     fadeables.push(bridgeWood);
-    cullables.push(bridgeWood);
 
     const mergedDarkWoodGeo = BufferGeometryUtils.mergeGeometries(darkWoodGeos);
     const bridgeDarkWood = new THREE.Mesh(mergedDarkWoodGeo, matWoodDark);
     bridgeDarkWood.castShadow = true; bridgeDarkWood.receiveShadow = true;
     scene.add(bridgeDarkWood);
     fadeables.push(bridgeDarkWood);
-    cullables.push(bridgeDarkWood);
 
     _bridgePassage = new THREE.Box3(
         new THREE.Vector3(BX - BW / 2 + 0.4, -2, RZ - arcWidth / 2 - 0.8),
@@ -255,7 +253,6 @@ function _criarBocaDoRio(scene, colliders, fadeables, cullables, cx, cz, riverWi
     bouldersMesh.castShadow = true; bouldersMesh.receiveShadow = true;
     scene.add(bouldersMesh);
     fadeables.push(bouldersMesh);
-    cullables.push(bouldersMesh);
 
     if (boulderDarkGeos.length > 0) {
         const mergedDark = BufferGeometryUtils.mergeGeometries(boulderDarkGeos);
@@ -263,7 +260,6 @@ function _criarBocaDoRio(scene, colliders, fadeables, cullables, cx, cz, riverWi
         darkMesh.castShadow = true; darkMesh.receiveShadow = true;
         scene.add(darkMesh);
         fadeables.push(darkMesh);
-        cullables.push(darkMesh);
     }
 
     const matMist = new THREE.MeshBasicMaterial({ color: 0xeaf0f6, transparent: true, opacity: 0.28, depthWrite: false });

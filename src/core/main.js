@@ -45,7 +45,7 @@ import { estado, lojaPlayer, caseloPlayer, tavernPlayer, quartoPlayer, setWorldS
 import moderator from '../systems/moderator.js'; // Ativa ferramentas de debug
 import { isPauseAberto, togglePause } from '../ui/pause-menu.js';
 import { tickFps, setFpsDebugTargets, sampleCullingNow } from '../ui/fps-counter.js';
-import { inicializarAudio, switchMusic, getCurrentTrack, playSFX, tocarAtivacaoCristal, saltarParaClimaxMusical } from '../systems/audio.js';
+import { inicializarAudio, switchMusic, getCurrentTrack, playSFX, tocarAtivacaoCristal, saltarParaClimaxMusical, tocarSomAmbienteRio } from '../systems/audio.js';
 import { isTelaInicialAberta, updateTitleCamera, titleCamera, onTelaInicialFechar } from '../ui/tela-inicial.js';
 import { initNightMode, setNightMode, updateNightMode, pauseNightMode, resumeNightMode, renderNightWorld, resizeNightComposer, isNightInitialized } from '../world/night-mode.js';
 import { initWalkDust, updateWalkDust } from '../world/walk-dust.js';
@@ -351,7 +351,7 @@ registarCallbackInput(
         togglePause();
     },
     () => {
-        // B — Códice de Encargos
+        // B — Diário de Missões
         if (estadoJogo.emCombate || mapaAberto || isInventarioAberto() || isDialogoAberto() || isPauseAberto() || isLockpickAberto()) return;
         toggleQuestBook();
     },
@@ -425,7 +425,10 @@ inicializarAudio(mainCamera, {
     trovao:    'assets/sounds/trovao.mp3',
     cristal:   'assets/sounds/cristal.mp3',
     swoosh:    'assets/sounds/swoosh.mp3',
+    spike_s:   'assets/sounds/Attacks/boss/spike_s.mp3',
+    clock:     'assets/sounds/Attacks/nucleo/clock.mp3',
     transicao_batalha: 'assets/sounds/transicao_batalha.mp3',
+    river:     'assets/sounds/amb_river.flac',
     step_grass: 'assets/sounds/footsteps/relva.mp3',
     step_wood:  'assets/sounds/footsteps/wood.mp3',
     step_stone: 'assets/sounds/footsteps/stone.mp3',
@@ -706,10 +709,10 @@ function animateMundo(deltaTime) {
                         setTimeout(() => {
                             mostrarRecompensa({
                                 titulo: '⚜ Dádiva Ancestral ⚜',
-                                icone: '💜',
+                                icone: 'assets/icones/Heart.png',
                                 nome: 'Bênção de Vigor',
-                                descricao: 'O vosso espírito fortalece-se (+5 HP máximo permanentemente).',
-                                dica: 'A vossa alma transborda vitalidade',
+                                descricao: 'O teu espírito fortalece-se (+5 HP máximo permanentemente).',
+                                dica: 'A tua alma transborda vitalidade',
                                 duracao: 3500
                             });
                         }, 2000);
@@ -729,7 +732,7 @@ function animateMundo(deltaTime) {
                 } else {
                     const zonaBatalha = zonaBatalhaProximoCentro(player.position.x, player.position.z);
                     if (zonaBatalha) {
-                        showPrompt('E — Iniciar Peleja');
+                        showPrompt('E — Iniciar Batalha');
                         if (keys.e) {
                             keys.e = false;
                             iniciarCombateEm(player.position.x, player.position.z, zonaBatalha.tipo);
@@ -750,9 +753,10 @@ function animateMundo(deltaTime) {
     updateLostItems(deltaTime);
     updateSantuarios(deltaTime);
     updateCogumelos(deltaTime);
-    updateVegetacao(deltaTime);
+    updateVegetacao(deltaTime, player.position);
     updateGuardiao(deltaTime);
     updateBruxaMapa(deltaTime, player.position);
+    tocarSomAmbienteRio(player.position.z, 0); // Som dinâmico do rio (Z=0)
     if (!moderator.lockY) {
         player.userData.baseY = getBridgeHeight(player.position.x, player.position.z);
     }
@@ -777,15 +781,22 @@ function animateMundo(deltaTime) {
             _camLook.set(player.position.x, player.position.y + 0.6, player.position.z);
             _camRayDir.subVectors(_camLook, mainCamera.position);
             const dist = _camRayDir.length();
-            _camRayDir.divideScalar(dist);
-            _camRaycaster.set(mainCamera.position, _camRayDir);
-            _camRaycaster.far = dist;
-            const hits = _camRaycaster.intersectObjects(fadeables, true);
-            _activeFadeMeshes.clear();
-            for (const hit of hits) {
-                if (_isPartOfPlayer(hit.object)) continue;
-                if (!hit.object.material) continue;
-                _activeFadeMeshes.add(hit.object);
+            
+            // Só faz raycast se estivermos a uma distância razoável (evita fade massivo 
+            // no regresso da free cam distantes).
+            if (dist < 25.0) {
+                _camRayDir.divideScalar(dist);
+                _camRaycaster.set(mainCamera.position, _camRayDir);
+                _camRaycaster.far = dist;
+                const hits = _camRaycaster.intersectObjects(fadeables, true);
+                _activeFadeMeshes.clear();
+                for (const hit of hits) {
+                    if (_isPartOfPlayer(hit.object)) continue;
+                    if (!hit.object.material) continue;
+                    _activeFadeMeshes.add(hit.object);
+                }
+            } else {
+                _activeFadeMeshes.clear();
             }
         }
 
@@ -797,7 +808,6 @@ function animateMundo(deltaTime) {
     }
 
     if (mapaAberto) {
-        _restoreAllCullables();
         renderizarMinimapa(renderer, scene, window.innerWidth, window.innerHeight, player.position, true);
     } else {
         // Actualizar spotlight (lanterna mágica do herói)
@@ -836,7 +846,6 @@ function animateMundo(deltaTime) {
             renderer.render(scene, mainCamera);
         }
 
-        _restoreAllCullables();
         // Durante a cinemática a HUD inteira é apagada — não renderizar o
         // minimapa nem deixar o seu border aparecer.
         if (emCutscene) {
@@ -1068,6 +1077,19 @@ function animateCaselo(deltaTime) {
                     keys.e = false;
                     if (colocarItemPedestal(idx)) {
                         completarQuest(ped.itemId);
+                        // Recompensa em cintilas por restituir cada artefacto à
+                        // sua runa. Calibrado para que, somado às restantes
+                        // quests e combates, dê para mestrar todos os ataques
+                        // da loja (ver análise de balanceamento).
+                        const RECOMPENSA_PEDESTAL = {
+                            coroa_magica:   70,
+                            brincos_vida:   70,
+                            oculos_carga:   75,
+                            mascara_eclipse: 70,
+                            aureola_caidos: 90,
+                        };
+                        const premioPedestal = RECOMPENSA_PEDESTAL[ped.itemId] || 0;
+                        if (premioPedestal > 0) ganharCintilas(premioPedestal);
                         removerInv(ped.itemId, 1);
                         // se o item estava equipado, desequipa-o
                         if (playerStats.equipped?.acessorio === ped.itemId) {
@@ -1115,7 +1137,7 @@ function animateCaselo(deltaTime) {
         // Salta para a marca de 1 minuto da música atual (seção épica)
         saltarParaClimaxMusical();
         // Pré-carrega o boss agora que o jogador acaba de cumprir o ritual.
-        // A peleja arranca quando ele interagir com o cristal — temos esses
+        // A batalha arranca quando ele interagir com o cristal — temos esses
         // segundos para fazer o upload das ~24 texturas + meshes sem hitch.
         precarregarBoss();
     }
@@ -1293,7 +1315,7 @@ function animateTavern(deltaTime) {
             if (keys.e) {
                 keys.e = false;
                 questAureola.estado = 'aceite';
-                mostrarPista('Estalajadeiro: "Estas terras pranteiam pelos caídos. Purificai todas as zonas corruptas do mapa e a Auréola dos Caídos será vossa."');
+                mostrarPista('Estalajadeiro: "Estas terras choram pelos caídos. Limpa todas as zonas corruptas do mapa e a Auréola dos Caídos será tua."');
             }
         }
     } else {
@@ -1546,7 +1568,18 @@ function _updatePlayerSpot() {
 }
 
 let _prevCena = null;
+let _lastFrameTime = performance.now();
 function animate() {
+    const now = performance.now();
+    const maxFpsMs = 1000 / (settings.maxFps || 60);
+    const elapsedMs = now - _lastFrameTime;
+
+    if (elapsedMs < maxFpsMs) {
+        requestAnimationFrame(animate);
+        return;
+    }
+
+    _lastFrameTime = now;
     requestAnimationFrame(animate);
     _frameCount++;
     let deltaTime = clock.getDelta();

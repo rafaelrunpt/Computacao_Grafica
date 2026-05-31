@@ -1,6 +1,7 @@
 // Adapter: mesma API que npc-dialog.js, mas usa a UI ArcanoDialogue.
 // Para alternar entre os dois, troca o import em src/core/main.js.
 import './arcano-dialogue.js';
+import { limparTutoriais } from './tutorial.js';
 
 const ArcanoDialogue = window.ArcanoDialogue;
 
@@ -8,62 +9,62 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
 const ABERTURA = {
     fraco: [
-        'Alto! Esta ponte não é para qualquer caminhante. Retornai quando o vosso poder for digno de nota.',
-        'Sustai o passo! Sinto em vós a inexperiência de um aprendiz. Esta travessia não vos pertence... ainda.',
-        'Nenhum homem passa sem provar o seu valor. Vós, estranho, ainda não o fizestes.',
+        'Alto! Esta ponte não é para qualquer um. Volta quando fores mais forte.',
+        'Para o passo! Sinto que ainda és um principiante. Esta travessia não é para ti... ainda.',
+        'Ninguém passa sem provar o seu valor. Tu ainda não o fizeste.',
     ],
     posPassagem: [
-        'A ponte está aberta para vós, viajante. Em que vos posso ser útil?',
-        'Regressastes. Dizei-me — o que vos traz a estas paragens?',
-        'A passagem é vossa. Falai, se for do vosso desejo.',
+        'A ponte está aberta para ti, viajante. Como posso ajudar?',
+        'Voltaste. Diz-me — o que te traz por aqui?',
+        'A passagem é tua. Fala, se quiseres.',
     ],
     cedePassagem: [
-        'Sinto em vós um poder que outrora não existia. A ponte é vossa, guerreiro — passai.',
-        'O vosso espírito transmutou-se desde a última vez que aqui estivestes. Reconheço a força em vós. Passai.',
-        'Esta presença... carregais agora o fardo de verdadeiras batalhas. Não vos detenho mais. Ide.',
+        'Sinto em ti um poder que antes não tinhas. A ponte é tua, guerreiro — podes passar.',
+        'O teu espírito mudou desde a última vez. Reconheço a tua força. Passa.',
+        'Esta presença... carregas agora o fardo de verdadeiras lutas. Não te prendo mais. Podes ir.',
     ],
 };
 
 
 const ESCOLHAS = {
     fraco: [
-        { id: 'requisito', label: 'O que devo fazer para atravessar?',
+        { id: 'requisito', label: 'O que tenho de fazer para passar?',
           respostas: [
-            'Provai o vosso valor em combate. Regressai quando tiverdes colhido sabedoria e poder.',
-            'Enfrentai as bestas que assolam estas terras. Quando o vosso espírito for suficientemente temperado, eu o saberei.',
-            'Não existem atalhos para a glória. Combatei, aprendei, crescei. Depois voltaremos a parlamentar.',
+            'Prova o teu valor em combate. Volta quando tiveres mais sabedoria e poder.',
+            'Enfrenta as criaturas que andam por estas terras. Quando fores suficientemente forte, eu saberei.',
+            'Não há atalhos para a glória. Luta, aprende e cresce. Depois voltamos a falar.',
           ] },
-        { id: 'norte_fraco', label: 'Que perigos espreitam no norte?',
+        { id: 'norte_fraco', label: 'Que perigos existem no norte?',
           respostas: [
-            'Um baluarte sombrio, maculado por uma força ancestral. Criaturas que outrora foram homens.',
-            'O mal recrudesce a cada lua cheia nas terras setentrionais. O castelo é a verdadeira danação.',
-            'Terras corrompidas, feras sem discernimento. Mas para atravessar, primeiro deveis convencer-me com a vossa bravura.',
+            'Um forte sombrio, dominado por uma força antiga. Criaturas que antes eram homens.',
+            'O mal cresce a cada lua cheia nas terras do norte. O castelo é a verdadeira maldição.',
+            'Terras corrompidas e feras perigosas. Mas para passar, primeiro tens de me convencer com a tua coragem.',
           ] },
-        { id: 'adeus', label: 'Ficai em paz, guardião.', acao: 'fechar', repetivel: true,
+        { id: 'adeus', label: 'Fica bem, guardião.', acao: 'fechar', repetivel: true,
           respostas: [
-            'Ide com cautela, jovem. E regressai mais robusto.',
-            'Que os ventos vos conduzam ao vosso destino, caminhante.',
-            'Retornai quando as vossas cicatrizes forem o vosso testemunho.',
+            'Vai com cuidado. E volta mais forte.',
+            'Que os ventos te levem ao teu destino.',
+            'Volta quando as tuas cicatrizes forem a tua prova.',
           ] },
     ],
     posPassagem: [
-        { id: 'norte_pos', label: 'O que me aguarda no norte?',
+        { id: 'norte_pos', label: 'O que me espera no norte?',
           respostas: [
-            'Um castelo fustigado por sombras de eras idas. Criaturas que já foram homens. Ide devidamente preparado.',
-            'O mal viceja naquelas entranhas há décadas. O que encontrardes no castelo... não será fácil de subjugar.',
-            'Terras mártires e, no âmago, um cristal negro que pulsa como um coração enfermo.',
+            'Um castelo assombrado por sombras do passado. Criaturas que já foram homens. Vai bem preparado.',
+            'O mal vive ali há décadas. O que encontrares no castelo... não será fácil de derrotar.',
+            'Terras sofridas e, no centro, um cristal negro que pulsa como um coração doente.',
           ] },
-        { id: 'identidade_pos', label: 'Quem sois vós, guardião?',
+        { id: 'identidade_pos', label: 'Quem és tu, guardião?',
           respostas: [
-            'Um soldado que elegeu o dever em detrimento da glória. Trezentos anos cumpro este posto.',
-            'O último da Ordem da Ponte. Os meus irmãos tombaram. Eu permaneço até que alguém leve a contenda ao norte.',
-            'Apenas um velho arauto com uma missão. E hoje, antevejo em vós o que tanto busquei.',
+            'Um soldado que escolheu o dever em vez da glória. Cumpro este posto há trezentos anos.',
+            'O último da Ordem da Ponte. Os meus irmãos morreram. Eu fico aqui até que alguém leve a luta ao norte.',
+            'Apenas um velho com uma missão. E hoje, vejo em ti o que tanto procurei.',
           ] },
-        { id: 'adeus_pos', label: 'Ficai em paz, guardião.', acao: 'fechar', repetivel: true,
+        { id: 'adeus_pos', label: 'Fica bem, guardião.', acao: 'fechar', repetivel: true,
           respostas: [
-            'Que os vossos passos sejam firmes e o vosso aço incansável.',
-            'A ponte permanece aberta para vós. Atravessai quando vos sentirdes pronto.',
-            'Boa fortuna, guerreiro. Bem haveis de precisar dela.',
+            'Que os teus passos sejam firmes e a tua espada incansável.',
+            'A ponte continua aberta para ti. Passa quando te sentires pronto.',
+            'Boa sorte, guerreiro. Vais precisar dela.',
           ] },
     ],
 };
@@ -136,6 +137,7 @@ function ensureDialogue() {
 }
 
 export function abrirDialogoGuardiao(level, callbackPassar, passouJa = false /*, themeKey */) {
+    limparTutoriais();
     if (dialogoAberto) return;
     dialogoAberto = true;
     playerLevel = level;
@@ -164,6 +166,7 @@ export function abrirDialogoGuardiao(level, callbackPassar, passouJa = false /*,
 }
 
 export function abrirDialogoGuardiaoCedePassagem(callbackPassar) {
+    limparTutoriais();
     if (dialogoAberto) return;
     dialogoAberto = true;
     onPassar = callbackPassar;

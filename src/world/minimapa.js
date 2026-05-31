@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mapBounds } from './mapa.js';
 
 export const minimapCamera = new THREE.OrthographicCamera(-8, 8, 8, -8, 1, 100);
+minimapCamera.layers.enable(1);
 
 const _miniCamPos = new THREE.Vector2(0, 0);
 
@@ -101,11 +102,15 @@ export function renderizarMinimapa(renderer, scene, windowWidth, windowHeight, p
         const _prevBg = scene.background;
         scene.background = _miniBg;
 
-        // Preenche todo o interior octogonal da moldura prateada (180×180).
-        // O octógono é mais largo a meio (~135px) — usar 136 centrado faz o
-        // mapa encher por completo. Os cantos do quadrado que sobressaem do
-        // octógono ficam tapados pelas diagonais prateadas da SVG por cima.
-        const size = 136, xPos = 42, yPos = 42;
+        // Ajustado ao olho interior do PNG de bússola (assets/HUD/compass.png).
+        // PNG 44×46 px, olho transparente em PNG cols 8-35 × rows 9-36 (28×28).
+        // Escalado para o border CSS 180×180:
+        //   olho ≈ 115 (largura) × 110 (altura) CSS
+        //   centro do olho em coords screen (bottom-left): (108, 112)
+        // Para preencher SEM ultrapassar o anel: size = 115 (encaixa na
+        // largura, leve overlap simétrico em altura escondido pelo anel
+        // opaco). xPos = centro x − size/2; yPos = centro y − size/2.
+        const size = 117, xPos = 50, yPos = 54;
         renderer.setViewport(xPos, yPos, size, size);
         renderer.setScissor(xPos, yPos, size, size);
         renderer.setScissorTest(true);

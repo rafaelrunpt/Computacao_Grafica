@@ -9,6 +9,8 @@ import { getReducaoCooldown, getLevelDamageMult } from './player-stats.js';
 //   precisao  — probabilidade de acertar (1.0 = sempre)
 //   hits      — número de golpes por ativação
 //   cooldown  — turnos de espera depois de usado
+//   elemento  — 'corte' | 'impacto' | 'arcano' | null (buff)
+//               define a afinidade contra cada tipo de inimigo (ver AFINIDADES).
 // ----------------------------------------------------------------------
 // ----------------------------------------------------------------------
 // Cada ataque inclui metadata visual:
@@ -23,9 +25,10 @@ export const ATAQUES = {
     golpe_rapido: {
         id: 'golpe_rapido',
         nome: 'Lâmina Veloz',
-        desc: 'Estocada rápida e certeira.',
+        desc: 'Estocada de corte rápida. Boa contra espectros, fraca contra rocha.',
         icone: 'assets/icones/ataques/golpe_veloz.png',
         cooldown: 0,
+        elemento: 'corte',
         multATK: 1.0,
         bonusMin: 0, bonusMax: 3,
         precisao: 1.0,
@@ -35,9 +38,10 @@ export const ATAQUES = {
     golpe_pesado: {
         id: 'golpe_pesado',
         nome: 'Talho Profundo',
-        desc: 'Corte poderoso, demorado.',
+        desc: 'Golpe de impacto poderoso. Estilhaça cascas rochosas (núcleos).',
         icone: 'assets/icones/ataques/golpe_pesado.png',
         cooldown: 1,
+        elemento: 'impacto',
         multATK: 1.6,
         bonusMin: 2, bonusMax: 5,
         precisao: 0.85,
@@ -47,9 +51,10 @@ export const ATAQUES = {
     investida: {
         id: 'investida',
         nome: 'Carga Implacável',
-        desc: 'Avança a toda velocidade.',
+        desc: 'Embate de impacto devastador. Ideal contra Núcleos Corrompidos.',
         icone: 'assets/icones/ataques/carga.png',
         cooldown: 2,
+        elemento: 'impacto',
         multATK: 2.2,
         bonusMin: 4, bonusMax: 8,
         precisao: 0.65,
@@ -59,9 +64,10 @@ export const ATAQUES = {
     combo_duplo: {
         id: 'combo_duplo',
         nome: 'Dança das Lâminas',
-        desc: 'Dois cortes encadeados.',
+        desc: 'Dois cortes encadeados. Dilacera espectros (Shaco), fraco em rocha.',
         icone: 'assets/icones/ataques/slash_duplo.png',
         cooldown: 1,
+        elemento: 'corte',
         multATK: 0.7,
         bonusMin: 0, bonusMax: 2,
         precisao: 0.9,
@@ -73,24 +79,26 @@ export const ATAQUES = {
     golpe_giratorio: {
         id: 'golpe_giratorio',
         nome: 'Tornado de Lâminas',
-        desc: 'Três cortes giratórios rápidos. Físico.',
+        desc: 'Três cortes giratórios. Excelente contra espectros, inútil em rocha.',
         icone: 'assets/icones/ataques/tornado.png',
         cooldown: 2,
+        elemento: 'corte',
         multATK: 0.85,
         bonusMin: 1, bonusMax: 3,
         precisao: 0.85,
         hits: 3,
-        anim: { tipo: 'danca', cor: '#ffd86a', lunge: 1.3, dur: 940, impacto: 260, impacto2: 540, impacto3: 820, shake: 7 },
+        anim: { tipo: 'tornado', cor: '#ffd86a', lunge: 1.3, dur: 940, impacto: 260, impacto2: 540, impacto3: 820, shake: 7 },
     },
     // BUFF DEFENSIVO — vendido pela Bruxa das Poções.
     // Não causa dano: aplica véu místico que reduz o dano recebido em 35%
     // durante 5 rondas. Consome o turno do jogador.
-    escudo_mistico: {
-        id: 'escudo_mistico',
+    veu: {
+        id: 'veu',
         nome: 'Véu Arcano',
         desc: 'Reduz o dano sofrido em 35% durante 5 rondas.',
-        icone: '🛡',
+        icone: 'assets/icones/ataques/escudo.png',
         cooldown: 6,
+        elemento: null,
         multATK: 0,
         bonusMin: 0, bonusMax: 0,
         precisao: 1.0,
@@ -104,17 +112,44 @@ export const ATAQUES = {
     relampago_arcano: {
         id: 'relampago_arcano',
         nome: 'Relâmpago Arcano',
-        desc: 'Raio mágico de alto dano. Ignora parte da defesa.',
+        desc: 'Raio arcano de alto dano. Punge espectros e o Soberano; rocha resiste-lhe um pouco.',
         icone: 'assets/icones/ataques/ThunderGlyph.png',
         cooldown: 3,
+        elemento: 'arcano',
         multATK: 2.0,
         bonusMin: 6, bonusMax: 10,
         precisao: 0.95,
         hits: 1,
         magico: true,
-        anim: { tipo: 'talho', cor: '#7ad8ff', lunge: 0.6, dur: 880, impacto: 460, shake: 14 },
+        anim: { tipo: 'trovao', cor: '#7ad8ff', lunge: 0.2, dur: 1000, impacto: 400, shake: 20 },
     },
 };
+
+// ----------------------------------------------------------------------
+// AFINIDADES ELEMENTAIS — multiplicador de dano por (tipo de inimigo × elemento)
+// ----------------------------------------------------------------------
+// Dá uma razão concreta para comprar e alternar ataques: cada inimigo tem
+// uma fraqueza e uma resistência claras.
+//   • Núcleo Corrompido — casca de ROCHA fracturada. As lâminas escorregam
+//     (corte fraco), mas o impacto estilhaça-a (impacto forte).
+//   • Wraith / Shaco — espectro etéreo e veloz. Os golpes pesados atravessam
+//     o vazio (impacto fraco); cortes rápidos e magia arcana ferem-no (fortes).
+//   • Soberano (boss) — couraça densa, mas vulnerável à energia arcana.
+// Valores: 1.5 = super eficaz, 1.0 = neutro, 0.6 = resistente.
+export const AFINIDADES = {
+    nucleo: { impacto: 1.5, corte: 0.6, arcano: 1.0 },
+    wraith: { impacto: 0.6, corte: 1.4, arcano: 1.5 },
+    boss:   { impacto: 1.0, corte: 1.0, arcano: 1.4 },
+};
+
+// Devolve o multiplicador de afinidade de um elemento contra um tipo de
+// inimigo. Sem elemento (buff) ou tipo desconhecido → 1.0 (neutro).
+export function getAfinidade(elemento, tipoInimigo) {
+    if (!elemento) return 1;
+    const tabela = AFINIDADES[tipoInimigo];
+    if (!tabela) return 1;
+    return tabela[elemento] ?? 1;
+}
 
 // ----------------------------------------------------------------------
 // ESTADO — 2 slots equipáveis e catálogo desbloqueado pelo jogador

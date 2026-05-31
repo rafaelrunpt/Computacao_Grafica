@@ -58,17 +58,28 @@ export function criarAcessorioAureola() {
 
 export function criarAcessorioMascara() {
     const g = new THREE.Group();
-    const matBanda = new THREE.MeshStandardMaterial({ color: 0x0a0612, roughness: 0.6, metalness: 0.5, emissive: 0x10001f, emissiveIntensity: 0.5 });
-    const matRuna  = new THREE.MeshStandardMaterial({ color: 0xa84bff, emissive: 0xa040ff, emissiveIntensity: 2.0, roughness: 0.3, metalness: 0.2 });
-    const banda = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.17, 0.17, 0.08, 24, 1, true, -Math.PI * 0.55, Math.PI * 1.1),
-        matBanda
-    );
-    banda.rotation.y = Math.PI / 2;
-    g.add(banda);
-    const runa = new THREE.Mesh(new THREE.OctahedronGeometry(0.055, 0), matRuna);
-    runa.position.set(0, 0, 0.17);
-    g.add(runa);
+    const matCorona = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff8800, emissiveIntensity: 1.5, transparent: true, opacity: 0.95 });
+    const matLua    = new THREE.MeshStandardMaterial({ color: 0x08040a, roughness: 0.9 });
+    const matCresc  = new THREE.MeshStandardMaterial({ color: 0xe8d8a8, emissive: 0xf0e0b0, emissiveIntensity: 0.5 });
+    const matOlho   = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x88ccff, emissiveIntensity: 2.0 });
+
+    const corona = new THREE.Mesh(new THREE.TorusGeometry(0.20, 0.04, 12, 32), matCorona);
+    g.add(corona);
+
+    const lua = new THREE.Mesh(new THREE.SphereGeometry(0.19, 24, 12), matLua);
+    lua.scale.z = 0.2;
+    g.add(lua);
+
+    const cresc = new THREE.Mesh(new THREE.SphereGeometry(0.195, 24, 12, 0, Math.PI * 1.2), matCresc);
+    cresc.scale.z = 0.15;
+    cresc.position.set(0.03, 0, 0.03);
+    cresc.rotation.z = Math.PI * 0.25;
+    g.add(cresc);
+
+    const oGeo = new THREE.SphereGeometry(0.015, 8, 4);
+    const o1 = new THREE.Mesh(oGeo, matOlho); o1.position.set(-0.06, 0.03, 0.05); o1.scale.set(2.2, 0.4, 1); g.add(o1);
+    const o2 = new THREE.Mesh(oGeo, matOlho); o2.position.set(0.06, 0.03, 0.05); o2.scale.set(2.2, 0.4, 1); g.add(o2);
+
     return g;
 }
 

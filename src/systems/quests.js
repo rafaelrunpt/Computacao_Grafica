@@ -1,4 +1,4 @@
-// Sistema simples de encargos para o Códice (tecla B).
+// Sistema simples de missões para o Diário (tecla B).
 // Cada quest tem: id, title (curto), summary (descrição), discovered (true
 // quando o jogador descobriu a pista), completed (true quando concluiu a
 // tarefa). O painel só mostra quests com discovered === true.

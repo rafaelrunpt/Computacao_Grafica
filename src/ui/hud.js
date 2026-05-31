@@ -34,8 +34,21 @@ import { formatPrompt as _formatPromptForInput } from './glyphs.js';
                única bitmap cacheada em vez de ~80 <rect> SVG recompostos */
             background-repeat: no-repeat;
             background-size: 100% 100%;
+            /* Cor de fundo azul-escura preenche o espaço entre o canvas (52×52)
+               e o anel de madeira interior, eliminando o ver-através ao mundo
+               no exterior. O clip-path corta a Box ao octógono exterior da
+               moldura para que o azul não vaze para fora da forma de madeira. */
+            background-color: #1a1a2e;
+            clip-path: polygon(
+                26% 0%, 74% 0%, 100% 26%, 100% 74%,
+                74% 100%, 26% 100%, 0% 74%, 0% 26%
+            );
         }
         #game-hud .hud-avatar canvas {
+            /* Canvas dentro do interior octogonal da moldura (não cobre o
+               anel de madeira). O clip-path corta-o no mesmo octógono
+               interior; qualquer fina margem para o anel é preenchida pela
+               background-color azul da Box. */
             position: absolute; top: 9px; left: 9px;
             width: 52px; height: 52px;
             image-rendering: pixelated;
@@ -260,22 +273,29 @@ export function buildAvatarScene() {
     clone.traverse(c => { if (c.isMesh) cloneMeshes.push(c); });
     _avatarOriginalMeshes = origMeshes.map((o, i) => ({ orig: o, clone: cloneMeshes[i] }));
 
-    // Enquadrar a câmara com o bounding box real do clone — assim a cabeça
-    // preenche a janela octogonal em vez de ficar um quadrado pequeno no meio.
-    // Forçamos todos os acessórios visíveis durante a medição para que o
-    // enquadramento permaneça estável (não muda se um acessório aparecer).
+    // Enquadrar com bounding SPHERE da cabeça (sem acessórios).
+    // Esfera é invariante à rotação — antes usávamos bbox AABB que mudava
+    // de tamanho conforme o player virava, dando enquadramentos diferentes
+    // entre interiores (player parado) e exterior (player roda livre).
+    // Aureola/coroa estendem o bound muito → escondemos durante medição.
     const _origVis = [];
-    clone.traverse(c => { _origVis.push([c, c.visible]); c.visible = true; });
+    const accessoryClones = [
+        _avatarCoroaClone, _avatarBrincosClone, _avatarOculosClone,
+        _avatarAureolaClone, _avatarMascaraClone,
+    ].filter(Boolean);
+    for (const a of accessoryClones) { _origVis.push([a, a.visible]); a.visible = false; }
     clone.updateMatrixWorld(true);
     const bbox = new THREE.Box3().setFromObject(clone);
     for (const [c, v] of _origVis) c.visible = v;
 
-    const halfW = (bbox.max.x - bbox.min.x) * 0.5;
-    const halfH = (bbox.max.y - bbox.min.y) * 0.5;
-    // Pega no maior eixo + pequena margem (10%) para o modelo encostar à
-    // borda interior da moldura sem chocar com a clip-path do canvas.
-    const half = Math.max(halfW, halfH) * 1.1;
-    const cy = (bbox.max.y + bbox.min.y) * 0.5;
+    const sphere = new THREE.Sphere();
+    bbox.getBoundingSphere(sphere);
+    // TESTE com sphere * 0.6 — frustum pequeno, cabeça claramente maior.
+    // Sphere é rotation-invariant; consistente entre cenas mesmo se o
+    // player rodar livremente no exterior. Ajustar para 0.7-0.8 quando
+    // confirmares que está visível a mudança.
+    const half = sphere.radius * 0.6;
+    const cy = sphere.center.y;
 
     avatarCam.left   = -half;
     avatarCam.right  =  half;

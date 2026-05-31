@@ -49,16 +49,16 @@ export const madeira2Tex = _loader.load(_texPath('assets/textures/madeira2.webp'
     _onWoodLoad();
 });
 
-// Texturas da água — color + normal map (tileáveis, scrolladas no shader)
 export const waterColorTex = _loader.load('assets/textures/water/Water%200339.jpg', t => {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.anisotropy = 4;
-    t.colorSpace = THREE.SRGBColorSpace;   // cor → sRGB, convertida em shader
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.needsUpdate = true; // Só marca após carregar
 });
 export const waterNormalTex = _loader.load('assets/textures/water/Water%200339normal.jpg', t => {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.anisotropy = 4;
-    // normal map mantém-se em espaço linear (NoColorSpace por defeito)
+    t.needsUpdate = true; // Só marca após carregar
 });
 
 // ---- shader de terreno ----
@@ -116,9 +116,13 @@ export function makeTerrainShader(grassCol, pathColor) {
                            mix(_hash(i+vec2(0,1)),_hash(i+vec2(1,1)),f.x),f.y);
             }
             float _fbm(vec2 p){
-                // Restaurado para 2 iterações (balanço entre qualidade e performance)
+                // Reduzido para 1 iteração em qualidade baixa, 2 em média/alta.
                 float v=0.0,a=0.5;
-                for(int i=0;i<2;i++){v+=a*_sn(p);p=p*2.1+vec2(1.7,9.2);a*=0.5;}
+                int iters = ${_LOW ? 1 : 2};
+                for(int i=0;i<2;i++){
+                    if (i >= iters) break;
+                    v+=a*_sn(p);p=p*2.1+vec2(1.7,9.2);a*=0.5;
+                }
                 return v;
             }
 
@@ -494,47 +498,38 @@ export const matWater = new THREE.ShaderMaterial({
         void main() {
             if (vWorldPos.y < -0.3) discard;
 
-            // UVs em coords-mundo → tiles uniformes mesmo no plano 210×6.
+            // UVs em coords-mundo -> tiles uniformes mesmo no plano 210×6.
             vec2 baseUv = vWorldPos.xz * 0.18;
             float t = uTime;
 
             // bankN — usado mais à frente só para a máscara da espuma.
             float bankN = 1.0 - abs(vUv.y - 0.5) * 2.0;
 
-            // -- Domain warp por ruído --
-            // Distorce os UVs *antes* do scroll → o flow serpenteia em vez
-            // de ir em linha recta. Duas amostras lentas em escalas/fases
-            // diferentes geram um warp 2D contínuo.
+            // -- Domain warp por ruído (Original) --
             float wnA = vnoise(baseUv * 0.42 + vec2(-t * 0.07,       0.0));
             float wnB = vnoise(baseUv * 0.38 + vec2(0.0,        t * 0.05) + 17.3);
             vec2  warp = vec2(wnA - 0.5, wnB - 0.5) * 0.55;
 
-            // Duas camadas — sinal negativo no scroll em X → o padrão move-se
-            // em -X, fazendo a corrente correr no sentido oposto ao anterior.
-            vec2 uvA = baseUv * 1.0 + vec2(-t * 0.16,  t * 0.07) + warp;
-            vec2 uvB = baseUv * 2.1 + vec2(-t * 0.26, -t * 0.10) + warp * 1.4;
+            // Velocidade Restaurada para o ritmo lento mas fluido
+            vec2 uvA = baseUv * 1.0 + vec2(t * 0.16,  t * 0.07) + warp;
+            vec2 uvB = baseUv * 2.1 + vec2(t * 0.26, -t * 0.10) + warp * 1.4;
 
             vec3 nA = texture2D(uNormalMap, uvA).xyz * 2.0 - 1.0;
             vec3 nB = texture2D(uNormalMap, uvB).xyz * 2.0 - 1.0;
             vec3 nTS = normalize(nA + nB);
 
-            // Tangente-espaço → mundo (plano horizontal). Damped para
-            // não parecer gelatina.
+            // Tangente-espaço → mundo.
             float bump = 0.55;
             vec3 N = normalize(vec3(nTS.x * bump, 1.0, nTS.y * bump));
 
-            // "Crista" da onda — quanto inclinada está a normal local.
-            // Usada mais à frente para gerar espuma só onde há agitação.
+            // Crista restaurada
             float crest = clamp(length(vec2(nTS.x, nTS.y)) * 1.4, 0.0, 1.0);
 
-            // Cor da textura — tinta subtil, escala ligeiramente diferente
-            // e scroll por dentro do warp para não correr em sintonia.
+            // Cor da textura restaurada (visto que o utilizador prefere e lagava menos)
             vec3 texCol = texture2D(uColorMap, baseUv * 0.7 + vec2(-t * 0.085, t * 0.010) + warp * 0.6).rgb;
 
             // View / Light
             vec3 V = normalize(cameraPosition - vWorldPos);
-            // Alinhado com o sunLight da cena (main.js: position(80, 120, 80))
-            // para que o glint da água venha da mesma direcção que as sombras.
             vec3 L = normalize(vec3(80.0, 120.0, 80.0));
             vec3 H = normalize(L + V);
 
@@ -542,10 +537,10 @@ export const matWater = new THREE.ShaderMaterial({
             float fresnel = pow(1.0 - ndotv, 3.5);
             float spec    = pow(max(0.0, dot(N, H)), 45.0);
 
-            // Paleta teal/verde-azul. A textura entra como tinta (22%).
-            vec3 deep    = vec3(0.04, 0.13, 0.16);
-            vec3 shallow = vec3(0.20, 0.42, 0.42);
-            vec3 sky     = vec3(0.62, 0.74, 0.78);
+            // Paleta — azul cristalino, água muito límpida
+            vec3 deep    = vec3(0.06, 0.46, 0.70);
+            vec3 shallow = vec3(0.30, 0.78, 0.96);
+            vec3 sky     = vec3(0.66, 0.92, 1.00);
 
             float texLum = dot(texCol, vec3(0.33));
             vec3 baseTint = mix(deep, shallow, smoothstep(0.15, 0.85, texLum));
@@ -554,18 +549,12 @@ export const matWater = new THREE.ShaderMaterial({
             vec3 col = mix(baseTint, sky, fresnel * 0.55);
             col += vec3(1.0, 0.93, 0.78) * spec * 0.45;
 
-            // -- Espuma --
-            // Antigamente: banda branca contínua junto às margens (ficava
-            // como "borda pintada"). Agora a espuma só aparece onde há
-            // *crista* da onda E perto da margem, em padrão "blobby"
-            // (dois ruídos multiplicados → manchas, não tapete). Ainda
-            // por cima usa um off-white levemente verde-acinzentado em
-            // vez de branco puro.
+            // -- Espuma Original (Manchas orgânicas) --
             float foamMask  = smoothstep(0.22, 0.06, bankN);
             float foamN1    = vnoise(baseUv * 5.5 + vec2(t * 0.7,  t * 0.25));
             float foamN2    = vnoise(baseUv * 11.0 + vec2(-t * 0.5, t * 0.45));
             float foamPat   = foamN1 * foamN2;
-            foamPat = smoothstep(0.18, 0.42, foamPat);   // limiar alto → manchas
+            foamPat = smoothstep(0.18, 0.42, foamPat);
             float foam = foamMask * foamPat * (0.30 + crest * 1.20);
             foam = clamp(foam, 0.0, 1.0);
             col = mix(col, vec3(0.82, 0.90, 0.91), foam * 0.45);
@@ -573,11 +562,12 @@ export const matWater = new THREE.ShaderMaterial({
             // Noite
             col *= mix(vec3(1.0), vec3(0.32, 0.42, 0.55), uNight);
 
-            // Mais transparente — deixa o leito de areia respirar.
-            float alphaBase = mix(0.55, 0.85, foam);
-            float alpha = mix(alphaBase, 0.95, fresnel * 0.7);
+            // Transparência — água muito mais límpida (deixa ver bem o leito de areia)
+            float alphaBase = mix(0.20, 0.62, foam);
+            float alpha = mix(alphaBase, 0.85, fresnel * 0.7);
             gl_FragColor = vec4(col, alpha);
         }
+
     `,
 });
 

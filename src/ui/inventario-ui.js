@@ -9,6 +9,7 @@
 import { getItens, usarItem, registarOnChange, CATALOGO } from '../systems/inventario.js';
 import { playerStats } from '../systems/player-stats.js';
 import { atualizarHUD } from './hud.js';
+import { limparTutoriais } from './tutorial.js';
 
 let _aberto = false;
 let _bloqueado = false;
@@ -259,7 +260,7 @@ function renderItens() {
     if (usaveis.length === 0) {
         const v = document.createElement('div');
         v.className = 'vazio';
-        v.textContent = '— o vosso alforge encontra-se vazio —';
+        v.textContent = '— o teu inventário está vazio —';
         listaEl.appendChild(v);
         return;
     }
@@ -322,6 +323,7 @@ function renderHp() {
 registarOnChange(() => { if (_aberto) renderItens(); });
 
 export function abrirInventario() {
+    limparTutoriais();
     if (_bloqueado || _aberto) return;
     _aberto = true;
     flashEl.textContent = '';

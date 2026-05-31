@@ -163,20 +163,16 @@ function buildCompassSVG() {
     return `<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" style="width:100%;height:100%;display:block;image-rendering:pixelated;">${svg}</svg>`;
 }
 
-// Injecta a moldura uma única vez no #minimap-border.
-// Em vez de SVG inline (200+ <rect> recompostos por frame por cima do
-// canvas WebGL), serializamos a SVG para um data URI e pomos como
-// background-image — o compositor trata como uma bitmap única em cache,
-// custo de composição praticamente zero por frame.
+// Injecta a moldura uma única vez no #minimap-border, usando o PNG
+// pixel-art em assets/HUD/compass.png (o SVG procedural acima ficou só
+// como fallback — pode ser removido se nunca for usado novamente).
 export function instalarMolduraBussola() {
     const el = document.getElementById('minimap-border');
     if (!el) return;
-    const svg = buildCompassSVG();
-    const encoded = encodeURIComponent(svg)
-        .replace(/'/g, '%27')
-        .replace(/"/g, '%22');
     el.innerHTML = '';
-    el.style.background = `url("data:image/svg+xml;utf8,${encoded}") center/100% 100% no-repeat`;
+    el.style.background = `url("assets/HUD/compass.png") center/100% 100% no-repeat`;
+    // Garante que o PNG fica nítido (pixelated) e não interpolado.
+    el.style.imageRendering = 'pixelated';
 }
 
 // auto-instala assim que o módulo é importado (o div já existe no index.html)

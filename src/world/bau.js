@@ -141,21 +141,42 @@ export class Bau {
     }
 
     _criarVisualMascara(group) {
-        const matBanda = new THREE.MeshStandardMaterial({ color: 0x0a0612, roughness: 0.6, metalness: 0.5, emissive: 0x10001f, emissiveIntensity: 0.5 });
-        const matRuna  = new THREE.MeshStandardMaterial({ color: 0xa84bff, emissive: 0xa040ff, emissiveIntensity: 2.0, roughness: 0.3, metalness: 0.2 });
-        // tira horizontal curva
-        const banda = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.22, 0.22, 0.12, 24, 1, true, -Math.PI * 0.55, Math.PI * 1.1),
-            matBanda
-        );
-        banda.position.set(0, 0, 0);
-        banda.rotation.y = Math.PI / 2;
-        group.add(banda);
-        // runa frontal
-        const runa = new THREE.Mesh(new THREE.OctahedronGeometry(0.075, 0), matRuna);
-        runa.position.set(0, 0, 0.22);
-        group.add(runa);
-        group.userData.brilho = runa;
+        // Versão "Eclipse Total" para o baú — consistente com entities/jogador.js
+        const matCorona    = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff8800, emissiveIntensity: 1.2, transparent: true, opacity: 0.9 });
+        const matLuaNegra  = new THREE.MeshStandardMaterial({ color: 0x08040a, roughness: 0.9 });
+        const matCrescente = new THREE.MeshStandardMaterial({ color: 0xe8d8a8, emissive: 0xf0e0b0, emissiveIntensity: 0.4 });
+        const matOlho      = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x88ccff, emissiveIntensity: 2.0 });
+
+        // 1. Corona (Disco exterior brilhante)
+        const corona = new THREE.Mesh(new THREE.SphereGeometry(0.30, 24, 12), matCorona);
+        corona.scale.set(1.0, 1.0, 0.1);
+        group.add(corona);
+
+        // 2. Disco Negro (A Lua)
+        const lua = new THREE.Mesh(new THREE.SphereGeometry(0.26, 24, 12), matLuaNegra);
+        lua.scale.set(1.0, 1.0, 0.15);
+        lua.position.z = 0.02;
+        group.add(lua);
+
+        // 3. Crescente
+        const cresc = new THREE.Mesh(new THREE.SphereGeometry(0.265, 24, 12, 0, Math.PI * 1.1), matCrescente);
+        cresc.scale.set(1.0, 1.0, 0.1);
+        cresc.position.set(0.04, 0, 0.04);
+        cresc.rotation.z = Math.PI * 0.2;
+        group.add(cresc);
+
+        // 4. Olhos (Fendas)
+        const olhoGeo = new THREE.SphereGeometry(0.02, 8, 4);
+        const o1 = new THREE.Mesh(olhoGeo, matOlho);
+        o1.position.set(-0.08, 0.04, 0.06);
+        o1.scale.set(2, 0.4, 1);
+        group.add(o1);
+        const o2 = new THREE.Mesh(olhoGeo, matOlho);
+        o2.position.set(0.08, 0.04, 0.06);
+        o2.scale.set(2, 0.4, 1);
+        group.add(o2);
+
+        group.userData.brilho = corona;
     }
 
     _criarVisualPocao(group) {

@@ -105,13 +105,13 @@ function _criarUm(scene, p, addCollider) {
     topo.receiveShadow = true;
     g.add(topo);
 
-    // runa flutuante (torus deitado) — começa apagada; só ilumina no burst
+    // runa flutuante (torus deitado) — começa acesa, indicando que está disponível
     const runa = new THREE.Mesh(
         new THREE.TorusGeometry(0.30, 0.06, 8, 24),
         new THREE.MeshStandardMaterial({
-            color:    RUNA_COR_GASTA,
-            emissive: RUNA_COR_GASTA,
-            emissiveIntensity: 0.15,
+            color:    RUNA_COR_ATIVA,
+            emissive: RUNA_COR_ATIVA,
+            emissiveIntensity: 2.8,
             roughness: 0.45,
         }),
     );
@@ -119,8 +119,8 @@ function _criarUm(scene, p, addCollider) {
     runa.position.y = 1.60;
     g.add(runa);
 
-    // luz suave — apagada até ao trigger
-    const light = new THREE.PointLight(RUNA_COR_ATIVA, 0, 7.5, 1.8);
+    // luz suave — acesa, indicando que está disponível
+    const light = new THREE.PointLight(RUNA_COR_ATIVA, 3.2, 7.5, 1.8);
     light.position.y = 1.6;
     g.add(light);
 
@@ -179,6 +179,13 @@ export function resetSantuarios() {
     for (const s of _lista) {
         if (!s.ativado) continue;
         s.ativado = false;
+        
+        // Voltar a acender indicando que está novamente disponível
+        s._runa.material.color.setHex(RUNA_COR_ATIVA);
+        s._runa.material.emissive.setHex(RUNA_COR_ATIVA);
+        s._runa.material.emissiveIntensity = 2.8;
+        s._light.intensity = 3.2;
+
         if (s._burst) {
             s._burst.visible = false;
             s._burst.userData.active = false;
@@ -201,15 +208,18 @@ export function updateSantuarios(dt) {
                 b.userData.rayMat.opacity = 0;
                 b.userData.coreMat.opacity = 0;
                 b.userData.shockMat.opacity = 0;
-                // volta a apagar a runa e a luz
+                // Apaga a runa e a luz (santuário foi consumido)
+                s._runa.material.color.setHex(RUNA_COR_GASTA);
+                s._runa.material.emissive.setHex(RUNA_COR_GASTA);
                 s._runa.material.emissiveIntensity = 0.15;
                 s._light.intensity = 0;
             } else {
                 const k = tt / BURST_DUR;           // 0..1
-                // envelope: sobe em 0.12s, depois desce até ao fim
+                // envelope visual do burst (raio/onda): sobe em 0.12s, depois desce
                 const fadeIn  = Math.min(1, tt / 0.12);
                 const fadeOut = Math.pow(1 - k, 1.6);
                 const env = fadeIn * fadeOut;
+                
                 b.userData.rayMat.opacity   = 0.85 * env;
                 b.userData.coreMat.opacity  = 1.00 * env;
                 // raio gira ligeiramente
@@ -219,9 +229,10 @@ export function updateSantuarios(dt) {
                 const sc = 0.6 + k * 6.5;
                 b.userData.shock.scale.set(sc, sc, 1);
                 b.userData.shockMat.opacity = 0.9 * Math.pow(1 - k, 0.8);
-                // a runa acende durante o burst e volta a apagar
-                s._runa.material.emissiveIntensity = 0.15 + 2.4 * env;
-                s._light.intensity = 2.6 * env;
+
+                // A runa (aureola) e a luz mantêm-se acesas e intensificam com o burst
+                s._runa.material.emissiveIntensity = 2.8 + 1.2 * fadeIn;
+                s._light.intensity = 3.2 + 1.0 * fadeIn;
             }
         }
     }

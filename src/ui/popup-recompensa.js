@@ -1,8 +1,10 @@
+import { playSpriteFX } from './combate-anims.js';
+
 // --------------------------------------------------------
 // POPUP DE RECOMPENSA + FOGOS DE ARTIFÍCIO
 // --------------------------------------------------------
-// Mostra um cartão dourado central com o item desbloqueado
-// e dispara fogos de artifício no canvas overlay.
+// Mostra um cartão dourado central com o item desbloqueado.
+// Combina fogos clássicos (partículas Canvas) com os novos VFX (Spritesheet).
 // --------------------------------------------------------
 
 const overlay = document.createElement('div');
@@ -17,7 +19,7 @@ overlay.style.cssText = `
 `;
 document.body.appendChild(overlay);
 
-// canvas dos fogos de artifício
+// canvas dos fogos de artifício clássicos
 const canvas = document.createElement('canvas');
 canvas.style.cssText = `position:absolute;inset:0;width:100%;height:100%;`;
 overlay.appendChild(canvas);
@@ -47,6 +49,7 @@ card.style.cssText = `
     text-align: center;
     transform: scale(0.8); opacity: 0;
     transition: transform 0.35s cubic-bezier(.2,1.4,.3,1), opacity 0.25s ease;
+    z-index: 100;
 `;
 overlay.appendChild(card);
 
@@ -108,115 +111,157 @@ dica.style.cssText = `
     font-family: 'Courier New', monospace;
     letter-spacing: 1px;
 `;
-dica.textContent = 'Consultai o vosso inventário (I) para o empunhar';
+dica.textContent = 'Consulta o teu inventário (I) para o equipar';
 card.appendChild(dica);
 
-// keyframes para o pop do ícone (sem rotação)
-const style = document.createElement('style');
-style.textContent = `
+// keyframes para o pop do ícone
+const styleEl = document.createElement('style');
+styleEl.textContent = `
     @keyframes rewardPop {
         0%   { transform: scale(0.35); }
         65%  { transform: scale(1.18); }
         100% { transform: scale(1); }
     }
 `;
-document.head.appendChild(style);
+document.head.appendChild(styleEl);
 
-// --- fogos de artifício ---
-// Assim que a recompensa aparece, várias explosões grandes surgem de
-// imediato — já na sua posição final, sem foguetes a subir antes.
-// Cada explosão lança um leque de faíscas que se espalham e caem.
-const cores = ['#ffd24a', '#ffe7a0', '#7fb0ff', '#ff84b4', '#9dff9d', '#c878ff', '#ff9050', '#ffffff'];
-let faiscas  = [];   // faíscas lançadas pelas explosões
-let claroes  = [];   // clarão breve no instante da explosão
-let animando = false;
+// --- Lógica 1: Fogos de Artifício em Partículas (Canvas) ---
+const coresCanvas = ['#ffd24a', '#ffe7a0', '#7fb0ff', '#ff84b4', '#9dff9d', '#c878ff', '#ff9050', '#ffffff'];
+let faiscas  = [];
+let claroes  = [];
+let animandoCanvas = false;
 
-function explodir(x, y, cor) {
-    const n = 70 + Math.floor(Math.random() * 60);     // explosão grande
-    const anel = Math.random() < 0.30;                 // por vezes um anel limpo
-    const vel = 5.5 + Math.random() * 4.0;             // espalha-se bem longe
-    const cor2 = cores[Math.floor(Math.random() * cores.length)];
+function explodirCanvas(x, y, cor) {
+    const n = 50 + Math.floor(Math.random() * 30);
+    const vel = 4.5 + Math.random() * 3;
     for (let i = 0; i < n; i++) {
-        const ang = (i / n) * Math.PI * 2 + Math.random() * 0.14;
-        const spd = anel ? vel * (0.85 + Math.random() * 0.30)
-                         : vel * (0.30 + Math.random() * 0.90);
+        const ang = (i / n) * Math.PI * 2 + Math.random() * 0.15;
+        const spd = vel * (0.4 + Math.random() * 0.8);
         faiscas.push({
             x, y,
             vx: Math.cos(ang) * spd,
             vy: Math.sin(ang) * spd,
-            cor: Math.random() < 0.72 ? cor : cor2,
+            cor,
             vida: 1,
-            decai: 0.011 + Math.random() * 0.020,
-            tam: 1.8 + Math.random() * 3.2,
+            decai: 0.012 + Math.random() * 0.015,
+            tam: 1.5 + Math.random() * 2,
         });
     }
     claroes.push({ x, y, vida: 1 });
 }
 
-function tickFireworks() {
-    if (!animando) return;
+function tickCanvas() {
+    if (!animandoCanvas) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.globalCompositeOperation = 'lighter';   // mistura aditiva → dá brilho
+    ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
 
-    // clarão das explosões
     for (let i = claroes.length - 1; i >= 0; i--) {
         const c = claroes[i];
-        c.vida -= 0.085;
+        c.vida -= 0.08;
         if (c.vida <= 0) { claroes.splice(i, 1); continue; }
-        ctx.globalAlpha = c.vida * 0.55;
+        ctx.globalAlpha = c.vida * 0.4;
         ctx.fillStyle = '#fff3d0';
         ctx.beginPath();
-        ctx.arc(c.x, c.y, 16 + (1 - c.vida) * 82, 0, Math.PI * 2);
+        ctx.arc(c.x, c.y, 10 + (1 - c.vida) * 60, 0, Math.PI * 2);
         ctx.fill();
     }
 
-    // faíscas das explosões (riscos tipo cometa)
     for (let i = faiscas.length - 1; i >= 0; i--) {
         const s = faiscas[i];
-        s.x += s.vx;
-        s.y += s.vy;
-        s.vy += 0.05;                            // gravidade
-        s.vx *= 0.985;                           // resistência do ar
-        s.vy *= 0.985;
+        s.x += s.vx; s.y += s.vy;
+        s.vy += 0.05; s.vx *= 0.98; s.vy *= 0.98;
         s.vida -= s.decai;
         if (s.vida <= 0) { faiscas.splice(i, 1); continue; }
         ctx.globalAlpha = s.vida * s.vida;
         ctx.strokeStyle = s.cor;
-        ctx.lineWidth = s.tam * (0.4 + s.vida * 0.6);
+        ctx.lineWidth = s.tam * (0.5 + s.vida * 0.5);
         ctx.beginPath();
         ctx.moveTo(s.x, s.y);
-        ctx.lineTo(s.x - s.vx * 2.6, s.y - s.vy * 2.6);
+        ctx.lineTo(s.x - s.vx * 2, s.y - s.vy * 2);
         ctx.stroke();
     }
-
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
 
     if (faiscas.length || claroes.length) {
-        requestAnimationFrame(tickFireworks);
+        requestAnimationFrame(tickCanvas);
     } else {
-        animando = false;
+        animandoCanvas = false;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 }
 
-// dispara as explosões — todas logo, já na posição final
+// --- Lógica 2: Fogos de Artifício em Spritesheet (VFX) ---
+let intervalofogos = null;
+
 function dispararFogos() {
-    if (!animando) { animando = true; requestAnimationFrame(tickFireworks); }
-    const explosao = () => {
-        const x = canvas.width  * (0.10 + Math.random() * 0.80);
-        const y = canvas.height * (0.13 + Math.random() * 0.40);
-        explodir(x, y, cores[Math.floor(Math.random() * cores.length)]);
+    const explosaoVFX = (x, y) => {
+        const size = 20 + Math.random() * 15; 
+        playSpriteFX({
+            url: 'assets/vfx/fireworks_ordered.png',
+            cols: 4, rows: 3, frames: 12,
+            fps: 20, 
+            x, y, size,
+            extraCss: 'transform: translate(-50%, -50%) scaleY(-1); filter: hue-rotate(' + (Math.random() * 360) + 'deg) brightness(1.3); z-index: 90;'
+        });
     };
-    // salva principal — imediata, espalhada pelo ecrã
-    for (let i = 0; i < 6; i++) explosao();
-    // pequena segunda salva logo a seguir, para encher o ecrã
-    setTimeout(() => { for (let i = 0; i < 3; i++) explosao(); }, 320);
+
+    const explosaoCanvas = (xvw, yvh) => {
+        const canvX = (xvw / 100) * canvas.width;
+        const canvY = (yvh / 100) * canvas.height;
+        explodirCanvas(canvX, canvY, coresCanvas[Math.floor(Math.random() * coresCanvas.length)]);
+    };
+
+    if (!animandoCanvas) { animandoCanvas = true; requestAnimationFrame(tickCanvas); }
+
+    // 1. Salva Inicial: VFX nos cantos e Canvas em posições intermédias
+    // VFX (PNG)
+    explosaoVFX(15, 15); // Canto Superior Esquerdo
+    explosaoVFX(85, 15); // Canto Superior Direito
+    explosaoVFX(10, 50); // Lado Esquerdo
+    explosaoVFX(90, 50); // Lado Direito
+    
+    // Partículas (Canvas)
+    explosaoCanvas(50, 15); // Topo Centro
+    explosaoCanvas(30, 80); // Baixo Esquerda
+    explosaoCanvas(70, 80); // Baixo Direita
+
+    // 2. Loop de explosões aleatórias — Alternando locais
+    if (intervalofogos) clearInterval(intervalofogos);
+    intervalofogos = setInterval(() => {
+        if (Math.random() > 0.5) {
+            // Spritesheet (PNG) nos lados
+            const rx = Math.random() < 0.5 ? (5 + Math.random() * 20) : (75 + Math.random() * 20);
+            const ry = 10 + Math.random() * 70;
+            explosaoVFX(rx, ry);
+        } else {
+            // Partículas (Canvas) no topo ou fundo
+            const rx = 20 + Math.random() * 60;
+            const ry = Math.random() < 0.5 ? (5 + Math.random() * 15) : (75 + Math.random() * 20);
+            explosaoCanvas(rx, ry);
+        }
+    }, 350); 
+}
+
+function pararFogos() {
+    if (intervalofogos) { clearInterval(intervalofogos); intervalofogos = null; }
+    faiscas = []; claroes = [];
 }
 
 // --- API pública ---
-export function mostrarRecompensa({ icone: ic, nome: nm, descricao: desc, cintilas = 0, duracao = 3500 }) {
+export function mostrarRecompensa({ 
+    icone: ic, 
+    nome: nm, 
+    descricao: desc, 
+    cintilas = 0, 
+    duracao = 3500,
+    titulo: customTitulo = '⚜ Novo Equipamento Desbloqueado ⚜',
+    dica: customDica = 'Consultai o vosso inventário (I) para o empunhar'
+}) {
+    titulo.textContent = customTitulo;
+    dica.textContent = customDica;
+
     if (ic && (ic.endsWith('.png') || ic.endsWith('.jpg') || ic.includes('/'))) {
         const rodar = /potion|elixir/i.test(ic);
         icone.innerHTML = `<img src="${ic}" style="width:130px;height:130px;object-fit:contain;filter:drop-shadow(0 0 15px #d4a830);${rodar ? 'transform:rotate(20deg);' : ''}margin:10px 0;">`;
@@ -233,7 +278,6 @@ export function mostrarRecompensa({ icone: ic, nome: nm, descricao: desc, cintil
         cintilasLinha.style.display = 'none';
     }
 
-    // re-trigger da animação de pop no ícone
     icone.style.animation = 'none';
     void icone.offsetWidth;
     icone.style.animation = 'rewardPop 0.55s cubic-bezier(.2,1.6,.3,1)';
@@ -246,10 +290,10 @@ export function mostrarRecompensa({ icone: ic, nome: nm, descricao: desc, cintil
 
     dispararFogos();
 
-    // fechar
     setTimeout(() => {
         card.style.transform = 'scale(0.85)';
         card.style.opacity = '0';
+        pararFogos();
         setTimeout(() => { overlay.style.display = 'none'; }, 350);
     }, duracao);
 }

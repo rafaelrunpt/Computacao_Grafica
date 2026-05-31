@@ -216,7 +216,7 @@ overlay.id = 'qb-overlay';
 overlay.innerHTML = `
     <div id="qb-book">
         <div id="qb-header">
-            <div id="qb-title">Códice de Encargos</div>
+            <div id="qb-title">Diário de Missões</div>
             <div id="qb-hint">B — Fechar</div>
         </div>
         <div id="qb-list"></div>
@@ -234,7 +234,7 @@ function render({ animateNew = null } = {}) {
     if (quests.length === 0) {
         const empty = document.createElement('div');
         empty.id = 'qb-empty';
-        empty.textContent = 'Páginas em branco. Explorai o mundo em busca de novos encargos.';
+        empty.textContent = 'Páginas em branco. Explora o mundo em busca de novas missões.';
         listEl.appendChild(empty);
         return;
     }
@@ -260,7 +260,7 @@ function render({ animateNew = null } = {}) {
             <div class="qb-entry-title">${escapeHtml(q.title)}${progBadge}<span class="qb-strike"></span></div>
             <div class="qb-entry-summary">${escapeHtml(q.summary)}<span class="qb-strike"></span></div>
             ${progBar}
-            <div class="qb-stamp">Cumprido</div>
+            <div class="qb-stamp">Concluída</div>
         `;
         listEl.appendChild(entry);
         if (q.completed) _knownCompleted.add(q.id);
@@ -441,12 +441,12 @@ function mostrarToast(tipo, qid) {
     const toast = document.createElement('div');
     toast.className = 'qbt ' + (tipo === 'completa' ? 'qbt-completa' : 'qbt-nova');
     const seal = tipo === 'completa' ? '✓' : '✦';
-    const kicker = tipo === 'completa' ? 'Demanda Cumprida' : 'Novo Encargo';
+    const kicker = tipo === 'completa' ? 'Missão Concluída' : 'Nova Missão';
     toast.innerHTML = `
         <div class="qbt-seal">${seal}</div>
-        <div class="qbt-kicker">Códice de Encargos</div>
+        <div class="qbt-kicker">Diário de Missões</div>
         <div class="qbt-title">${kicker} — ${escapeHtml(q.title)}</div>
-        <div class="qbt-sub">Premi ${_keyGlyph('B')} para consultar o vosso Códice.</div>
+        <div class="qbt-sub">Prime ${_keyGlyph('B')} para consultares o teu Diário.</div>
     `;
     stackEl.appendChild(toast);
     const dur = 4200;

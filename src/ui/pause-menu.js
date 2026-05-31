@@ -244,9 +244,9 @@ function renderVideo() {
 
     // Resolução do canvas — reduz fragment work proporcionalmente. Aplicação
     // imediata (sem reload) porque renderer.setPixelRatio é runtime-safe.
-    const rRes = row(); rRes.appendChild(labelLine('Resolução do Renderizador'));
-    rRes.appendChild(select([[0.5,'50% (GPU fraca)'],[0.75,'75% (Equilibrado)'],[1.0,'100% (Nativo)']],
-        settings.renderScale, v => setSetting('renderScale', parseFloat(v))));
+    // Slider de 10% a 200%. 200% = renderScale 1.0 (máximo antigo).
+    const rRes = row(); rRes.appendChild(labelLine('Densidade de Pixéis (Resolução)'));
+    rRes.appendChild(slider(0.1, 2.0, 0.05, settings.renderScale * 2.0, v => setSetting('renderScale', v / 2.0), '%'));
     conteudo.appendChild(rRes);
 
     const r2 = row(); r2.appendChild(labelLine('Alcance do Olhar (FOV)'));
@@ -264,6 +264,10 @@ function renderVideo() {
     const r4 = row(); r4.appendChild(labelLine('Mostrar Cadência (FPS)'));
     r4.appendChild(toggle(settings.showFps, v => setSetting('showFps', v)));
     conteudo.appendChild(r4);
+
+    const r4b = row(); r4b.appendChild(labelLine('Limitar Cadência Máxima (FPS)'));
+    r4b.appendChild(slider(15, 60, 5, settings.maxFps, v => setSetting('maxFps', v), ' FPS'));
+    conteudo.appendChild(r4b);
 
     const r5 = row(); r5.appendChild(labelLine('Modo Depuração VFX (Frame a Frame)'));
     r5.appendChild(toggle(settings.vfxDebug, v => setSetting('vfxDebug', v)));
@@ -553,10 +557,10 @@ function renderAcoes() {
 
     const sair = btn('✕ Partir', '#9e3b45');
     sair.onclick = () => {
-        if (confirm('Desejais partir e abandonar o reino? Fechai a janela para sair.')) {
+        if (confirm('Queres sair do jogo? Fecha a aba para sair.')) {
             window.close();
             // se window.close não funcionar, desliga a página
-            document.body.innerHTML = `<div style="color:#f0d080;font-family:Georgia,serif;text-align:center;padding:60px;">Agradecemos a vossa presença. Podeis fechar esta aba.</div>`;
+            document.body.innerHTML = `<div style="color:#f0d080;font-family:Georgia,serif;text-align:center;padding:60px;">Obrigado por jogares. Podes fechar esta aba.</div>`;
         }
     };
     acoes.appendChild(sair);
@@ -583,3 +587,4 @@ export function togglePause() { _aberto ? fecharPause() : abrirPause(); }
 
 // fechar com clique fora
 overlay.addEventListener('click', (e) => { if (e.target === overlay) fecharPause(); });
+

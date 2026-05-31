@@ -5,6 +5,7 @@ import { player } from '../entities/jogador.js';
 import { posPlayerCombate, posInimigoCombate, getInimigoActivo, isBossMode } from '../world/combate-scene.js';
 import { combateCamera, combateBossCamera } from '../core/renderer.js';
 import { settings } from '../systems/settings.js';
+import { playSFX, tocarSomTrovaoPlayer } from '../systems/audio.js';
 
 // ---- VFX DEBUG UI ----
 let _debugAnims = new Set();
@@ -221,7 +222,7 @@ export function playSlashImage({ url, x = 63, y = 25, size = 40, dur = 360, rot 
 // ---- sprite-sheet VFX ----
 // Toca um sprite-sheet (grelha cols×rows de frames) num <div> overlay.
 // Posição em vw/vh (mesmo sistema que as âncoras de combate).
-export function playSpriteFX({ url, cols, rows, frames = cols * rows, fps = 24, x, y, size = 14, loop = false, dur = 0, extraCss = '' }) {
+export function playSpriteFX({ url, cols, rows, frames = cols * rows, fps = 24, x, y, size = 14, loop = false, dur = 0, extraCss = '', frameOrder = null }) {
     const el = document.createElement('div');
     el.style.cssText = `
         position: fixed;
@@ -264,7 +265,8 @@ export function playSpriteFX({ url, cols, rows, frames = cols * rows, fps = 24, 
         lastTickTime = now;
 
         const e = accumulatedTime;
-        const idx = loop ? Math.floor((e / frameDur)) % frames : Math.min(frames - 1, Math.floor(e / frameDur));
+        const rawIdx = loop ? Math.floor((e / frameDur)) % frames : Math.min(frames - 1, Math.floor(e / frameDur));
+        const idx = frameOrder ? frameOrder[rawIdx] : rawIdx;
         
         if (settings.vfxDebug) _updateDebugUI(url, idx, frames);
 
@@ -433,11 +435,12 @@ function screenShake(amp, dur) {
 // ---- player lunge 3D ----
 let _lungeRAF = null;
 const _tmpDir = new THREE.Vector3();
-function playerLunge({ amount, dur, peaks = [0.5] }) {
+function playerLunge({ amount, dur, peaks = [0.5], targetPos = null }) {
     if (_lungeRAF) cancelAnimationFrame(_lungeRAF);
     
-    // Direção do lunge: sempre do player para o inimigo.
-    _tmpDir.copy(posInimigoCombate).sub(posPlayerCombate).setY(0).normalize();
+    // Direção do lunge: do player para o inimigo (ou target customizado)
+    const target = targetPos || posInimigoCombate;
+    _tmpDir.copy(target).sub(posPlayerCombate).setY(0).normalize();
     
     const t0 = performance.now();
     function step(now) {
@@ -558,10 +561,17 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
     clearOverlay();
 
     // movimento 3D
+    // Ponto 3D onde o ataque deve "bater" (alinhado com o Boss por defeito)
+    const target3D = posInimigoCombate.clone();
+    if (isBossMode()) {
+        // Deslocamos o alvo 4.5 unidades para a esquerda no mundo 3D
+        target3D.x -= 4.5;
+    }
+
     if (tipo === 'danca') {
-        playerLunge({ amount: lunge, dur, peaks: [0.32, 0.72] });
+        playerLunge({ amount: lunge, dur, peaks: [0.32, 0.72], targetPos: target3D });
     } else {
-        playerLunge({ amount: lunge, dur, peaks: [0.5] });
+        playerLunge({ amount: lunge, dur, peaks: [0.5], targetPos: target3D });
     }
 
     // Âncoras dinâmicas para posicionar os efeitos de ecrã conforme as posições 3D.
@@ -569,12 +579,10 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
         const cam = isBossMode() ? combateBossCamera : combateCamera;
         let p;
         if (alvo === 'inimigo') {
-            // Em boss mode, o boss está fixo no centro Z negativo. 
-            // Em modo normal, o inimigo está à direita (X positivo).
             const height = isBossMode() ? 2.8 : 1.6;
-            p = new THREE.Vector3(posInimigoCombate.x, height, posInimigoCombate.z);
+            // Usamos o alvo 3D que já tem o offset aplicado
+            p = new THREE.Vector3(target3D.x, height, target3D.z);
         } else {
-            // Player em (x, y, z) — y+1.2 é aproximadamente a altura do peito.
             p = new THREE.Vector3(player.position.x, player.position.y + 1.2, player.position.z);
         }
         const _v = p.project(cam);
@@ -582,7 +590,31 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
     };
 
     // overlay por tipo
-    if (tipo === 'corte') {
+    if (tipo === 'trovao') {
+        const ai = getPos('inimigo');
+        // O trovão vem de cima e cai no alvo
+        const frames = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11]; // 11 frames no grid 6x2 (skip index 5)
+
+        playSpriteFX({
+            url: 'assets/vfx/player/11685618_4461.jpg',
+            cols: 6, rows: 2, frames: 11, frameOrder: frames,
+            fps: 14,
+            x: ai.x, y: ai.y, size: 85,
+            extraCss: `
+                mix-blend-mode: screen; 
+                transform: translate(-50%, -80%);
+                filter: brightness(1.5) contrast(1.2) hue-rotate(20deg);
+            `
+        });
+
+        // Clarão e tremor no impacto
+        setTimeout(() => {
+            tocarSomTrovaoPlayer(); // Som do trovão (mesmo do castelo)
+            makeFlash({ cor: '#7ad8ff', cx: ai.x, cy: ai.y, dur: 450, delay: 0, intensidade: 1.0 });
+            screenShake(20, 600);
+        }, 350);
+
+    } else if (tipo === 'corte') {
         const ai = getPos('inimigo');
         const ap = getPos('player');
         
@@ -615,11 +647,35 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
         }, 80);
     } else if (tipo === 'talho') {
         const ai = getPos('inimigo');
-        // clarão vermelho no impacto
-        makeFlash({ cor: '#ff3050', cx: ai.x, cy: ai.y, dur: 460, delay: 220, intensidade: 0.95 });
-        // talho diagonal pesado (SVG absoluto por agora)
-        makeSlash({ d: 'M 320 320 Q 500 480 720 660', cor, width: 18, dur: 380, delay: 200 });
-        makeSlash({ d: 'M 360 360 Q 520 500 700 640', cor: '#ffffff', width: 4, dur: 320, delay: 240, glow: false });
+        
+        // Em BossMode, o chão está numa posição ligeiramente diferente.
+        // A âncora 'ai.y' aponta ao centro/peito do inimigo. Vamos somar
+        // uma percentagem de viewport para alinhar a base do sprite com o "chão".
+        const yBase = ai.y + (isBossMode() ? 8 : 12);
+
+        const el = playSpriteFX({
+            url: 'assets/vfx/player/heavy.png',
+            cols: 4, rows: 2, frames: 5,
+            fps: 15,
+            x: ai.x, y: yBase, size: 50,
+            extraCss: `
+                mix-blend-mode: screen; 
+                transform-origin: bottom center;
+                transform: translate(-30%, -100%);
+                filter: brightness(1.2);
+                margin-top: -30vh;
+                transition: margin-top 200ms cubic-bezier(.2,.8,.3,1);
+            `
+        });
+
+        // Trigger slide down
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (el) el.style.marginTop = '0vh';
+            });
+        });
+        
+        makeFlash({ cor: '#ff3050', cx: ai.x, cy: yBase, dur: 460, delay: 220, intensidade: 0.95 });
     } else if (tipo === 'carga') {
         const ai = getPos('inimigo');
         // linha de velocidade horizontal + impacto radial
@@ -627,16 +683,83 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
         makeImpactRing({ cx: ai.x * 10, cy: ai.y * 10, cor, delay: 480 });
     } else if (tipo === 'danca') {
         const ai = getPos('inimigo');
+        
+        // Primeiro corte (normal)
+        setTimeout(() => {
+            playSpriteFX({
+                url: 'assets/vfx/player/double_slash_black.jpg',
+                cols: 4, rows: 2, frames: 8,
+                fps: 24,
+                x: ai.x, y: ai.y, size: 60,
+                extraCss: `
+                    mix-blend-mode: screen; 
+                    transform: translate(-50%, -50%);
+                    filter: brightness(1.4);
+                `
+            });
+            makeFlash({ cor: cor, cx: ai.x, cy: ai.y, dur: 300, delay: 50, intensidade: 0.9 });
+        }, 150);
+
+        // Segundo corte (virado para baixo e espelhado)
+        setTimeout(() => {
+            playSpriteFX({
+                url: 'assets/vfx/player/double_slash_black.jpg',
+                cols: 4, rows: 2, frames: 8,
+                fps: 24,
+                x: ai.x, y: ai.y, size: 60,
+                extraCss: `
+                    mix-blend-mode: screen; 
+                    transform: translate(-50%, -50%) rotate(180deg) scaleX(-1);
+                    filter: brightness(1.4);
+                `
+            });
+            makeFlash({ cor: cor, cx: ai.x, cy: ai.y, dur: 300, delay: 50, intensidade: 0.9 });
+        }, 450);
+    } else if (tipo === 'tornado') {
+        const ai = getPos('inimigo');
         const ap = getPos('player');
-        // dois cortes em X centrados no inimigo
-        makeSlash({ d: `M ${ai.x * 10 - 150} ${ai.y * 10 - 150} L ${ai.x * 10 + 150} ${ai.y * 10 + 150}`, cor, width: 12, dur: 220, delay: 220 });
-        makeSlash({ d: `M ${ai.x * 10 - 150} ${ai.y * 10 + 150} L ${ai.x * 10 + 150} ${ai.y * 10 - 150}`, cor, width: 12, dur: 220, delay: 520 });
+        
+        const tempoViagem = a.impacto3 || 820;
+        
+        const el = playSpriteFX({
+            url: 'assets/vfx/player/tornado_black.jpg',
+            cols: 4, rows: 2, frames: 8,
+            fps: 16,
+            x: ap.x, y: ap.y, size: 70,
+            loop: true, dur: dur,
+            extraCss: `
+                mix-blend-mode: screen; 
+                transform: translate(-50%, -60%);
+                filter: brightness(1.5);
+                transition: left ${tempoViagem}ms ease-out, top ${tempoViagem}ms ease-out;
+            `
+        });
+
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (el) {
+                    el.style.left = `${ai.x}vw`;
+                    el.style.top = `${ai.y}vh`;
+                }
+            });
+        });
+
+        setTimeout(() => {
+            if (el) {
+                el.style.transition = 'opacity 150ms ease-out';
+                el.style.opacity = '0';
+                setTimeout(() => { el._stop = true; }, 150);
+            }
+        }, tempoViagem);
+
+        makeFlash({ cor: cor, cx: ai.x, cy: ai.y, dur: 400, delay: tempoViagem, intensidade: 0.8 });
     }
 
     if (a.shake && !falhou) screenShake(a.shake, Math.min(dur, 360));
 
     const impacto1 = a.impacto ?? Math.floor(dur * 0.45);
     const impacto2 = a.impacto2;
+    const impacto3 = a.impacto3;
 
     setTimeout(() => {
         if (callbacks.onImpacto1) callbacks.onImpacto1();
@@ -648,6 +771,13 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
             if (callbacks.onImpacto2) callbacks.onImpacto2();
             if (!falhou) pulsarInimigoCurto();
         }, impacto2);
+    }
+
+    if (impacto3 != null) {
+        setTimeout(() => {
+            if (callbacks.onImpacto3) callbacks.onImpacto3();
+            if (!falhou) pulsarInimigoCurto();
+        }, impacto3);
     }
 
     setTimeout(() => {

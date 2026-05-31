@@ -992,6 +992,10 @@ function abrirConfig() {
         rFov.appendChild(_slider(50, 110, 1, settings.fov, v => setSetting('fov', v), '°'));
         body.appendChild(rFov);
 
+        const rRes = _row('Densidade de Pixéis');
+        rRes.appendChild(_slider(0.1, 2.0, 0.05, settings.renderScale * 2.0, v => setSetting('renderScale', v / 2.0), '%'));
+        body.appendChild(rRes);
+
         const rFps = _row('Mostrar Cadência');
         rFps.appendChild(_toggle(settings.showFps, v => setSetting('showFps', v)));
         body.appendChild(rFps);
@@ -1195,7 +1199,7 @@ function _abrirInputModal(onConfirm) {
         transform: translateY(20px); transition: transform .35s ease;
     `;
     panel.innerHTML = `
-        <div style="font-size:14px;color:#d4a830;letter-spacing:4px;margin-bottom:18px;">⚔  ESCOLHEI A VOSSA ARMA  ⚔</div>
+        <div style="font-size:14px;color:#d4a830;letter-spacing:4px;margin-bottom:18px;">⚔  ESCOLHE A TUA ARMA  ⚔</div>
         <div style="font-size:11px;color:#c8a96e;letter-spacing:1px;line-height:1.7;margin-bottom:28px;font-family:'Courier New',monospace;">
             Como pretendeis comandar o herói nesta jornada?<br>
             (Podereis trocar mais tarde em Ajustes)

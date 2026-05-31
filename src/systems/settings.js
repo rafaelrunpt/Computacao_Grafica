@@ -14,15 +14,14 @@ const defaults = {
     invertY: false,
 
     quality: 'media',     // 'baixa' | 'media' | 'alta'
-    // Escala de render aplicada ao pixelRatio. 1.0 = nativo; 0.75 = 75% dos
-    // pixels (corta ~44% do fragment work); 0.5 = metade da resolução
-    // (corta 75% do fragment work). Maior win de perf em GPUs integradas e
-    // Safari sem perda significativa de jogabilidade.
-    renderScale: 1.0,     // 0.5 | 0.75 | 1.0
+    // Escala de render aplicada ao pixelRatio. 0.5 = 100% no novo slider.
+    // 1.0 = 200% (Nativo/HiDPI completo).
+    renderScale: 0.5,
     fov: 75,
     fullscreen: false,
     showFps: false,
     vfxDebug: false,
+    maxFps: 60,
 
     // Benchmark de iluminação — modo nocturno do mundo exterior.
     // Quando activo, transmuta o céu, escurece a luz solar, acrescenta lua,

@@ -92,8 +92,10 @@ export function precarregarTexturasCastelo() {
     _texturasCarregadas = true;
     for (const { tex, url } of _lazyQueue) {
         _texLoader.load(url, (loaded) => {
-            tex.image = loaded.image;
-            tex.needsUpdate = true;
+            if (loaded && loaded.image) {
+                tex.image = loaded.image;
+                tex.needsUpdate = true;
+            }
         });
     }
 }
