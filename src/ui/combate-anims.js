@@ -653,12 +653,10 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
         // uma percentagem de viewport para alinhar a base do sprite com o "chão".
         const yBase = ai.y + (isBossMode() ? 8 : 12);
 
-        // frameOrder: frames 0-4 normais, depois frame 4 repetida 15x (1 seg a fps 15)
         const el = playSpriteFX({
             url: 'assets/vfx/player/heavy.png',
-            cols: 4, rows: 2,
+            cols: 4, rows: 2, frames: 5,
             fps: 15,
-            frameOrder: [0, 1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
             x: ai.x, y: yBase, size: 50,
             extraCss: `
                 mix-blend-mode: screen;
@@ -666,18 +664,15 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
                 transform: translate(-30%, -100%);
                 filter: brightness(1.2);
                 margin-top: -60vh;
-                transition: margin-top 600ms cubic-bezier(.2,.8,.3,1);
+                transition: margin-top 200ms cubic-bezier(.2,.8,.3,1);
             `
         });
 
-        // começa a descer depois dos 5 frames normais (~333ms) + 1 seg do último frame
-        setTimeout(() => {
+        requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    if (el) el.style.marginTop = '40vh';
-                });
+                if (el) el.style.marginTop = '40vh';
             });
-        }, 1333);
+        });
         
         makeFlash({ cor: '#ff3050', cx: ai.x, cy: yBase, dur: 460, delay: 220, intensidade: 0.95 });
     } else if (tipo === 'carga') {
