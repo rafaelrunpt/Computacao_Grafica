@@ -129,7 +129,10 @@ function stoneCourse(orient, length, height, baseX, baseZ, faceNormal, gapY = 0)
             const bMat = ((i + r) % 4 === 0) ? matStoneDark : matStone;
             const depth = 0.20;
             const blockH2 = blockH - 0.02;
-            const m = new THREE.Mesh(new THREE.BoxGeometry(bw - 0.04, blockH2, depth), bMat);
+            const geo = orient === 'z'
+                ? new THREE.BoxGeometry(depth, blockH2, bw - 0.04)
+                : new THREE.BoxGeometry(bw - 0.04, blockH2, depth);
+            const m = new THREE.Mesh(geo, bMat);
             if (orient === 'x') {
                 m.position.set(baseX + x, y, baseZ + faceNormal * (0.18 - depth / 2));
             } else {
