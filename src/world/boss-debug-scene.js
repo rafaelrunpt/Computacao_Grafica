@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { criarBoss, updateBoss } from '../entities/boss.js';
 import { criarInimigoNucleo, updateInimigoNucleo } from '../entities/inimigo-nucleo.js';
 import { criarInimigoWraith, updateInimigoWraith } from '../entities/inimigo-wraith.js';
+import { registerLight } from '../systems/moderator.js';
 
 export const bossDebugScene = new THREE.Scene();
 bossDebugScene.background = new THREE.Color(0x050505);
@@ -16,16 +17,19 @@ bossDebugScene.background = new THREE.Color(0x050505);
 // Lighting for texture analysis
 const ambient = new THREE.AmbientLight(0xffffff, 0.4);
 bossDebugScene.add(ambient);
+registerLight('Boss Debug', 'Luz Ambiente', ambient);
 
 const sun = new THREE.DirectionalLight(0xffffff, 1.0);
 sun.position.set(5, 10, 7.5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
 bossDebugScene.add(sun);
+registerLight('Boss Debug', 'Luz Principal (Sol)', sun);
 
 const rimLight = new THREE.PointLight(0xaa88ff, 1.5, 15);
 rimLight.position.set(-5, 5, -5);
 bossDebugScene.add(rimLight);
+registerLight('Boss Debug', 'Luz de Contorno (Rim)', rimLight);
 
 // Ground to see shadows
 const ground = new THREE.Mesh(

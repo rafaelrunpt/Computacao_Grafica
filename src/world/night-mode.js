@@ -27,6 +27,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { registerLight } from '../systems/moderator.js';
 
 // --- estado ---
 let _scene = null;
@@ -49,6 +50,8 @@ const _torches = [];         // tochas do caminho (PointLight + chama animada)
 const _runas = [];           // 6 runas
 let _moonSprite = null;
 let _moonHalo = null;
+let _playerSpot = null;
+let _playerSpotTarget = null;
 
 let _composer = null;
 let _bloomPass = null;
@@ -96,6 +99,7 @@ export function initNightMode(scene, sunLight, ambientLight, player, mainCamera,
     _nightGroup.name = 'NightFX';
 
     _createMoon();
+    _createPlayerSpotlight();
     _createLanterns();
     // _createTorches(); // Removido a pedido do utilizador
     _createCrystals();
@@ -154,6 +158,19 @@ export function updateNightMode(dt) {
         const mz = _player.position.z - 65;
         if (_moonSprite) _moonSprite.position.set(mx, my, mz);
         if (_moonHalo)   _moonHalo.position.set(mx, my, mz);
+
+        if (_playerSpot) {
+            _playerSpot.position.set(
+                _player.position.x,
+                _player.position.y + 22,
+                _player.position.z,
+            );
+            _playerSpotTarget.position.set(
+                _player.position.x,
+                _player.position.y,
+                _player.position.z,
+            );
+        }
     }
 
     if (_t > 0.01) {
@@ -227,6 +244,9 @@ function _applyEnvironment(t) {
     if (_moonSprite) _moonSprite.material.opacity = t;
     if (_moonHalo)   _moonHalo.material.opacity   = 0.4 * t;
 
+    // Spotlight do player — aparece gradualmente com a noite
+    if (_playerSpot) _playerSpot.intensity = 18 * t;
+
     // Lanternas / cristais — modulam pela transição também
     for (let i = 0; i < _lanterns.length; i++) {
         const lan = _lanterns[i];
@@ -289,6 +309,27 @@ function _cullBelowGround(scene) {
     if (hidden > 0) {
         console.log(`[night] culled ${hidden} meshes below y=0`);
     }
+}
+
+// ===========================================================
+// SPOTLIGHT DO PLAYER — cone de luz lunar a 22u de altura a seguir o herói
+// ===========================================================
+function _createPlayerSpotlight() {
+    _playerSpotTarget = new THREE.Object3D();
+    _scene.add(_playerSpotTarget);
+
+    _playerSpot = new THREE.SpotLight(
+        0xb0c8ff,   // azul-lua frio
+        0,          // começa a zero — sobe com _t em _applyEnvironment
+        40,         // distance
+        Math.PI / 7, // angle (~26°) — feixe relativamente estreito
+        0.55,       // penumbra suave
+        1.2,        // decay
+    );
+    _playerSpot.target = _playerSpotTarget;
+    _playerSpot.castShadow = false; // shadow-map a mover por frame seria caro
+    _scene.add(_playerSpot);
+    registerLight('Mundo (Noite)', 'Spotlight Player', _playerSpot);
 }
 
 // ===========================================================
@@ -512,6 +553,7 @@ function _createTorches() {
         light.position.y = 2.4;
         light.castShadow = false;
         group.add(light);
+        registerLight('Mundo (Noite)', `Tocha ${i}`, light);
 
         _nightGroup.add(group);
         _torches.push({

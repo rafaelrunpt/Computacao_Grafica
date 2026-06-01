@@ -23,6 +23,7 @@
 //   • resetInimigoNucleo(grupo)
 // ======================================================================
 import * as THREE from 'three';
+import { registerLight } from '../systems/moderator.js';
 
 const _texLoader = new THREE.TextureLoader();
 const _Z = new THREE.Vector3(0, 0, 1);
@@ -165,6 +166,7 @@ export function criarInimigoNucleo() {
     const coreLight = new THREE.PointLight(0xb060ff, 1.6, 6.5, 2);
     coreLight.position.set(0, coreY, 0.3);
     grupo.add(coreLight);
+    registerLight('Inimigo - Núcleo', 'Luz do Núcleo', coreLight);
 
     // ---- CASCA FRACTURADA — lascas de rocha à volta do núcleo. A frente
     // (dir.z alto) fica aberta para o olho glarar lá de dentro. ----

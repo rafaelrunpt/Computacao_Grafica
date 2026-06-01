@@ -42,7 +42,7 @@ import { criarLostItems, updateLostItems, getLostItemAt } from '../world/lost-it
 import { coletarItemPerdido, precisaCutsceneEspaco, marcarCutsceneVista, revelarItensEstelares } from '../systems/merchant-fetch-quest.js';
 import { initSpaceCutscene, startSpaceCutscene, updateSpaceCutscene, isSpaceCutsceneActive } from '../world/space-quest-cutscene.js';
 import { estado, lojaPlayer, caseloPlayer, tavernPlayer, quartoPlayer, setWorldScene, entrarLoja, sairLoja, entrarCaselo, sairCaselo, entrarTavern, sairTavern, entrarQuarto, sairQuarto, fade } from './transicoes.js';
-import moderator from '../systems/moderator.js'; // Ativa ferramentas de debug
+import moderator, { registerLight } from '../systems/moderator.js'; // Ativa ferramentas de debug
 import { isPauseAberto, togglePause } from '../ui/pause-menu.js';
 import { tickFps, setFpsDebugTargets, sampleCullingNow } from '../ui/fps-counter.js';
 import { inicializarAudio, switchMusic, getCurrentTrack, playSFX, tocarAtivacaoCristal, saltarParaClimaxMusical, tocarSomAmbienteRio } from '../systems/audio.js';
@@ -249,6 +249,7 @@ function _restoreMesh(mesh, deltaTime) {
 // ---- iluminação ----
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
+registerLight('Mundo', 'Luz Ambiente Global', ambientLight);
 
 // ---- Sombra fixa cobrindo o mapa todo ----
 // Frustum apertado contra mapBounds (-100/100). Resolução adaptativa à
@@ -276,6 +277,7 @@ sunLight.position.set(80, 120, 80);
 sunLight.target.position.set(0, 0, 0);
 scene.add(sunLight, sunLight.target);
 sunLight.shadow.camera.layers.enable(1); // shadow camera vê os objetos culled (layer 1)
+registerLight('Mundo', 'Luz Solar (Directional)', sunLight);
 
 // ---- spotlight do jogador (cor oposta ao roxo: amarelo/ouro) ----
 // Posicionado muito alto para evitar colisão com o cenário e simular luz orbital
@@ -293,6 +295,7 @@ playerSpot.shadow.camera.far = 25;
 playerSpot.shadow.camera.fov = 40;
 playerSpot.shadow.camera.layers.enable(1); // Importante: ver objetos na layer 1 para sombras
 scene.add(playerSpot, playerSpot.target);
+registerLight('Jogador', 'Foco de Cutscene', playerSpot);
 
 // ----------------------------------------------------------------------
 // TOGGLES DE REQUISITO (defesa CG)

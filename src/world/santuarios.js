@@ -8,6 +8,7 @@
 // --------------------------------------------------------
 
 import * as THREE from 'three';
+import { registerLight } from '../systems/moderator.js';
 
 const POSICOES = [
     { id: 's_ne', x:  62, z:  52 },   // canto NE — depois das zonas norte
@@ -71,7 +72,7 @@ function _criarBurst(cor) {
     return grupo;
 }
 
-function _criarUm(scene, p, addCollider) {
+function _criarUm(scene, p, addCollider, i) {
     const g = new THREE.Group();
     g.position.set(p.x, 0, p.z);
 
@@ -123,6 +124,7 @@ function _criarUm(scene, p, addCollider) {
     const light = new THREE.PointLight(RUNA_COR_ATIVA, 3.2, 7.5, 1.8);
     light.position.y = 1.6;
     g.add(light);
+    registerLight('Mundo - Santuários', `Luz Santuário ${i}`, light);
 
     // burst de activação (2s) — escondido até ser activado
     const burst = _criarBurst(RUNA_COR_ATIVA);
@@ -153,7 +155,9 @@ function _criarUm(scene, p, addCollider) {
 }
 
 export function criarSantuarios(scene, addCollider) {
-    for (const p of POSICOES) _lista.push(_criarUm(scene, p, addCollider));
+    for (let i = 0; i < POSICOES.length; i++) {
+        _lista.push(_criarUm(scene, POSICOES[i], addCollider, i));
+    }
 }
 
 export function getSantuarios() { return _lista; }

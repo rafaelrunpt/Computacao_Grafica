@@ -4,6 +4,7 @@
 // dominada por uma vela/lanterna ao lado da cama, com luz fria a entrar
 // pela janela.
 import * as THREE from 'three';
+import { registerLight } from '../systems/moderator.js';
 
 // ---- dimensões ----
 const W = 7.0;   // largura (x)
@@ -276,7 +277,7 @@ quartoScene.add(nightG);
 
 // luz da vela — quente e intensa, com leve flicker no animate.
 // É também o único pointlight com sombras (raio pequeno, custo baixo).
-const candleLight = new THREE.PointLight(0xff8a44, 18, 7, 1.6);
+export const candleLight = new THREE.PointLight(0xff8a44, 18, 7, 1.6);
 candleLight.position.set(nsX - 0.15, 1.2, nsZ - 0.1);
 candleLight.castShadow = true;
 candleLight.shadow.mapSize.set(512, 512);
@@ -284,6 +285,7 @@ candleLight.shadow.bias = -0.002;
 candleLight.shadow.camera.near = 0.1;
 candleLight.shadow.camera.far = 7;
 quartoScene.add(candleLight);
+registerLight('Quarto', 'Luz da Vela', candleLight);
 
 // collider mesa-de-cabeceira
 quartoColliders.push(new THREE.Box3(
@@ -507,9 +509,10 @@ lantG.position.set(W / 2 - 0.08, 2.3, -1.0);
 lantG.rotation.y = -Math.PI / 2;
 quartoScene.add(lantG);
 
-const lantLight = new THREE.PointLight(0xffa050, 12, 6, 1.8);
+export const lantLight = new THREE.PointLight(0xffa050, 12, 6, 1.8);
 lantLight.position.set(W / 2 - 0.3, 2.1, -1.0);
 quartoScene.add(lantLight);
+registerLight('Quarto', 'Luz da Lanterna', lantLight);
 
 // ---------------------------------------------------------------
 // ILUMINAÇÃO GLOBAL

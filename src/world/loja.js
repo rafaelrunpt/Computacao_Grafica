@@ -2,33 +2,38 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Bau } from './bau.js';
 import { criarMercador, getMercadorInteractBox, updateMercador } from '../entities/mercador.js';
+import { registerLight } from '../systems/moderator.js';
 
 export const lojaScene = new THREE.Scene();
 lojaScene.background = new THREE.Color(0x1a120a);
 
 // ---- iluminação interior ----
-const ambient = new THREE.AmbientLight(0xffffff, 0.3);
-lojaScene.add(ambient);
+export const lojaAmbient = new THREE.AmbientLight(0xffffff, 0.3);
+lojaScene.add(lojaAmbient);
+registerLight('Loja', 'Luz Ambiente', lojaAmbient);
 
 // Spot principal — ilumina o centro do piso térreo
-const spot1 = new THREE.SpotLight(0xfff5e0, 80, 20, Math.PI * 0.35, 0.4, 1.5);
-spot1.position.set(0, 9, 1);
-spot1.target.position.set(0, 0, 1);
-spot1.castShadow = true;
-lojaScene.add(spot1, spot1.target);
+export const lojaSpot1 = new THREE.SpotLight(0xfff5e0, 80, 20, Math.PI * 0.35, 0.4, 1.5);
+lojaSpot1.position.set(0, 9, 1);
+lojaSpot1.target.position.set(0, 0, 1);
+lojaSpot1.castShadow = true;
+lojaScene.add(lojaSpot1, lojaSpot1.target);
+registerLight('Loja', 'Foco 1 (Principal)', lojaSpot1);
 
 // Spot secundário — ilumina a zona do balcão/fundo
-const spot2 = new THREE.SpotLight(0xfff5e0, 60, 16, Math.PI * 0.3, 0.4, 1.5);
-spot2.position.set(0, 9, -3);
-spot2.target.position.set(0, 0, -3);
-spot2.castShadow = true;
-lojaScene.add(spot2, spot2.target);
+export const lojaSpot2 = new THREE.SpotLight(0xfff5e0, 60, 16, Math.PI * 0.3, 0.4, 1.5);
+lojaSpot2.position.set(0, 9, -3);
+lojaSpot2.target.position.set(0, 0, -3);
+lojaSpot2.castShadow = true;
+lojaScene.add(lojaSpot2, lojaSpot2.target);
+registerLight('Loja', 'Foco 2 (Secundário)', lojaSpot2);
 
 // Spot para o piso superior
-const spot3 = new THREE.SpotLight(0xfff5e0, 40, 12, Math.PI * 0.35, 0.5, 1.5);
-spot3.position.set(-4, 8, -2);
-spot3.target.position.set(-4, 4, -2);
-lojaScene.add(spot3, spot3.target);
+export const lojaSpot3 = new THREE.SpotLight(0xfff5e0, 40, 12, Math.PI * 0.35, 0.5, 1.5);
+lojaSpot3.position.set(-4, 8, -2);
+lojaSpot3.target.position.set(-4, 4, -2);
+lojaScene.add(lojaSpot3, lojaSpot3.target);
+registerLight('Loja', 'Foco 3 (Piso Superior)', lojaSpot3);
 
 // ---- carregamento do modelo ----
 const loader = new GLTFLoader();

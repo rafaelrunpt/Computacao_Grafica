@@ -1,3 +1,7 @@
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { registerLight } from '../systems/moderator.js';
+
 // ======================================================================
 // BOSS FINAL — modelo procedural em three.js.
 // ----------------------------------------------------------------------
@@ -9,7 +13,6 @@
 // • Cada material está marcado como "TEXTURE SLOT" — substitui o `.map`
 //   ou usa `aplicarTexturaBoss(slot, url)` para trocar a textura.
 // ======================================================================
-import * as THREE from 'three';
 import { criarAcessorio } from '../world/acessorios.js';
 
 const _texLoader = new THREE.TextureLoader();
@@ -444,6 +447,7 @@ export function criarBoss(scene, posicao = new THREE.Vector3(0, 0, 0), {
     const eyeLight = new THREE.PointLight(0xff4020, 2.0, 4, 2);
     eyeLight.position.set(0, 3.00, 0.50);
     _boss.add(eyeLight);
+    registerLight('Boss', 'Luz dos Olhos', eyeLight);
 
     // CAPA — pendurada a partir dos ombros/parte de cima das costas, num
     // pivô inclinado para trás para não entrar dentro da armadura.

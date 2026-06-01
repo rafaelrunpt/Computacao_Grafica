@@ -4,12 +4,15 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { criarBartender, updateBartender, bartenderIntroFeita as _bartenderIntroFeita, marcarBartenderIntroFeita as _marcarBartenderIntroFeita } from '../entities/bartender.js';
 import { criarEstalajadeiro, updateEstalajadeiro } from '../entities/estalajadeiro.js';
+import { registerLight } from '../systems/moderator.js';
 
 export const tavernScene = new THREE.Scene();
 tavernScene.background = new THREE.Color(0x120e08);
 
 // Luz ambiente ténue para visibilidade geral (não tão clara)
-tavernScene.add(new THREE.AmbientLight(0xffffff, 0.08));
+export const tavernAmbient = new THREE.AmbientLight(0xffffff, 0.08);
+tavernScene.add(tavernAmbient);
+registerLight('Taverna', 'Luz Ambiente', tavernAmbient);
 
 // Material comum para as chamas
 const matFlame = new THREE.MeshStandardMaterial({ 
@@ -25,24 +28,26 @@ const torchFlame2 = new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.32, 8), matFla
 torchFlame2.position.set(-9.48, 2.65, 2.00);
 tavernScene.add(torchFlame2);
 
-const torchLight2 = new THREE.PointLight(0xff8a44, 40, 12, 1.4);
+export const torchLight2 = new THREE.PointLight(0xff8a44, 40, 12, 1.4);
 torchLight2.position.set(-9.48, 2.75, 2.00);
 torchLight2.castShadow = true;
 torchLight2.shadow.mapSize.set(512, 512);
 torchLight2.shadow.bias = -0.005;
 tavernScene.add(torchLight2);
+registerLight('Taverna', 'Tocha 2', torchLight2);
 
 // ---- Tocha na parede (Terceira Chama + Luz) ----
 const torchFlame3 = new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.32, 8), matFlame);
 torchFlame3.position.set(-10.51, 2.65, 1.99);
 tavernScene.add(torchFlame3);
 
-const torchLight3 = new THREE.PointLight(0xff8a44, 40, 12, 1.4);
+export const torchLight3 = new THREE.PointLight(0xff8a44, 40, 12, 1.4);
 torchLight3.position.set(-10.51, 2.75, 1.99);
 torchLight3.castShadow = true;
 torchLight3.shadow.mapSize.set(512, 512);
 torchLight3.shadow.bias = -0.005;
 tavernScene.add(torchLight3);
+registerLight('Taverna', 'Tocha 3', torchLight3);
 
 // ---- modelo ----
 const loader = new GLTFLoader();

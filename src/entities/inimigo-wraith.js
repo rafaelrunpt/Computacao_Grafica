@@ -7,6 +7,7 @@
 // • Expõe `updateInimigoWraith(grupo, dt, time, basePos)` para a anim.
 // ======================================================================
 import * as THREE from 'three';
+import { registerLight } from '../systems/moderator.js';
 
 export function criarInimigoWraith() {
     const grupo = new THREE.Group();
@@ -85,6 +86,7 @@ export function criarInimigoWraith() {
     const faceLight = new THREE.PointLight(0xa060ff, 1.0, 2.2, 2);
     faceLight.position.set(0, 2.55, 0.25);
     grupo.add(faceLight);
+    registerLight('Inimigo - Wraith', 'Luz da Face', faceLight);
 
     // Braços + garras (expostos no grupo para a animação de ataque)
     function braco(side) {
@@ -178,6 +180,7 @@ export function criarInimigoWraith() {
     const auraLight = new THREE.PointLight(0x9040ff, 1.6, 5.5, 2);
     auraLight.position.set(0, 1.4, 0);
     grupo.add(auraLight);
+    registerLight('Inimigo - Wraith', 'Aura Rastejante', auraLight);
 
     // Proxy de material para preservar a API usada por systems/combate.js
     const _fadeMats = [wraithDark, wraithCloth, wingMat, flameMat, mistMat, glowMat,

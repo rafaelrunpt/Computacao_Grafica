@@ -7,6 +7,7 @@
 // --------------------------------------------------------
 
 import * as THREE from 'three';
+import { registerLight } from '../systems/moderator.js';
 
 const CLUSTERS = [
     { x:  40, z: -14, n: 5 },
@@ -114,13 +115,15 @@ export function criarCogumelos(scene) {
     for (const im of _instCapsByColor.values()) im.instanceMatrix.needsUpdate = true;
 
     // 1 luz por cluster (cor do cogumelo "líder", subtil para não pesar)
-    for (const cluster of CLUSTERS) {
+    for (let i = 0; i < CLUSTERS.length; i++) {
+        const cluster = CLUSTERS[i];
         _rngState = 31337 + cluster.x + cluster.z;
         const luzCor = CORES[Math.floor(_rand() * CORES.length)];
         const light = new THREE.PointLight(luzCor, 0.55, 5.5, 2.0);
         light.position.set(cluster.x, 0.45, cluster.z);
         light.castShadow = false;
         scene.add(light);
+        registerLight('Mundo - Cogumelos', `Cluster ${i + 1}`, light);
         _lights.push({ light, fase: _rand() * Math.PI * 2, baseInt: 0.55 });
     }
 }

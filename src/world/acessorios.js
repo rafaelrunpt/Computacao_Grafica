@@ -3,7 +3,7 @@
 // Cada função devolve um THREE.Group em escala "troféu" (~0.18 raio
 // para coroa). Para colocar no boss, basta scale para ~1.0–1.6.
 // ----------------------------------------------------------------------
-import * as THREE from 'three';2
+import * as THREE from 'three';
 
 export function criarAcessorioCoroa() {
     const g = new THREE.Group();

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { player, coroaGroup, brincosGroup, oculosGroup, aureolaGroup, mascaraGroup } from '../entities/jogador.js';
 import { playerStats, registarCallbacksStats } from '../systems/player-stats.js';
 import { formatPrompt as _formatPromptForInput } from './glyphs.js';
+import { registerLight } from '../systems/moderator.js';
 
 // ---- fontes pixel (uma só vez) ----
 (function carregarFontesHUD() {
@@ -239,7 +240,11 @@ avatarCam.lookAt(0, 0, 0);
 const avatarLight = new THREE.DirectionalLight(0xffffff, 1.2);
 avatarLight.position.set(1, 2, 3);
 avatarScene.add(avatarLight);
-avatarScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+registerLight('UI (HUD)', 'Luz do Avatar (Direcional)', avatarLight);
+
+const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+avatarScene.add(ambient);
+registerLight('UI (HUD)', 'Luz do Avatar (Ambiente)', ambient);
 
 let _avatarBuilt = false;
 let _avatarOriginalMeshes = [];

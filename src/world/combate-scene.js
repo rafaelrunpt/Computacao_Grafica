@@ -4,6 +4,7 @@ import { criarInimigoWraith, updateInimigoWraith, resetInimigoWraith } from '../
 import { criarInimigoNucleo, updateInimigoNucleo, resetInimigoNucleo } from '../entities/inimigo-nucleo.js';
 import { skyboxCombate, starMat } from './sky.js';
 import { settings } from '../systems/settings.js';
+import { registerLight } from '../systems/moderator.js';
 
 // ----------------------------------------------------------------------
 // CENA DE COMBATE
@@ -40,7 +41,9 @@ export const posPlayerCombate  = _posPlayerNormal.clone();
 export const posInimigoCombate = _posInimigoNormal.clone();
 
 // ---- Iluminação ambiental + chave + contraluz roxo ----
-combateScene.add(new THREE.AmbientLight(0x553388, 0.55));
+const ambient = new THREE.AmbientLight(0x553388, 0.55);
+combateScene.add(ambient);
+registerLight('Combate', 'Luz Ambiente', ambient);
 
 const keyLight = new THREE.DirectionalLight(0xb070ff, 1.4);
 keyLight.position.set(-4, 8, 4);
@@ -54,15 +57,18 @@ keyLight.shadow.camera.top = 10;
 keyLight.shadow.camera.bottom = -10;
 keyLight.shadow.bias = -0.0005;
 combateScene.add(keyLight);
+registerLight('Combate', 'Luz Principal (Key)', keyLight);
 
 const rimLight = new THREE.DirectionalLight(0xff60d0, 0.6);
 rimLight.position.set(6, 4, -6);
 combateScene.add(rimLight);
+registerLight('Combate', 'Luz de Contorno (Rim)', rimLight);
 
 // luz pontual a pulsar entre os dois lutadores (dramatiza a arena)
 const arenaPulse = new THREE.PointLight(0xaa55ff, 1.5, 14, 1.4);
 arenaPulse.position.set(0, 2.2, 0);
 combateScene.add(arenaPulse);
+registerLight('Combate', 'Pulso da Arena', arenaPulse);
 
 // ---- Chão da arena: obsidiana (Rock035) + shader de corrupção roxa ----
 // textura reaproveitada (sem assets novos): a obsidiana dá o detalhe de

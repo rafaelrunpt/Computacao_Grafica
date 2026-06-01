@@ -594,7 +594,7 @@ styleHide.textContent = `
 body.title-screen-active #game-hud,
 body.title-screen-active #minimap-border,
 body.title-screen-active #fps-counter,
-body.title-screen-active #mod-menu,
+body.title-screen-active #mod-panel,
 body.title-screen-active #inv-overlay,
 body.title-screen-active #pause-overlay,
 body.title-screen-active #reward-overlay {

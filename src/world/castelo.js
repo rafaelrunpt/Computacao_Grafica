@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { matBattleGrass, matBattleSky, matBattleDark } from './shaders.js';
 import { criarAcessorio } from './acessorios.js';
 import { atualizarSomVorticeCristal, getAudioListener, setSwooshAudio } from '../systems/audio.js';
+import { registerLight } from '../systems/moderator.js';
 
 // ---- dimensões da sala do boss ----
 const W = 22;   // largura
@@ -47,6 +48,7 @@ for (let ti = 0; ti < tochaPositions.length; ti++) {
     flame.shadow.camera.far  = 15;
     flame.shadow.bias = -0.001;
     caseloScene.add(flame);
+    registerLight('Castelo', `Tocha ${ti + 1}`, flame);
 
     const torchBody = new THREE.Mesh(
         new THREE.CylinderGeometry(0.06, 0.08, 0.4, 6),

@@ -12,6 +12,11 @@ let _pendingTrack = null; // pedido feito antes do buffer ter carregado
 const _activeFades = new Map();
 const _audioLoader = new THREE.AudioLoader();
 
+// Multiplicadores de volume por faixa (relativo ao volume global de música)
+const _TRACK_VOL_MULT = {
+    boss: 1.45,
+};
+
 export function inicializarAudio(camera, faixas, sfx) {
     _listener = new THREE.AudioListener();
     camera.add(_listener);
@@ -618,12 +623,16 @@ export function atualizarSomVorticeCristal(intensidade) {
 
 export function getCurrentTrack() { return _currentTrack; }
 
+function _trackVolume(trackName) {
+    return getMusicTargetVolume() * (_TRACK_VOL_MULT[trackName] ?? 1.0);
+}
+
 function _aplicarVolumeMusica() {
     if (!_currentTrack) return;
     const audio = _sounds[_currentTrack];
     if (!audio || !audio.buffer) return;
 
-    const targetVol = getMusicTargetVolume();
+    const targetVol = _trackVolume(_currentTrack);
 
     // Se o volume agora é positivo mas a música estava parada (ex: mute), recomeçar
     if (targetVol > 0 && !audio.isPlaying) {
@@ -639,9 +648,12 @@ function _fadeIn(audio, duration) {
     if (!audio.isPlaying) audio.play();
     let vol = audio.getVolume();
     const interval = 50;
-    const step = (getMusicTargetVolume() || 0.001) / (duration * 1000 / interval);
+    // Descobrir qual o nome do track para aplicar o multiplicador correcto
+    const trackName = Object.keys(_sounds).find(k => _sounds[k] === audio) ?? '';
+    const target0 = _trackVolume(trackName) || 0.001;
+    const step = target0 / (duration * 1000 / interval);
     const timer = setInterval(() => {
-        const target = getMusicTargetVolume();
+        const target = _trackVolume(trackName);
         vol += step;
         if (vol >= target) { vol = target; clearInterval(timer); _activeFades.delete(audio); }
         audio.setVolume(vol);

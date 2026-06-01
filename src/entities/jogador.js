@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { playSFX, stopSFX } from '../systems/audio.js';
 import { getNightT } from '../world/night-mode.js';
+import { registerLight } from '../systems/moderator.js';
 
 // ---------------------------------------------------------
 // 1. MATERIAIS 
@@ -520,6 +521,7 @@ const tochaLuz = new THREE.PointLight(0xffce7a, 0.0001, 22, 0.5);
 tochaLuz.position.y = 0.38;
 tochaLuz.castShadow = false;
 tochaGroup.add(tochaLuz);
+registerLight('Jogador', 'Luz da Tocha', tochaLuz);
 
 rightArmGroup.add(tochaGroup);
 // Mantém o grupo presente no grafo (apenas as meshes ficam invisíveis)

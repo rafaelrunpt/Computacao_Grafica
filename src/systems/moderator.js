@@ -12,10 +12,26 @@ import { caseloScene, caseloColliders } from '../world/castelo.js';
 import * as THREE from 'three';
 import { setDebugModel, getDebugModelos, getDebugModeloAtivo } from '../world/boss-debug-scene.js';
 
-/**
- * MODERATOR / DEBUG TOOL
- * Pressiona 'L' para abrir/fechar.
- */
+
+if (typeof _lightRegistry === 'undefined') {
+    var _lightRegistry = {};
+}
+
+export function registerLight(sceneName, lightName, lightObject) {
+    if (typeof _lightRegistry === 'undefined') _lightRegistry = {}; // Guard against circular load TDZ/hoisting issues
+    if (!_lightRegistry[sceneName]) {
+        _lightRegistry[sceneName] = [];
+    }
+    // Adiciona apenas se uma luz com o mesmo nome não existir
+    if (!_lightRegistry[sceneName].some(l => l.name === lightName)) {
+        console.log(`[MOD] Registo de luz: ${sceneName} -> ${lightName}`);
+        _lightRegistry[sceneName].push({
+            name: lightName,
+            light: lightObject,
+            initialVisibility: lightObject.visible
+        });
+    }
+}
 
 const moderator = {
     isOpen: false,
@@ -210,162 +226,29 @@ const moderator = {
     }
 };
 
-// --- UI ---
-const modUI = document.createElement('div');
-modUI.id = 'mod-menu';
-modUI.style.cssText = `
-    position: fixed; top: 10px; right: 10px;
-    width: 260px; max-height: 92vh; overflow-y: auto;
-    background: rgba(20, 20, 30, 0.95);
-    border: 2px solid #f0d080; border-radius: 8px;
-    padding: 0; font-family: 'Courier New', monospace;
-    color: #f0d080; z-index: 9999; display: none;
-    box-shadow: 0 0 15px rgba(0,0,0,0.8);
-    user-select: none;
-`;
-
-modUI.innerHTML = `
-    <div id="mod-header" style="padding: 10px; cursor: grab; background: rgba(240, 208, 128, 0.1); border-bottom: 1px solid #f0d080; text-align: center; font-weight: bold;">
-        DEBUG MENU
-    </div>
-    
-    <div style="padding: 14px;">
-        <div id="mod-estado" style="font-size:11px;line-height:1.5;background:rgba(0,0,0,0.4);border:1px solid #6a5020;border-radius:4px;padding:6px 8px;margin-bottom:10px;">—</div>
-
-        <div style="font-size:10px;color:#c8a96e;margin:6px 0 4px 0;letter-spacing:1px;">PROGRESSO</div>
-        <div style="margin-bottom:8px;">
-            <label style="font-size:11px;">SET LEVEL:</label>
-            <div style="display:flex;gap:4px;margin-top:3px;">
-                <input type="number" id="mod-lvl-val" value="1" style="flex:1;background:#000;color:#fff;border:1px solid #f0d080;padding:2px;">
-                <button id="mod-lvl-btn" style="background:#f0d080;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;">SET</button>
-            </div>
-        </div>
-
-        <div style="margin-bottom:8px;">
-            <label style="font-size:11px;">ADD XP:</label>
-            <div style="display:flex;gap:4px;margin-top:3px;">
-                <input type="number" id="mod-xp-val" value="100" style="flex:1;background:#000;color:#fff;border:1px solid #f0d080;padding:2px;">
-                <button id="mod-xp-btn" style="background:#f0d080;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;">ADD</button>
-            </div>
-        </div>
-
-        <div style="font-size:10px;color:#ff9090;margin:10px 0 4px 0;letter-spacing:1px;">VIDA / HP</div>
-        <div style="margin-bottom:6px;">
-            <label style="font-size:11px;">SET HP:</label>
-            <div style="display:flex;gap:4px;margin-top:3px;">
-                <input type="number" id="mod-hp-val" value="30" style="flex:1;background:#000;color:#fff;border:1px solid #ff9090;padding:2px;">
-                <button id="mod-hp-btn" style="background:#ff9090;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;">SET</button>
-            </div>
-        </div>
-        <div style="margin-bottom:6px;">
-            <label style="font-size:11px;">SET MAX HP:</label>
-            <div style="display:flex;gap:4px;margin-top:3px;">
-                <input type="number" id="mod-maxhp-val" value="30" style="flex:1;background:#000;color:#fff;border:1px solid #ff9090;padding:2px;">
-                <button id="mod-maxhp-btn" style="background:#ff9090;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;">SET</button>
-            </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px;">
-            <button id="mod-heal-btn"  style="background:#22cc44;color:#000;border:none;cursor:pointer;padding:5px;font-weight:bold;">FULL HEAL</button>
-            <button id="mod-defeat-btn" style="background:#9e1818;color:#fff;border:none;cursor:pointer;padding:5px;font-weight:bold;">DERROTAR</button>
-        </div>
-
-        <div style="font-size:10px;color:#80c8ff;margin:10px 0 4px 0;letter-spacing:1px;">CINTILAS ✦</div>
-        <div style="margin-bottom:6px;">
-            <label style="font-size:11px;">SET CINTILAS:</label>
-            <div style="display:flex;gap:4px;margin-top:3px;">
-                <input type="number" min="0" id="mod-cint-val" value="0" style="flex:1;background:#000;color:#fff;border:1px solid #80c8ff;padding:2px;">
-                <button id="mod-cint-btn" style="background:#80c8ff;color:#000;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;">SET</button>
-            </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-bottom:8px;">
-            <button id="mod-cint-add-50"  style="background:#a0c8ff;color:#000;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">+50</button>
-            <button id="mod-cint-add-200" style="background:#80b0e0;color:#000;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">+200</button>
-            <button id="mod-cint-add-1000" style="background:#6090c8;color:#fff;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">+1k</button>
-            <button id="mod-cint-zero"    style="background:#9e3b45;color:#fff;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">ZERAR</button>
-        </div>
-
-        <div style="font-size:10px;color:#a060f0;margin:10px 0 4px 0;letter-spacing:1px;">ITENS</div>
-        <button id="mod-toggle-itens" style="width:100%;background:rgba(160, 96, 240, 0.2);color:#a060f0;border:1px solid #a060f0;cursor:pointer;padding:6px;font-weight:bold;margin-bottom:4px;">ABRIR CATÁLOGO DE ITENS</button>
-        <div id="mod-itens-panel" style="display:none;background:rgba(0,0,0,0.3);border:1px solid #a060f0;border-radius:4px;padding:8px;margin-bottom:8px;">
-            <div id="mod-itens-grid" style="display:flex;flex-direction:column;gap:4px;"></div>
-        </div>
-
-        <div style="font-size:10px;color:#c8a96e;margin:10px 0 4px 0;letter-spacing:1px;">CENAS / MUDANÇA</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:4px;">
-            <button id="mod-scene-mundo" style="background:#4a90e2;color:#fff;border:none;cursor:pointer;padding:6px 2px;font-size:10px;font-weight:bold;">MUNDO</button>
-            <button id="mod-scene-loja"  style="background:#8b5a2b;color:#fff;border:none;cursor:pointer;padding:6px 2px;font-size:10px;font-weight:bold;">LOJA</button>
-            <button id="mod-scene-castelo" style="background:#55506a;color:#fff;border:none;cursor:pointer;padding:6px 2px;font-size:10px;font-weight:bold;">CASTELO</button>
-        </div>
-        <div style="font-size:10px;color:#cc88ff;margin:10px 0 4px 0;letter-spacing:1px;">🔬 DEBUG DE MODELOS</div>
-        <div id="mod-modelos-grid" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;"></div>
-
-        <div style="font-size:10px;color:#c8a96e;margin:10px 0 4px 0;letter-spacing:1px;">UTILIDADES</div>
-        <div style="margin-bottom:8px;">
-            <label style="font-size:11px;">TELEPORT (X, Y, Z):</label>
-            <div style="display:flex;gap:4px;margin-top:3px;">
-                <input type="number" step="0.1" id="mod-tp-x" placeholder="X" style="width:42px;background:#000;color:#fff;border:1px solid #f0d080;padding:2px;">
-                <input type="number" step="0.1" id="mod-tp-y" placeholder="Y" style="width:42px;background:#000;color:#fff;border:1px solid #f0d080;padding:2px;">
-                <input type="number" step="0.1" id="mod-tp-z" placeholder="Z" style="width:42px;background:#000;color:#fff;border:1px solid #f0d080;padding:2px;">
-                <button id="mod-tp-btn" style="flex:1;background:#f0d080;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;">GO</button>
-            </div>
-            <button id="mod-pos-btn" style="width:100%;margin-top:4px;background:#3a3a4a;color:#f0d080;border:1px solid #f0d080;cursor:pointer;padding:5px;font-weight:bold;font-size:11px;">📍 MOSTRAR POSIÇÃO ATUAL</button>
-            <div id="mod-pos-out" style="font-size:10px;color:#a0c0ff;background:rgba(0,0,0,0.4);border:1px solid #6a5020;border-radius:4px;padding:4px 6px;margin-top:4px;text-align:center;">—</div>
-        </div>
-
-        <button id="mod-clear-btn"   style="width:100%;background:#9e3b45;color:#fff;border:1px solid #f0d080;cursor:pointer;padding:6px;font-weight:bold;margin-bottom:6px;">LIMPAR ZONAS</button>
-        <button id="mod-freecam-btn" style="width:100%;background:#f0d080;color:#000;border:1px solid #000;cursor:pointer;padding:8px;font-weight:bold;margin-bottom:6px;">FREE CAM: OFF</button>
-        <button id="mod-noclip-btn"  style="width:100%;background:#3a3a4a;color:#f0d080;border:1px solid #f0d080;cursor:pointer;padding:8px;font-weight:bold;margin-bottom:6px;">🚀 NOCLIP: OFF</button>
-        <button id="mod-coll-btn"    style="width:100%;background:#3a3a4a;color:#f0d080;border:1px solid #f0d080;cursor:pointer;padding:6px;font-weight:bold;margin-bottom:8px;">👁 VER COLISORES</button>
-
-        <div style="font-size:10px;color:#888;text-align:center;border-top:1px solid #444;padding-top:5px;">
-            L para fechar
-        </div>
-    </div>
-`;
-document.body.appendChild(modUI);
-
-// --- Draggable Logic ---
-let isDragging = false;
-let offsetX, offsetY;
-
-const header = document.getElementById('mod-header');
-header.onmousedown = (e) => {
-    isDragging = true;
-    header.style.cursor = 'grabbing';
-    offsetX = e.clientX - modUI.offsetLeft;
-    offsetY = e.clientY - modUI.offsetTop;
-};
-
-document.onmousemove = (e) => {
-    if (!isDragging) return;
-    modUI.style.left = (e.clientX - offsetX) + 'px';
-    modUI.style.top = (e.clientY - offsetY) + 'px';
-    modUI.style.right = 'auto'; // Disable right lock
-};
-
-document.onmouseup = () => {
-    isDragging = false;
-    header.style.cursor = 'grab';
-};
-
 // --- estado ao vivo ---
 function renderEstado() {
     const el = document.getElementById('mod-estado');
     if (!el) return;
-    const iconHtml = (ic) => (ic && (ic.endsWith('.png') || ic.endsWith('.jpg') || ic.includes('/')))
-        ? `<img src="${ic}" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;">`
-        : (ic || '');
-    const itens = getItens().filter(i => i.quantidade > 0).map(i => `${iconHtml(i.icone)} ${i.nome} x${i.quantidade}`).join('<br>') || '<i style="color:#888;">— vazio —</i>';
-    el.innerHTML = `
-        <span style="color:#ffe080;">Lv ${playerStats.level}</span> ·
-        <span style="color:#a0c0ff;">XP ${playerStats.xp}/${playerStats.xpToNext}</span><br>
-        <span style="color:#ff9090;">HP ${playerStats.hp}/${playerStats.maxHp}</span>
-        ${playerStats.derrotado ? '<span style="color:#ff4040;"> ⟡ DERROTADO ⟡</span>' : ''}
-        <span style="color:#c0a060;"> · ATK ${playerStats.atk}</span><br>
-        <span style="color:#80c8ff;">✦ ${getCintilas()} cintilas</span>
-        <hr style="border:0;border-top:1px solid #444;margin:4px 0;">
-        <div style="font-size:10px;">${itens}</div>
-    `;
+    try {
+        const iconHtml = (ic) => (typeof ic === 'string' && (ic.endsWith('.png') || ic.endsWith('.jpg') || ic.includes('/')))
+            ? `<img src="${ic}" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;">`
+            : (typeof ic === 'string' ? ic : '');
+        const itens = getItens().filter(i => i.quantidade > 0).map(i => `${iconHtml(i.icone)} ${i.nome} x${i.quantidade}`).join('<br>') || '<i style="color:#888;">— vazio —</i>';
+        el.innerHTML = `
+            <span style="color:#ffe080;">Lv ${playerStats.level}</span> ·
+            <span style="color:#a0c0ff;">XP ${playerStats.xp}/${playerStats.xpToNext}</span><br>
+            <span style="color:#ff9090;">HP ${playerStats.hp}/${playerStats.maxHp}</span>
+            ${playerStats.derrotado ? '<span style="color:#ff4040;"> ⟡ DERROTADO ⟡</span>' : ''}
+            <span style="color:#c0a060;"> · ATK ${playerStats.atk}</span><br>
+            <span style="color:#80c8ff;">✦ ${getCintilas()} cintilas</span>
+            <hr style="border:0;border-top:1px solid #444;margin:4px 0;">
+            <div style="font-size:10px;">${itens}</div>
+        `;
+    } catch (err) {
+        console.error('[MOD] Erro ao renderizar estado:', err);
+        el.innerHTML = '<span style="color:#f44;">Erro ao carregar stats</span>';
+    }
 }
 
 // --- grelha de adicionar itens, gerada do CATÁLOGO ---
@@ -409,87 +292,315 @@ function renderModelosGrid() {
 
 // --- eventos ---
 function setupEvents() {
-    document.getElementById('mod-lvl-btn').onclick = () => moderator.setLevel(document.getElementById('mod-lvl-val').value);
-    document.getElementById('mod-xp-btn').onclick  = () => { moderator.addXP(document.getElementById('mod-xp-val').value); renderEstado(); };
-    document.getElementById('mod-hp-btn').onclick  = () => moderator.setHP(document.getElementById('mod-hp-val').value);
-    document.getElementById('mod-maxhp-btn').onclick = () => moderator.setMaxHP(document.getElementById('mod-maxhp-val').value);
-    document.getElementById('mod-heal-btn').onclick   = () => moderator.fullHeal();
-    document.getElementById('mod-defeat-btn').onclick = () => moderator.derrotar();
+    const _on = (id, fn) => {
+        const el = document.getElementById(id);
+        if (el) el.onclick = fn;
+    };
+
+    _on('mod-lvl-btn', () => moderator.setLevel(document.getElementById('mod-lvl-val').value));
+    _on('mod-xp-btn',  () => { moderator.addXP(document.getElementById('mod-xp-val').value); renderEstado(); });
+    _on('mod-hp-btn',  () => moderator.setHP(document.getElementById('mod-hp-val').value));
+    _on('mod-maxhp-btn', () => moderator.setMaxHP(document.getElementById('mod-maxhp-val').value));
+    _on('mod-heal-btn',   () => moderator.fullHeal());
+    _on('mod-defeat-btn', () => moderator.derrotar());
 
     // --- cintilas ---
-    document.getElementById('mod-cint-btn').onclick = () => {
-        const v = parseInt(document.getElementById('mod-cint-val').value, 10) || 0;
+    _on('mod-cint-btn', () => {
+        const el = document.getElementById('mod-cint-val');
+        const v = parseInt(el ? el.value : '0', 10) || 0;
         setCintilas(Math.max(0, v));
         renderEstado();
-    };
-    document.getElementById('mod-cint-add-50').onclick   = () => { ganharCintilas(50);   renderEstado(); };
-    document.getElementById('mod-cint-add-200').onclick  = () => { ganharCintilas(200);  renderEstado(); };
-    document.getElementById('mod-cint-add-1000').onclick = () => { ganharCintilas(1000); renderEstado(); };
-    document.getElementById('mod-cint-zero').onclick     = () => { setCintilas(0);       renderEstado(); };
-    document.getElementById('mod-tp-btn').onclick = () => {
+    });
+    _on('mod-cint-add-50',   () => { ganharCintilas(50);   renderEstado(); });
+    _on('mod-cint-add-200',  () => { ganharCintilas(200);  renderEstado(); });
+    _on('mod-cint-add-1000', () => { ganharCintilas(1000); renderEstado(); });
+    _on('mod-cint-zero',     () => { setCintilas(0);       renderEstado(); });
+
+    _on('mod-tp-btn', () => {
         moderator.teleport(
             document.getElementById('mod-tp-x').value,
             document.getElementById('mod-tp-y').value,
             document.getElementById('mod-tp-z').value
         );
-    };
-    document.getElementById('mod-pos-btn').onclick = () => {
+    });
+
+    _on('mod-pos-btn', () => {
         const p = moderator.getPos();
         const out = document.getElementById('mod-pos-out');
+        if (!out) return;
         if (p.cam) {
             out.innerHTML =
                 `Player: <b>${p.x}, ${p.y}, ${p.z}</b><br>` +
                 `Câmara: <b>${p.cam.x}, ${p.cam.y}, ${p.cam.z}</b><br>` +
                 `LookAt: <b>${p.lookAt.x}, ${p.lookAt.y}, ${p.lookAt.z}</b>`;
-            console.log(
-                `[MOD] Player: (${p.x}, ${p.y}, ${p.z})\n` +
-                `[MOD] Camera.position.set(${p.cam.x}, ${p.cam.y}, ${p.cam.z});\n` +
-                `[MOD] Camera.lookAt(${p.lookAt.x}, ${p.lookAt.y}, ${p.lookAt.z});`,
-            );
         } else {
             out.innerHTML = `X: <b>${p.x}</b>  ·  Y: <b>${p.y}</b>  ·  Z: <b>${p.z}</b>`;
-            console.log(`[MOD] Pos: x=${p.x}, y=${p.y}, z=${p.z} (cena: ${estado.cena})`);
         }
         // preenche também os inputs para facilitar copiar / re-tp
-        document.getElementById('mod-tp-x').value = p.x;
-        document.getElementById('mod-tp-y').value = p.y;
-        document.getElementById('mod-tp-z').value = p.z;
-    };
-    document.getElementById('mod-clear-btn').onclick   = () => moderator.limparZonas();
-    document.getElementById('mod-freecam-btn').onclick = () => moderator.toggleFreeCam();
-    document.getElementById('mod-noclip-btn').onclick  = () => moderator.toggleNoClip();
-    document.getElementById('mod-coll-btn').onclick    = () => moderator.toggleColliders();
+        if (document.getElementById('mod-tp-x')) document.getElementById('mod-tp-x').value = p.x;
+        if (document.getElementById('mod-tp-y')) document.getElementById('mod-tp-y').value = p.y;
+        if (document.getElementById('mod-tp-z')) document.getElementById('mod-tp-z').value = p.z;
+    });
+
+    _on('mod-clear-btn',   () => moderator.limparZonas());
+    _on('mod-freecam-btn', () => moderator.toggleFreeCam());
+    _on('mod-noclip-btn',  () => moderator.toggleNoClip());
+    _on('mod-coll-btn',    () => moderator.toggleColliders());
 
     // Toggle de itens
     const toggleItens = document.getElementById('mod-toggle-itens');
     const itensPanel = document.getElementById('mod-itens-panel');
-    toggleItens.onclick = () => {
-        const isVisible = itensPanel.style.display === 'block';
-        itensPanel.style.display = isVisible ? 'none' : 'block';
-        toggleItens.textContent = isVisible ? 'ABRIR CATÁLOGO DE ITENS' : 'FECHAR CATÁLOGO DE ITENS';
-        if (!isVisible) renderItensGrid();
-    };
+    if (toggleItens && itensPanel) {
+        toggleItens.onclick = () => {
+            const isVisible = itensPanel.style.display === 'block';
+            itensPanel.style.display = isVisible ? 'none' : 'block';
+            toggleItens.textContent = isVisible ? 'ABRIR CATÁLOGO DE ITENS' : 'FECHAR CATÁLOGO DE ITENS';
+            if (!isVisible) renderItensGrid();
+        };
+    }
 
     // Scene Switcher
-    document.getElementById('mod-scene-mundo').onclick = () => moderator.switchScene('mundo');
-    document.getElementById('mod-scene-loja').onclick = () => moderator.switchScene('loja');
-    document.getElementById('mod-scene-castelo').onclick = () => moderator.switchScene('caselo');
+    _on('mod-scene-mundo',   () => moderator.switchScene('mundo'));
+    _on('mod-scene-loja',    () => moderator.switchScene('loja'));
+    _on('mod-scene-castelo', () => moderator.switchScene('caselo'));
 }
 
-// --- TOGGLE COM Ç ---
-window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'ç') {
-        moderator.isOpen = !moderator.isOpen;
-        modUI.style.display = moderator.isOpen ? 'block' : 'none';
-        if (moderator.isOpen) {
-            setupEvents();
+function renderLuzesGrid() {
+    const panel = document.getElementById('mod-luzes-panel');
+    if (!panel) return;
+    panel.innerHTML = '';
+    
+    const keys = Object.keys(_lightRegistry || {});
+    console.log(`[MOD] renderLuzesGrid: ${keys.length} categorias encontradas.`);
+
+    if (keys.length === 0) {
+        panel.innerHTML = '<div style="font-size:10px;color:#888;text-align:center;">Nenhuma luz registada.</div>';
+        return;
+    }
+
+    for (const sceneName in _lightRegistry) {
+        const lights = _lightRegistry[sceneName];
+        console.log(`[MOD]   - ${sceneName}: ${lights.length} luzes.`);
+        const sceneHeader = document.createElement('div');
+        sceneHeader.style.cssText = 'font-size:10px; color:#a0c0ff; border-bottom:1px solid #666; margin-bottom:4px; padding-bottom:2px; text-transform:uppercase;';
+        sceneHeader.textContent = sceneName;
+        panel.appendChild(sceneHeader);
+
+        _lightRegistry[sceneName].forEach(lightEntry => {
+            const { name, light } = lightEntry;
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; font-size:11px;';
+            row.innerHTML = `
+                <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+                    <input type="checkbox" class="mod-light-toggle" data-scene="${sceneName}" data-name="${name}" ${light.visible ? 'checked' : ''}>
+                    ${name}
+                </label>
+            `;
+            panel.appendChild(row);
+        });
+    }
+}
+
+// --- bindings ---
+function _buildPanel() {
+    if (document.getElementById('mod-panel')) {
+        document.getElementById('mod-panel').style.display = 'block';
+        try {
             renderEstado();
+            renderItensGrid();
             renderModelosGrid();
+            renderLuzesGrid();
+        } catch (err) {
+            console.error('[MOD] Erro no refresh inicial:', err);
+        }
+        return;
+    }
+    const modUI = document.createElement('div');
+    modUI.id = 'mod-panel';
+    modUI.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        width: 240px;
+        max-height: 85vh;
+        overflow-y: auto;
+        background: rgba(20, 10, 0, 0.9);
+        color: #f0d080;
+        border: 2px solid #d4a830;
+        border-radius: 8px;
+        padding: 10px;
+        z-index: 10000;
+        pointer-events: auto !important;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        display: none;
+    `;
+    modUI.innerHTML = `
+        <div id="mod-header" style="background:#421;color:#f0d080;padding:6px;text-align:center;font-weight:bold;letter-spacing:2px;cursor:grab;margin:-10px -10px 8px -10px;border-radius:6px 6px 0 0;position:sticky;top:-10px;z-index:11;">⚜ MODERATOR ⚜</div>
+        
+        <div id="mod-estado" style="background:rgba(0,0,0,0.3);border:1px solid #8b5a2b;border-radius:4px;padding:8px;margin-bottom:8px;font-size:11px;line-height:1.5;"></div>
+
+        <div style="font-size:10px;color:#f0a060;margin:10px 0 4px 0;letter-spacing:1px;">JOGADOR</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px;">
+            <input type="number" id="mod-hp-val"    placeholder="HP" style="width:100%;box-sizing:border-box;background:#000;color:#ff9090;border:1px solid #f0a060;padding:4px;">
+            <button id="mod-hp-btn" style="width:100%;background:#f0a060;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;">SET</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px;">
+            <input type="number" id="mod-maxhp-val" placeholder="MaxHP" style="width:100%;box-sizing:border-box;background:#000;color:#ff9090;border:1px solid #f0a060;padding:4px;">
+            <button id="mod-maxhp-btn" style="width:100%;background:#f0a060;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;">SET</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px;">
+            <input type="number" id="mod-xp-val" placeholder="XP" style="width:100%;box-sizing:border-box;background:#000;color:#a0c0ff;border:1px solid #f0a060;padding:4px;">
+            <button id="mod-xp-btn" style="width:100%;background:#a0c0ff;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;color:#000;">ADD</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px;">
+            <input type="number" id="mod-lvl-val" placeholder="Lvl" style="width:100%;box-sizing:border-box;background:#000;color:#ffe080;border:1px solid #f0a060;padding:4px;">
+            <button id="mod-lvl-btn" style="width:100%;background:#ffe080;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;color:#000;">SET</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px;">
+            <button id="mod-heal-btn"   style="background:#3ac850;color:#000;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">CURA TOTAL</button>
+            <button id="mod-defeat-btn" style="background:#9e3b45;color:#fff;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">DERROTAR</button>
+        </div>
+
+        <div style="font-size:10px;color:#80c8ff;margin:10px 0 4px 0;letter-spacing:1px;">MOEDA</div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:4px;margin-bottom:4px;">
+            <input type="number" id="mod-cint-val" placeholder="Cintilas" style="width:100%;box-sizing:border-box;background:#000;color:#80c8ff;border:1px solid #80c8ff;padding:4px;">
+            <button id="mod-cint-btn" style="width:100%;background:#80c8ff;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;color:#000;">SET</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-bottom:8px;">
+            <button id="mod-cint-add-50"   style="background:#3a80c0;color:#fff;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">+50</button>
+            <button id="mod-cint-add-200"  style="background:#3a80c0;color:#fff;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">+200</button>
+            <button id="mod-cint-add-1000" style="background:#3a80c0;color:#fff;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">+1k</button>
+            <button id="mod-cint-zero"    style="background:#9e3b45;color:#fff;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">ZERAR</button>
+        </div>
+
+        <div style="font-size:10px;color:#a060f0;margin:10px 0 4px 0;letter-spacing:1px;">ITENS</div>
+        <button id="mod-toggle-itens" style="width:100%;background:rgba(160, 96, 240, 0.2);color:#a060f0;border:1px solid #a060f0;cursor:pointer;padding:6px;font-weight:bold;margin-bottom:4px;">ABRIR CATÁLOGO DE ITENS</button>
+        <div id="mod-itens-panel" style="display:none;background:rgba(0,0,0,0.3);border:1px solid #a060f0;border-radius:4px;padding:8px;margin-bottom:8px;">
+            <div id="mod-itens-grid" style="display:flex;flex-direction:column;gap:4px;"></div>
+        </div>
+
+        <div style="font-size:10px;color:#c8a96e;margin:10px 0 4px 0;letter-spacing:1px;">CENAS / MUDANÇA</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:4px;">
+            <button id="mod-scene-mundo" style="background:#4a90e2;color:#fff;border:none;cursor:pointer;padding:6px 2px;font-size:10px;font-weight:bold;">MUNDO</button>
+            <button id="mod-scene-loja"  style="background:#8b5a2b;color:#fff;border:none;cursor:pointer;padding:6px 2px;font-size:10px;font-weight:bold;">LOJA</button>
+            <button id="mod-scene-castelo" style="background:#55506a;color:#fff;border:none;cursor:pointer;padding:6px 2px;font-size:10px;font-weight:bold;">CASTELO</button>
+        </div>
+        <div style="font-size:10px;color:#cc88ff;margin:10px 0 4px 0;letter-spacing:1px;">🔬 DEBUG DE MODELOS</div>
+        <div id="mod-modelos-grid" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;"></div>
+
+        <div style="font-size:10px;color:#ffe080;margin:10px 0 4px 0;letter-spacing:1px;">💡 LUZES</div>
+        <div id="mod-luzes-panel" style="background:rgba(0,0,0,0.3);border:1px solid #ffe080;border-radius:4px;padding:8px;margin-bottom:8px;display:flex;flex-direction:column;gap:4px;">
+            <!-- As luzes serão inseridas aqui -->
+        </div>
+
+        <div style="font-size:10px;color:#c8a96e;margin:10px 0 4px 0;letter-spacing:1px;">UTILIDADES</div>
+        <div style="margin-bottom:8px;">
+            <label style="font-size:11px;">TELEPORT (X, Y, Z):</label>
+            <div style="display:flex;gap:4px;margin-top:3px;">
+                <input type="number" step="0.1" id="mod-tp-x" placeholder="X" style="width:42px;background:#000;color:#fff;border:1px solid #f0d080;padding:2px;">
+                <input type="number" step="0.1" id="mod-tp-y" placeholder="Y" style="width:42px;background:#000;color:#fff;border:1px solid #f0d080;padding:2px;">
+                <input type="number" step="0.1" id="mod-tp-z" placeholder="Z" style="width:42px;background:#000;color:#fff;border:1px solid #f0d080;padding:2px;">
+                <button id="mod-tp-btn" style="flex:1;background:#f0d080;border:none;cursor:pointer;padding:3px 8px;font-weight:bold;">GO</button>
+            </div>
+            <button id="mod-pos-btn" style="width:100%;margin-top:4px;background:#3a3a4a;color:#f0d080;border:1px solid #f0d080;cursor:pointer;padding:5px;font-weight:bold;font-size:11px;">📍 MOSTRAR POSIÇÃO ATUAL</button>
+            <div id="mod-pos-out" style="font-size:10px;color:#a0c0ff;background:rgba(0,0,0,0.4);border:1px solid #6a5020;border-radius:4px;padding:4px 6px;margin-top:4px;text-align:center;">—</div>
+        </div>
+
+        <button id="mod-clear-btn"   style="width:100%;background:#9e3b45;color:#fff;border:1px solid #f0d080;cursor:pointer;padding:6px;font-weight:bold;margin-bottom:6px;">LIMPAR ZONAS</button>
+        <button id="mod-freecam-btn" style="width:100%;background:#f0d080;color:#000;border:1px solid #000;cursor:pointer;padding:8px;font-weight:bold;margin-bottom:6px;">FREE CAM: OFF</button>
+        <button id="mod-noclip-btn"  style="width:100%;background:#3a3a4a;color:#f0d080;border:1px solid #f0d080;cursor:pointer;padding:8px;font-weight:bold;margin-bottom:6px;">🚀 NOCLIP: OFF</button>
+        <button id="mod-coll-btn"    style="width:100%;background:#3a3a4a;color:#f0d080;border:1px solid #f0d080;cursor:pointer;padding:6px;font-weight:bold;margin-bottom:8px;">👁 VER COLISORES</button>
+
+        <div style="font-size:10px;color:#888;text-align:center;border-top:1px solid #444;padding-top:5px;">
+            Ç para fechar
+        </div>
+    `;
+    modUI.addEventListener('mousedown', (e) => e.stopPropagation());
+    modUI.addEventListener('click', (e) => e.stopPropagation());
+    modUI.addEventListener('wheel', (e) => e.stopPropagation(), { passive: false });
+    document.body.appendChild(modUI);
+
+    // --- Draggable Logic ---
+    let isDragging = false;
+    let dragStartX, dragStartY;
+    let initialX, initialY;
+
+    const header = modUI.querySelector('#mod-header');
+    if (header) {
+        header.style.cursor = 'grab';
+        header.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            header.style.cursor = 'grabbing';
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            initialX = modUI.offsetLeft;
+            initialY = modUI.offsetTop;
+            e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - dragStartX;
+            const dy = e.clientY - dragStartY;
+            modUI.style.left = (initialX + dx) + 'px';
+            modUI.style.top = (initialY + dy) + 'px';
+            modUI.style.right = 'auto'; // Disable right lock
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            header.style.cursor = 'grab';
+        });
+    }
+
+    const panel = document.getElementById('mod-luzes-panel');
+    if (panel) {
+        panel.addEventListener('change', (e) => {
+            if (e.target.classList.contains('mod-light-toggle')) {
+                const sceneName = e.target.dataset.scene;
+                const lightName = e.target.dataset.name;
+                const entry = _lightRegistry[sceneName]?.find(l => l.name === lightName);
+                if (entry) {
+                    entry.light.visible = e.target.checked;
+                }
+            }
+        });
+    }
+}
+
+// --- TOGGLE COM Ç ou L ---
+window.addEventListener('keydown', (e) => {
+    const key = e.key.toLowerCase();
+    if (key === 'ç' || key === 'l') {
+        moderator.isOpen = !moderator.isOpen;
+        const modUI = document.getElementById('mod-panel');
+        if (!modUI) {
+            _buildPanel(); // build if not present
+        }
+        const modUIFinal = document.getElementById('mod-panel');
+        if (modUIFinal) {
+            modUIFinal.style.display = moderator.isOpen ? 'block' : 'none';
+        }
+        if (moderator.isOpen) {
+            try {
+                setupEvents();
+                renderEstado();
+                renderModelosGrid();
+                renderLuzesGrid();
+            } catch (err) {
+                console.error('[MOD] Erro ao abrir painel:', err);
+            }
             // reflectir HP/MaxHP/cintilas actuais nos inputs ao abrir
-            document.getElementById('mod-hp-val').value    = playerStats.hp;
-            document.getElementById('mod-maxhp-val').value = playerStats.maxHp;
-            document.getElementById('mod-lvl-val').value   = playerStats.level;
-            document.getElementById('mod-cint-val').value  = getCintilas();
+            const hpVal = document.getElementById('mod-hp-val');
+            if (hpVal) hpVal.value = playerStats.hp;
+            const maxHpVal = document.getElementById('mod-maxhp-val');
+            if (maxHpVal) maxHpVal.value = playerStats.maxHp;
+            const lvlVal = document.getElementById('mod-lvl-val');
+            if (lvlVal) lvlVal.value = playerStats.level;
+            const cintVal = document.getElementById('mod-cint-val');
+            if (cintVal) cintVal.value = getCintilas();
         }
     }
 });
@@ -497,6 +608,6 @@ window.addEventListener('keydown', (e) => {
 // auto-refresh quando o menu está aberto
 setInterval(() => { if (moderator.isOpen) renderEstado(); }, 500);
 
-console.log("%c[MODERADOR] Pressiona 'L' para abrir.", "color:#f0d080;font-weight:bold;");
+console.log("%c[MODERADOR] Pressiona 'L' ou 'Ç' para abrir.", "color:#f0d080;font-weight:bold;");
 
 export default moderator;
