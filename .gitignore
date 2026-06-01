@@ -26,7 +26,7 @@ yarn-error.log*
 .idea/
 *.swp
 *.swo
-.claude/settings.local.json
+.claude/
 
 # Local env files
 .env
