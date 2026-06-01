@@ -1,11 +1,3 @@
-// ======================================================================
-// WRAITH INIMIGO — figura encapuzada com chamas roxas usada em combate.
-// ----------------------------------------------------------------------
-// • Constrói o group procedural (robe, capuz, asas, garras, chamas, névoa).
-// • Anexa um proxy material em `.material` para preservar a API antiga
-//   usada por systems/combate.js (`emissiveIntensity`, `opacity`, ...).
-// • Expõe `updateInimigoWraith(grupo, dt, time, basePos)` para a anim.
-// ======================================================================
 import * as THREE from 'three';
 import { registerLight } from '../systems/moderator.js';
 
@@ -33,7 +25,6 @@ export function criarInimigoWraith() {
     });
     const glowMat = new THREE.MeshBasicMaterial({ color: 0xc080ff });
 
-    // Robe (corpo cónico, alargado em baixo)
     const robe = new THREE.Mesh(
         new THREE.ConeGeometry(0.95, 2.2, 14, 1, true),
         wraithCloth
@@ -42,7 +33,6 @@ export function criarInimigoWraith() {
     robe.castShadow = true;
     grupo.add(robe);
 
-    // Cintura
     const belt = new THREE.Mesh(
         new THREE.TorusGeometry(0.55, 0.06, 8, 24),
         new THREE.MeshStandardMaterial({ color: 0x6a6a78, roughness: 0.6 })
@@ -51,7 +41,6 @@ export function criarInimigoWraith() {
     belt.rotation.x = Math.PI / 2;
     grupo.add(belt);
 
-    // Tronco
     const torso = new THREE.Mesh(
         new THREE.CylinderGeometry(0.42, 0.58, 0.95, 12, 1, true),
         wraithCloth
@@ -60,7 +49,6 @@ export function criarInimigoWraith() {
     torso.castShadow = true;
     grupo.add(torso);
 
-    // Ombros / capa
     const shoulders = new THREE.Mesh(
         new THREE.ConeGeometry(0.7, 0.5, 12, 1, true),
         wraithDark
@@ -69,7 +57,6 @@ export function criarInimigoWraith() {
     shoulders.castShadow = true;
     grupo.add(shoulders);
 
-    // Capuz
     const hood = new THREE.Mesh(
         new THREE.ConeGeometry(0.42, 0.9, 12),
         wraithDark
@@ -79,7 +66,6 @@ export function criarInimigoWraith() {
     hood.castShadow = true;
     grupo.add(hood);
 
-    // Rosto brilhante
     const face = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 12), glowMat);
     face.position.set(0, 2.55, 0.18);
     grupo.add(face);
@@ -88,7 +74,6 @@ export function criarInimigoWraith() {
     grupo.add(faceLight);
     registerLight('Inimigo - Wraith', 'Luz da Face', faceLight);
 
-    // Braços + garras (expostos no grupo para a animação de ataque)
     function braco(side) {
         const manga = new THREE.Mesh(
             new THREE.ConeGeometry(0.18, 1.05, 8, 1, true),
@@ -113,7 +98,6 @@ export function criarInimigoWraith() {
     grupo.userData.bracoEsq = bEsq;
     grupo.userData.bracoDir = bDir;
 
-    // Asas
     function asa(side) {
         const shape = new THREE.Shape();
         shape.moveTo(0, 0);
@@ -130,7 +114,6 @@ export function criarInimigoWraith() {
     const asaR = asa(1);
     grupo.add(asaL, asaR);
 
-    // Chamas roxas em volta da cabeça
     const flames = [];
     for (let i = 0; i < 12; i++) {
         const g = new THREE.ConeGeometry(0.08 + Math.random() * 0.05, 0.45 + Math.random() * 0.45, 6);
@@ -148,7 +131,6 @@ export function criarInimigoWraith() {
         grupo.add(m);
     }
 
-    // Nevoa rotativa
     const mistGroup = new THREE.Group();
     mistGroup.position.y = 1.2;
     for (let i = 0; i < 16; i++) {
@@ -176,13 +158,12 @@ export function criarInimigoWraith() {
     }
     grupo.add(mistGroup2);
 
-    // luz roxa pessoal
     const auraLight = new THREE.PointLight(0x9040ff, 1.6, 5.5, 2);
     auraLight.position.set(0, 1.4, 0);
     grupo.add(auraLight);
     registerLight('Inimigo - Wraith', 'Aura Rastejante', auraLight);
 
-    // Proxy de material para preservar a API usada por systems/combate.js
+    // Proxy de material para preservar a API usada por systems/combate.js.
     const _fadeMats = [wraithDark, wraithCloth, wingMat, flameMat, mistMat, glowMat,
                        belt.material, face.material];
     const _emissiveMats = [wraithCloth, wingMat];
@@ -217,13 +198,6 @@ export function criarInimigoWraith() {
     return grupo;
 }
 
-/**
- * Animação por frame do wraith.
- *   grupo  — group devolvido por criarInimigoWraith
- *   dt     — deltaTime
- *   t      — tempo acumulado da cena
- *   basePos — posição "alvo" actual (mutada pelo combate-scene)
- */
 export function updateInimigoWraith(grupo, dt, t, basePos) {
     grupo.position.y = basePos.y + Math.sin(t * 1.4) * 0.12;
     grupo.rotation.y = -Math.PI / 2 + 0.35 + Math.sin(t * 0.5) * 0.15;
@@ -253,14 +227,6 @@ export function updateInimigoWraith(grupo, dt, t, basePos) {
     }
 }
 
-/**
- * Animação de ataque do wraith. Cada `tipo` tem coreografia distinta.
- *   foice      — braço direito faz arco descendente largo
- *   lua        — braço esquerdo varre baixo
- *   verberacao — duplo jab alternado, asas vibram rápido
- *   espinho    — estocada/jab do braço direito
- *   talho      — AMBOS os braços + asas abrem (ataque mais pesado)
- */
 export function animarAtaqueWraith(grupo, tipo = 'foice', dur = 600) {
     const bE = grupo.userData.bracoEsq;
     const bD = grupo.userData.bracoDir;
@@ -278,16 +244,14 @@ export function animarAtaqueWraith(grupo, tipo = 'foice', dur = 600) {
         if (asaR) { asaR.rotation.x = 0; asaR.rotation.z = 0; asaR.scale.set(1,1,1); }
     };
 
-    // bell curve: vale 1 no meio, 0 nas pontas
     const bell = (e) => Math.sin(Math.PI * e);
-    // windup/strike/recoil: -1 a recuar, +1 no golpe
     const swingArc = (e) => {
-        if (e < 0.45)      return -(e / 0.45);                  // -1 a 0 (recua)
+        if (e < 0.45)      return -(e / 0.45);
         if (e < 0.7) {
             const k = (e - 0.45) / 0.25;
-            return -1 + k * 2.6;                                 // -1 → 1.6 (chicote)
+            return -1 + k * 2.6;
         }
-        return 1.6 * (1 - (e - 0.7) / 0.3);                      // 1.6 → 0
+        return 1.6 * (1 - (e - 0.7) / 0.3);
     };
 
     const t0 = performance.now();
@@ -296,8 +260,7 @@ export function animarAtaqueWraith(grupo, tipo = 'foice', dur = 600) {
         if (e >= 1) { resetBraco(bE); resetBraco(bD); resetAsas(); return; }
 
         if (tipo === 'foice') {
-            // braço direito: arco grande descendente, esquerdo quieto
-            const lift = bell(Math.min(1, e * 1.4));   // sobe rápido, fica
+            const lift = bell(Math.min(1, e * 1.4));
             const sw = swingArc(e);
             bD.manga.rotation.z = bD.manga.userData.baseRotZ + lift * 1.3;
             bD.manga.rotation.x = -sw * 0.6;
@@ -306,7 +269,6 @@ export function animarAtaqueWraith(grupo, tipo = 'foice', dur = 600) {
             bD.garra.position.z = bD.garra.userData.basePos.z + sw * 0.55;
         }
         else if (tipo === 'lua') {
-            // braço esquerdo: varre baixo, ligeiramente para baixo+frente
             const lift = bell(Math.min(1, e * 1.2));
             const sw = swingArc(e);
             bE.manga.rotation.z = bE.manga.userData.baseRotZ - lift * 0.4;
@@ -318,10 +280,10 @@ export function animarAtaqueWraith(grupo, tipo = 'foice', dur = 600) {
         }
         else if (tipo === 'verberacao') {
             // duplo jab alternado: esquerdo em 0..0.5, direito em 0.5..1
-            const wing = Math.sin(e * Math.PI * 6) * 0.15; // asas vibram rápido
+            const wing = Math.sin(e * Math.PI * 6) * 0.15;
             if (asaL) asaL.rotation.x = wing;
             if (asaR) asaR.rotation.x = -wing;
-            const half = e < 0.5 ? e * 2 : (e - 0.5) * 2;     // 0..1 em cada metade
+            const half = e < 0.5 ? e * 2 : (e - 0.5) * 2;
             const sw = swingArc(half);
             const b = e < 0.5 ? bE : bD;
             const other = e < 0.5 ? bD : bE;
@@ -331,16 +293,14 @@ export function animarAtaqueWraith(grupo, tipo = 'foice', dur = 600) {
             resetBraco(other);
         }
         else if (tipo === 'espinho') {
-            // estocada: braço direito estica para a frente, recta
             const sw = swingArc(e);
             bD.manga.rotation.z = bD.manga.userData.baseRotZ + 0.2;
             bD.manga.rotation.x = -sw * 0.5;
             bD.manga.position.z = bD.manga.userData.basePos.z + sw * 0.35;
-            bD.garra.position.z = bD.garra.userData.basePos.z + sw * 0.95; // perfura longe
+            bD.garra.position.z = bD.garra.userData.basePos.z + sw * 0.95;
             bD.garra.position.x = bD.garra.userData.basePos.x - Math.max(0, sw) * 0.15;
         }
         else if (tipo === 'talho') {
-            // ATAQUE PESADO: ambos os braços + asas abrem
             const lift = bell(Math.min(1, e * 1.3));
             const sw = swingArc(e);
             // braços
@@ -354,7 +314,6 @@ export function animarAtaqueWraith(grupo, tipo = 'foice', dur = 600) {
             bD.garra.position.y = bD.garra.userData.basePos.y + lift * 0.6;
             bE.garra.position.z = bE.garra.userData.basePos.z + sw * 0.55;
             bD.garra.position.z = bD.garra.userData.basePos.z + sw * 0.55;
-            // asas abrem em x (forward) + escala maior
             if (asaL) { asaL.rotation.x = -lift * 0.5; asaL.scale.setScalar(1 + lift * 0.25); }
             if (asaR) { asaR.rotation.x = -lift * 0.5; asaR.scale.setScalar(1 + lift * 0.25); }
         }
@@ -364,7 +323,6 @@ export function animarAtaqueWraith(grupo, tipo = 'foice', dur = 600) {
     requestAnimationFrame(step);
 }
 
-/** Repõe o wraith ao estado visual inicial. */
 export function resetInimigoWraith(grupo) {
     grupo.rotation.set(0, -Math.PI / 2 + 0.35, 0);
     grupo.scale.set(1, 1, 1);

@@ -1,27 +1,3 @@
-// ======================================================================
-// NÚCLEO CORROMPIDO — inimigo procedural complexo (tema: corrupção).
-// ----------------------------------------------------------------------
-// Substitui o antigo "Sluddy" (que era simples demais). É um "objeto" /
-// construto flutuante de corrupção:
-//   • núcleo de energia a pulsar, envolto numa CASCA DE ROCHA FRACTURADA
-//   • um OLHO de corrupção que glara pela abertura frontal da casca
-//   • dois ANÉIS RÚNICOS de metal escuro a orbitar em planos diferentes
-//   • ESPINHOS de corrupção a irromper da casca
-//   • CRISTAIS corrompidos em órbita
-//   • TENTÁCULOS a chicotear por baixo
-//   • NÉVOA/aura aditiva roxa
-// ----------------------------------------------------------------------
-// Texturas: reaproveita SÓ ficheiros que já existem (zero assets novos):
-//   boss/skin/Rock035            → casca fracturada + tentáculos
-//   boss/Rock020_Claws           → espinhos + juntas dos tentáculos
-//   boss/Metal_Dark/Metal046A    → anéis rúnicos + órbita do olho
-//   castelo/.../PaintedMetal002  → cristais em órbita
-// ----------------------------------------------------------------------
-// Mantém a API dos inimigos de combate:
-//   • grupo.material — proxy (emissiveIntensity / transparent / opacity)
-//   • updateInimigoNucleo(grupo, dt, t, basePos)
-//   • resetInimigoNucleo(grupo)
-// ======================================================================
 import * as THREE from 'three';
 import { registerLight } from '../systems/moderator.js';
 
@@ -29,9 +5,7 @@ const _texLoader = new THREE.TextureLoader();
 const _Z = new THREE.Vector3(0, 0, 1);
 const _Y = new THREE.Vector3(0, 1, 0);
 
-// Carrega o trio Color/Normal/Roughness de um set de textura existente.
 function _carregarSet(base, repeat = [1, 1]) {
-    // Texturas do castelo e do boss estão em WebP (-90% no disco).
     const map          = _texLoader.load(base + 'Color.webp');
     const normalMap    = _texLoader.load(base + 'NormalGL.webp');
     const roughnessMap = _texLoader.load(base + 'Roughness.webp');
@@ -43,8 +17,7 @@ function _carregarSet(base, repeat = [1, 1]) {
     return { map, normalMap, roughnessMap };
 }
 
-// Tentáculo: cadeia de Groups encadeados — rodar cada elo faz a ponta
-// "chicotear". Devolve { root, segs }.
+// Cadeia de Groups encadeados — rodar cada elo faz a ponta chicotear.
 function _criarTentaculo(matSeg, matJunta) {
     const N = 5, segLen = 0.22;
     const root = new THREE.Group();
@@ -83,7 +56,7 @@ function _criarTentaculo(matSeg, matJunta) {
     return { root, segs };
 }
 
-// Anel rúnico: tiltGroup (inclinação fixa) → spinGroup (roda no update).
+// tiltGroup fixa a inclinação; spinGroup rota no update.
 function _criarAnel(radius, runeCount, matAnel, matRuna) {
     const tiltGroup = new THREE.Group();
     const spinGroup = new THREE.Group();
@@ -91,7 +64,7 @@ function _criarAnel(radius, runeCount, matAnel, matRuna) {
     const torus = new THREE.Mesh(
         new THREE.TorusGeometry(radius, 0.055, 8, 44), matAnel
     );
-    torus.rotation.x = Math.PI / 2;          // anel deitado (plano XZ)
+    torus.rotation.x = Math.PI / 2;
     torus.castShadow = true;
     spinGroup.add(torus);
     for (let i = 0; i < runeCount; i++) {
@@ -112,9 +85,8 @@ function _criarAnel(radius, runeCount, matAnel, matRuna) {
 export function criarInimigoNucleo() {
     const grupo = new THREE.Group();
     grupo.name = 'inimigo-nucleo';
-    const coreY = 1.5;                       // altura do núcleo (coord. local)
+    const coreY = 1.5;
 
-    // ---- MATERIAIS (texturas reaproveitadas) ----
     const matCasca = new THREE.MeshStandardMaterial({
         ..._carregarSet('assets/textures/boss/skin/Rock035_1K-PNG_'),
         color: 0x7a52a0, roughness: 0.9, metalness: 0.2,
@@ -155,7 +127,6 @@ export function criarInimigoNucleo() {
         roughness: 0.4, metalness: 0.1,
     });
 
-    // ---- NÚCLEO + halo de energia ----
     const nucleo = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 0), matNucleo);
     nucleo.position.y = coreY;
     grupo.add(nucleo);
@@ -168,28 +139,26 @@ export function criarInimigoNucleo() {
     grupo.add(coreLight);
     registerLight('Inimigo - Núcleo', 'Luz do Núcleo', coreLight);
 
-    // ---- CASCA FRACTURADA — lascas de rocha à volta do núcleo. A frente
-    // (dir.z alto) fica aberta para o olho glarar lá de dentro. ----
+    // Frente (+z alto) fica aberta para o olho ficar visível.
     const shards = [];
     const shellR = 0.72;
     for (let i = 0; i < 12; i++) {
         const a = (i / 12) * Math.PI * 2;
         const tier = (i % 3 - 1) * 0.65;
         const dir = new THREE.Vector3(Math.cos(a), tier, Math.sin(a)).normalize();
-        if (dir.z > 0.45) continue;                       // abertura frontal
+        if (dir.z > 0.45) continue;
         const shard = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 0), matCasca);
         shard.scale.set(1.1 + (i % 3) * 0.15, 0.9 + (i % 2) * 0.2, 0.4);
         const base = dir.clone().multiplyScalar(shellR);
         base.y += coreY;
         shard.position.copy(base);
-        shard.quaternion.setFromUnitVectors(_Z, dir);     // eixo fino = radial
-        shard.rotateZ((i * 1.7) % Math.PI);               // irregularidade
+        shard.quaternion.setFromUnitVectors(_Z, dir);
+        shard.rotateZ((i * 1.7) % Math.PI);
         shard.castShadow = true;
         shard.userData = { dir, base: base.clone(), phase: i * 0.9 };
         grupo.add(shard);
         shards.push(shard);
     }
-    // lascas no topo e no fundo (cobertura)
     for (const ty of [1.8, -1.7]) {
         const dir = new THREE.Vector3(0.12, ty, 0.05).normalize();
         const shard = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 0), matCasca);
@@ -204,7 +173,6 @@ export function criarInimigoNucleo() {
         shards.push(shard);
     }
 
-    // ---- ESPINHOS DE CORRUPÇÃO a irromper da casca ----
     for (let i = 0; i < 8; i++) {
         const a = (i / 8) * Math.PI * 2 + 0.4;
         const tier = (i % 2 === 0) ? 0.32 : -0.42;
@@ -218,14 +186,13 @@ export function criarInimigoNucleo() {
         grupo.add(spike);
     }
 
-    // ---- OLHO DE CORRUPÇÃO (na abertura frontal, +Z) ----
     const olhoGrupo = new THREE.Group();
     olhoGrupo.position.set(0, coreY, 0.82);
     grupo.add(olhoGrupo);
     const socket = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.09, 8, 24), matAnel);
     socket.castShadow = true;
     olhoGrupo.add(socket);
-    const piscar = new THREE.Group();                     // grupo que pestaneja
+    const piscar = new THREE.Group();
     olhoGrupo.add(piscar);
     const globo = new THREE.Mesh(new THREE.SphereGeometry(0.31, 20, 16), matOlho);
     piscar.add(globo);
@@ -233,7 +200,6 @@ export function criarInimigoNucleo() {
     pupila.position.z = 0.27;
     piscar.add(pupila);
 
-    // ---- ANÉIS RÚNICOS em órbita ----
     const aneis = [];
     {
         const a1 = _criarAnel(1.28, 6, matAnel, matRuna);
@@ -249,7 +215,6 @@ export function criarInimigoNucleo() {
         aneis.push({ spin: a2.spinGroup, spd: -0.95 });
     }
 
-    // ---- CRISTAIS CORROMPIDOS em órbita ----
     const orbitais = [];
     for (let i = 0; i < 5; i++) {
         const cr = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), matCristal);
@@ -265,7 +230,6 @@ export function criarInimigoNucleo() {
         });
     }
 
-    // ---- TENTÁCULOS pendurados do núcleo ----
     const tentaculos = [];
     const NT = 4;
     for (let i = 0; i < NT; i++) {
@@ -277,10 +241,10 @@ export function criarInimigoNucleo() {
         tentaculos.push({ segs, phase: i * 1.9 });
     }
 
-    // ---- PROXY DE MATERIAL (API esperada por systems/combate.js) ----
+    
     const _fadeMats = [matCasca, matEspinho, matAnel, matCristal, matNucleo,
                        matHalo, matOlho, matPupila, matRuna];
-    const _emissiveMats = [matNucleo, matOlho];          // brilham no flash de dano
+    const _emissiveMats = [matNucleo, matOlho];
     const _baseOpacity = new Map(_fadeMats.map(m => [m, m.opacity ?? 1]));
     const _baseEmissive = _emissiveMats.map(m => m.emissiveIntensity);
     grupo.material = {
@@ -309,25 +273,16 @@ export function criarInimigoNucleo() {
     return grupo;
 }
 
-/**
- * Animação por frame do Núcleo Corrompido.
- *   grupo   — group devolvido por criarInimigoNucleo
- *   dt      — deltaTime
- *   t       — tempo acumulado da cena
- *   basePos — posição "alvo" actual (mutada pelo combate-scene)
- */
 export function updateInimigoNucleo(grupo, dt, t, basePos) {
     const ud = grupo.userData;
 
-    // flutuação + balanço lento
     grupo.position.x = basePos.x;
     grupo.position.z = basePos.z;
     grupo.position.y = basePos.y + Math.sin(t * 1.3) * 0.16;
     grupo.rotation.y = -Math.PI / 2 + Math.sin(t * 0.35) * 0.14;
     grupo.rotation.z = Math.sin(t * 0.7) * 0.03;
 
-    // núcleo + halo a pulsar (só ESCALA — o emissiveIntensity fica
-    // reservado ao flash de dano gerido por systems/combate.js).
+    // emissiveIntensity reservado ao flash de dano em systems/combate.js; apenas escala aqui.
     if (ud.nucleo) ud.nucleo.scale.setScalar(1 + Math.sin(t * 3.0) * 0.07);
     if (ud.halo) {
         ud.halo.scale.setScalar(1 + Math.sin(t * 3.0 + 0.6) * 0.13);
@@ -335,17 +290,14 @@ export function updateInimigoNucleo(grupo, dt, t, basePos) {
         ud.halo.rotation.x += dt * 0.32;
     }
 
-    // casca fracturada a "respirar" ao longo da normal radial
     for (const s of ud.shards) {
         const d = 0.03 + Math.sin(t * 1.6 + s.userData.phase) * 0.06;
         s.position.copy(s.userData.base).addScaledVector(s.userData.dir, d);
     }
 
-    // anéis rúnicos a rodar + runas a cintilar
     for (const an of ud.aneis) an.spin.rotation.y += dt * an.spd;
     if (ud.matRuna) ud.matRuna.emissiveIntensity = 1.5 + Math.sin(t * 4.2) * 0.7;
 
-    // cristais em órbita
     for (const c of ud.orbitais) {
         c.ang += dt * c.spd;
         c.mesh.position.set(
@@ -357,7 +309,6 @@ export function updateInimigoNucleo(grupo, dt, t, basePos) {
         c.mesh.rotation.z += dt * 1.1;
     }
 
-    // tentáculos a chicotear (amplitude cresce para a ponta)
     for (const tent of ud.tentaculos) {
         for (let i = 0; i < tent.segs.length; i++) {
             const amp = 0.05 + 0.13 * (i / tent.segs.length);
@@ -366,7 +317,6 @@ export function updateInimigoNucleo(grupo, dt, t, basePos) {
         }
     }
 
-    // olho — pestanejo periódico + deriva da pupila
     if (ud.olho) {
         const cyc = t % 3.6;
         const blink = cyc > 3.4 ? Math.abs(Math.cos((cyc - 3.4) / 0.2 * Math.PI)) : 1;
@@ -378,10 +328,6 @@ export function updateInimigoNucleo(grupo, dt, t, basePos) {
     }
 }
 
-/**
- * Animação de ataque do Núcleo.
- *   tipo: 'lascas' | 'praga' | 'esmagamento'
- */
 export function animarAtaqueNucleo(grupo, tipo = 'lascas', dur = 1000) {
     const ud = grupo.userData;
     const t0 = performance.now();
@@ -391,15 +337,13 @@ export function animarAtaqueNucleo(grupo, tipo = 'lascas', dur = 1000) {
         const e = (now - t0) / dur;
         if (e >= 1) { 
             grupo.scale.setScalar(baseScale);
-            grupo.position.y = 0; // será resetado pelo updateInimigoNucleo no próximo frame
+            grupo.position.y = 0;
             return; 
         }
 
-        // Bell curve para windup
         const pulse = Math.sin(e * Math.PI);
 
         if (tipo === 'lascas') {
-            // Vibração das lascas e aceleração dos anéis
             for (const s of ud.shards) {
                 const vib = Math.sin(now * 0.05 + s.userData.phase) * 0.15 * pulse;
                 s.position.addScaledVector(s.userData.dir, vib);
@@ -407,14 +351,12 @@ export function animarAtaqueNucleo(grupo, tipo = 'lascas', dur = 1000) {
             for (const an of ud.aneis) {
                 an.spin.rotation.y += pulse * 0.45;
             }
-            // Recuo no disparo
             if (e > 0.6) {
                 const recoil = Math.sin((e - 0.6) / 0.4 * Math.PI) * 0.8;
                 grupo.position.z += recoil;
             }
         } 
         else if (tipo === 'praga') {
-            // Inchaço do núcleo e chicoteamento frenético
             const swell = 1.0 + pulse * 0.35;
             grupo.scale.setScalar(swell);
             
@@ -427,19 +369,14 @@ export function animarAtaqueNucleo(grupo, tipo = 'lascas', dur = 1000) {
             if (ud.nucleo) ud.nucleo.scale.setScalar(1 + pulse * 0.5);
         }
         else if (tipo === 'esmagamento') {
-            // Sobe alto e esmaga o chão
             if (e < 0.6) {
-                // Windup: sobe devagar
                 const rise = Math.pow(e / 0.6, 2) * 2.5;
                 grupo.position.y = rise;
                 grupo.scale.setScalar(1.0 + (e / 0.6) * 0.2);
-                // Anéis giram loucamente
                 for (const an of ud.aneis) an.spin.rotation.y += e * 0.8;
             } else {
-                // Slam: desce rápido
                 const slam = (1.0 - (e - 0.6) / 0.4) * 2.5;
                 grupo.position.y = Math.max(0, slam);
-                // Impacto de escala no final
                 const squash = 1.2 - Math.sin((e - 0.6) / 0.4 * Math.PI) * 0.4;
                 grupo.scale.set(1.1, squash, 1.1);
             }
@@ -450,7 +387,6 @@ export function animarAtaqueNucleo(grupo, tipo = 'lascas', dur = 1000) {
     requestAnimationFrame(step);
 }
 
-/** Repõe o Núcleo Corrompido ao estado visual inicial. */
 export function resetInimigoNucleo(grupo) {
     grupo.rotation.set(0, -Math.PI / 2, 0);
     grupo.scale.set(1, 1, 1);

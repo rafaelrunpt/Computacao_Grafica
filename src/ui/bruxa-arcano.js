@@ -165,10 +165,10 @@ export function abrirBruxaArcano() {
     ensureDialogue();
 
     const npc = {
-        name: 'Mago',
+        name: 'Bruxa',
         title: 'do Vazio',
-        mono: 'M',
-        portraitUrl: 'assets/textures/avatares/mage_avatar.png',
+        mono: 'B',
+        portraitUrl: 'assets/icones/avatares/bruxa_simpatica.png',
         portrait: { hue: 285, secondHue: 200 },
         start: 'menu',
         nodes: {},

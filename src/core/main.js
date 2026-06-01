@@ -42,7 +42,8 @@ import { criarLostItems, updateLostItems, getLostItemAt } from '../world/lost-it
 import { coletarItemPerdido, precisaCutsceneEspaco, marcarCutsceneVista, revelarItensEstelares } from '../systems/merchant-fetch-quest.js';
 import { initSpaceCutscene, startSpaceCutscene, updateSpaceCutscene, isSpaceCutsceneActive } from '../world/space-quest-cutscene.js';
 import { estado, lojaPlayer, caseloPlayer, tavernPlayer, quartoPlayer, setWorldScene, entrarLoja, sairLoja, entrarCaselo, sairCaselo, entrarTavern, sairTavern, entrarQuarto, sairQuarto, fade } from './transicoes.js';
-import moderator, { registerLight } from '../systems/moderator.js'; // Ativa ferramentas de debug
+import moderator from '../systems/moderator.js'; // Ativa ferramentas de debug
+import { ambientLight, sunLight, sunOffset, playerSpot, setupLuzesMundo, updatePlayerSpot } from './luzes.js';
 import { isPauseAberto, togglePause } from '../ui/pause-menu.js';
 import { tickFps, setFpsDebugTargets, sampleCullingNow } from '../ui/fps-counter.js';
 import { inicializarAudio, switchMusic, getCurrentTrack, playSFX, tocarAtivacaoCristal, saltarParaClimaxMusical, tocarSomAmbienteRio } from '../systems/audio.js';
@@ -246,65 +247,7 @@ function _restoreMesh(mesh, deltaTime) {
     }
 }
 
-// ---- iluminação ----
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-scene.add(ambientLight);
-registerLight('Mundo', 'Luz Ambiente Global', ambientLight);
-
-// ---- Sombra fixa cobrindo o mapa todo ----
-// Frustum apertado contra mapBounds (-100/100). Resolução adaptativa à
-// qualidade — o shadow pass é proporcional a mapSize² × nº objectos.
-const SHADOW_SIZE_BY_QUALITY = { baixa: 512, media: 1024, alta: 2048 };
-const _shadowSize = SHADOW_SIZE_BY_QUALITY[settings.quality] ?? 1024;
-const sunLight = new THREE.DirectionalLight(0xffffff, 1);
-sunLight.castShadow = true;
-sunLight.shadow.mapSize.set(_shadowSize, _shadowSize);
-sunLight.shadow.bias = -0.0001;
-sunLight.shadow.normalBias = 0.08;
-// Frustum APERTADO à volta do player (a câmara de sombra segue-o em
-// animateMundo). Antes cobria o mapa inteiro (±105), o que tornava cada
-// re-bake brutal; agora só renderiza o que está perto do herói.
-sunLight.shadow.camera.near   =   1;
-sunLight.shadow.camera.far    = 320;
-sunLight.shadow.camera.left   =  -32;
-sunLight.shadow.camera.right  =   32;
-sunLight.shadow.camera.top    =   32;
-sunLight.shadow.camera.bottom =  -32;
-// Offset do sol em relação ao player (mantém a MESMA direcção de sombra
-// que tinha o sol fixo em (80,120,80) a apontar para a origem).
-const _sunOffset = new THREE.Vector3(80, 120, 80);
-sunLight.position.set(80, 120, 80);
-sunLight.target.position.set(0, 0, 0);
-scene.add(sunLight, sunLight.target);
-sunLight.shadow.camera.layers.enable(1); // shadow camera vê os objetos culled (layer 1)
-registerLight('Mundo', 'Luz Solar (Directional)', sunLight);
-
-// ---- spotlight do jogador (cor oposta ao roxo: amarelo/ouro) ----
-// Posicionado muito alto para evitar colisão com o cenário e simular luz orbital
-// Penumbra a 1.0 garante um desvanecimento suave do centro para as bordas
-const playerSpot = new THREE.SpotLight(0xfff500, 280, 22, 0.32, 1.0, 2.0);
-playerSpot.castShadow = true;
-// Shadow map de 1024 para melhor precisão nas sombras do herói.
-playerSpot.shadow.mapSize.set(1024, 1024);
-// Ajuste de bias para evitar "shadow acne" e garantir que a sombra se liga ao pé do herói
-playerSpot.shadow.bias = -0.0001; 
-playerSpot.shadow.normalBias = 0.05;
-// Câmara de sombra ajustada para a altura de 15m
-playerSpot.shadow.camera.near = 5;
-playerSpot.shadow.camera.far = 25;
-playerSpot.shadow.camera.fov = 40;
-playerSpot.shadow.camera.layers.enable(1); // Importante: ver objetos na layer 1 para sombras
-scene.add(playerSpot, playerSpot.target);
-registerLight('Jogador', 'Foco de Cutscene', playerSpot);
-
-// ----------------------------------------------------------------------
-// TOGGLES DE REQUISITO (defesa CG)
-//   C → alterna câmara perspetiva / ortográfica (Req. 2)
-//   1 → liga/desliga Luz Ambiente (AmbientLight)   (Req. 3)
-//   2 → liga/desliga Luz Direcional / Sol (DirectionalLight)
-//   3 → liga/desliga Luz Pontual / Holofote do herói (SpotLight)
-// ----------------------------------------------------------------------
-let _luzSpotOn = true; // o playerSpot é controlado no loop; usamos esta flag
+setupLuzesMundo(scene);
 
 // Centros das arenas (para a vista de topo ortográfica no combate).
 const _CENTRO_COMBATE = new THREE.Vector3(0.1, 0, 0);   // player ~-2.6, inimigo ~2.8
@@ -345,19 +288,6 @@ window.addEventListener('keydown', (e) => {
         setMontanhasVisiveis(!isOrthoMode());
         _toast(m === 2 ? 'Câmara: Ortográfica (ângulo)' : 'Câmara: Perspetiva');
         return;
-    }
-    // Toggles de luz só fora de combate (afectam as luzes do mundo).
-    if (estadoJogo.emCombate) return;
-    if (k === '1') {
-        ambientLight.visible = !ambientLight.visible;
-        _toast(`Luz Ambiente: ${ambientLight.visible ? 'Ligada' : 'Desligada'}`);
-    } else if (k === '2') {
-        sunLight.visible = !sunLight.visible;
-        renderer.shadowMap.needsUpdate = true;
-        _toast(`Luz Direcional (Sol): ${sunLight.visible ? 'Ligada' : 'Desligada'}`);
-    } else if (k === '3') {
-        _luzSpotOn = !_luzSpotOn;
-        _toast(`Luz Pontual (Holofote): ${_luzSpotOn ? 'Ligada' : 'Desligada'}`);
     }
 });
 
@@ -606,9 +536,9 @@ function animateMundo(deltaTime) {
     // frustum apertado (±32) para a shadow map ser barata de re-bakar.
     sunLight.target.position.set(player.position.x, 0, player.position.z);
     sunLight.position.set(
-        player.position.x + _sunOffset.x,
-        _sunOffset.y,
-        player.position.z + _sunOffset.z,
+        player.position.x + sunOffset.x,
+        sunOffset.y,
+        player.position.z + sunOffset.z,
     );
 
     // Partículas roxas das zonas corruptas — animadas no vertex shader.
@@ -627,7 +557,7 @@ function animateMundo(deltaTime) {
             camS.right = camS.top = 105;
             camS.updateProjectionMatrix();
             sunLight.target.position.set(0, 0, 0);
-            sunLight.position.set(_sunOffset.x, _sunOffset.y, _sunOffset.z);
+            sunLight.position.set(sunOffset.x, sunOffset.y, sunOffset.z);
             renderer.shadowMap.needsUpdate = true; // Bake global uma vez
         }
     } else {
@@ -642,9 +572,9 @@ function animateMundo(deltaTime) {
         if (_lastShadowPos.distanceToSquared(player.position) >= limiar * limiar) {
             sunLight.target.position.set(player.position.x, 0, player.position.z);
             sunLight.position.set(
-                player.position.x + _sunOffset.x,
-                _sunOffset.y,
-                player.position.z + _sunOffset.z,
+                player.position.x + sunOffset.x,
+                sunOffset.y,
+                player.position.z + sunOffset.z,
             );
         }
     }
@@ -685,7 +615,7 @@ function animateMundo(deltaTime) {
         const pb = _interactBox;
         if (guardianInteractBox && pb.intersectsBox(guardianInteractBox)) {
             const passou = isGuardiaoPassagemConcedida();
-            showPrompt('E — Parlamentar com o Guardião');
+            showPrompt('E — Falar com o Guardião');
             if (keys.e) {
                 keys.e = false;
                 if (!passou && playerStats.level >= 2) {
@@ -697,17 +627,17 @@ function animateMundo(deltaTime) {
             }
         } else if (shopDoorInteract && pb.intersectsBox(shopDoorInteract)) {
             if (isShopDesbloqueada() || zonasSulLimpas()) {
-                showPrompt('E — Adentrar a Loja');
+                showPrompt('E — Entrar na Loja');
                 if (keys.e) { keys.e = false; switchMusic('shop', 1.0); entrarLoja(); }
-            } else { showPrompt('Purificai as zonas fustigadas do sul para adentrar'); }
+            } else { showPrompt('Purificai as zonas fustigadas do sul para entrar'); }
         } else if (castleEnterBox && pb.intersectsBox(castleEnterBox)) {
-            showPrompt('E — Adentrar o Castelo');
+            showPrompt('E — Entrar no Castelo');
             if (keys.e) { keys.e = false; playSFX('trovao'); entrarCaselo(); }
         } else if (tavernEnterBox && pb.intersectsBox(tavernEnterBox)) {
             showPrompt('E — Entrar na Estalagem');
             if (keys.e) { keys.e = false; switchMusic('tavern', 1.0); entrarTavern(); }
         } else if (bruxaInteractBox && pb.intersectsBox(bruxaInteractBox)) {
-            showPrompt('E — Parlamentar com a Bruxa');
+            showPrompt('E — Falar com a Bruxa');
             if (keys.e) { keys.e = false; abrirBruxaArcano(); }
         } else if (getBauInteractBox() && pb.intersectsBox(getBauInteractBox())) {
             if (!bauJaColetado()) {
@@ -760,11 +690,13 @@ function animateMundo(deltaTime) {
                         if (coletarBauMascara()) {
                             playSFX('abrir_bau');
                             adicionarItem('mascara_eclipse', 1);
+                            ganharCintilas(40);
                             const item = CATALOGO['mascara_eclipse'];
                             mostrarRecompensa({
                                 icone: item.icone,
                                 nome: item.nome,
                                 descricao: item.descricao,
+                                cintilas: 40,
                             });
                             hidePrompt();
                         }
@@ -784,6 +716,7 @@ function animateMundo(deltaTime) {
                     keys.e = false;
                     if (ativarSantuario(santuarioAtivo)) {
                         adicionarBonusSantuario(5);
+                        ganharCintilas(25);
                         playSFX('cristal');
                         hidePrompt();
                         
@@ -795,6 +728,7 @@ function animateMundo(deltaTime) {
                                 nome: 'Bênção de Vigor',
                                 descricao: 'O teu espírito fortalece-se (+5 HP máximo permanentemente).',
                                 dica: 'A tua alma transborda vitalidade',
+                                cintilas: 25,
                                 duracao: 3500,
                                 som: true,
                             });
@@ -893,15 +827,7 @@ function animateMundo(deltaTime) {
     if (mapaAberto) {
         renderizarMinimapa(renderer, scene, window.innerWidth, window.innerHeight, player.position, true);
     } else {
-        // Actualizar spotlight (lanterna mágica do herói)
-        // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-        // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-        const luzNecessaria = (estado.cena !== 'mundo') && _luzSpotOn;
-        playerSpot.visible = luzNecessaria;
-        if (luzNecessaria) {
-            playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-            playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-        }
+        updatePlayerSpot(player, estado.cena);
 
         renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
         // Culling todo o frame — o throttle a cada 2 frames + restore a cada frame
@@ -1030,7 +956,7 @@ function animateLoja(deltaTime) {
             });
         }
     } else if (getMerchantInteractBox() && pb.intersectsBox(getMerchantInteractBox())) {
-        showPrompt('E — Parlamentar com a Mercadora');
+        showPrompt('E — Falar com a Mercadora');
         if (keys.e) { keys.e = false; abrirDialogoMercador(); }
     } else if (getBauLojaInteractBox() && pb.intersectsBox(getBauLojaInteractBox())) {
         if (!bauLojaJaColetado()) {
@@ -1066,15 +992,7 @@ function animateLoja(deltaTime) {
     updatePlayerAnimation(isMoving, deltaTime, 'wood');
     updateCoroaAnimacao(deltaTime);
 
-    // Actualizar spotlight (lanterna mágica do herói)
-    // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-    const luzNecessaria = (estado.cena !== 'mundo');
-    playerSpot.visible = luzNecessaria;
-    if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-        playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-    }
+    updatePlayerSpot(player, estado.cena);
 
     // Shadow map: throttled por distância (ver _maybeMarkShadowUpdate).
     // A mercadora roda lentamente: forçamos um bake adicional a cada 8
@@ -1255,15 +1173,7 @@ function animateCaselo(deltaTime) {
     // anima o shader de corrupção da abóbada do castelo
     matBattleSky.uniforms.uTime.value += deltaTime;
 
-    // Actualizar spotlight (lanterna mágica do herói)
-    // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-    const luzNecessaria = (estado.cena !== 'mundo');
-    playerSpot.visible = luzNecessaria;
-    if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-        playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-    }
+    updatePlayerSpot(player, estado.cena);
 
     // Shadow map: throttled por distância. O castelo tem efeitos atmosféricos
     // contínuos (pulsar do cristal) que beneficiam de um refresh periódico.
@@ -1366,7 +1276,7 @@ function animateTavern(deltaTime) {
         if (keys.e) { keys.e = false; entrarQuarto(); }
         if (isPistaAberta()) esconderPista();
     } else if (bartenderIntroFeita() && bartenderVendorBox.intersectsBox(pb)) {
-        showPrompt('E — Parlamentar com o Taberneiro');
+        showPrompt('E — Falar com o Taberneiro');
         if (keys.e) {
             keys.e = false;
             abrirBartenderShop();
@@ -1389,14 +1299,14 @@ function animateTavern(deltaTime) {
                     esconderPista();
                 }
             } else {
-                showPrompt('E — Parlamentar com o Estalajadeiro');
+                showPrompt('E — Falar com o Estalajadeiro');
                 if (keys.e) {
                     keys.e = false;
                     mostrarPista('Estalajadeiro: "Ainda restam sombras lá fora. Limpai-as todas, e depois regressai — guardo-vos a auréola."');
                 }
             }
         } else {
-            showPrompt('E — Parlamentar com o Estalajadeiro');
+            showPrompt('E — Falar com o Estalajadeiro');
             if (keys.e) {
                 keys.e = false;
                 questAureola.estado = 'aceite';
@@ -1415,20 +1325,13 @@ function animateTavern(deltaTime) {
     updateCoroaAnimacao(deltaTime);
 
     updateMerchant(deltaTime, player.position);
+    updateTavernNPCs(deltaTime, player.position);
 
     // Actualizar spotlight na loja
     playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
     playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
 
-    // Actualizar spotlight (lanterna mágica do herói)
-    // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-    const luzNecessaria = (estado.cena !== 'mundo');
-    playerSpot.visible = luzNecessaria;
-    if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-        playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-    }
+    updatePlayerSpot(player, estado.cena);
 
     // Shadow map: throttled. NPCs da taverna mexem-se devagar — um refresh
     // periódico (8 em 8 frames) chega para os acompanhar.
@@ -1532,10 +1435,12 @@ function animateQuarto(deltaTime) {
                     // elixires iniciais — agora vêm daqui
                     adicionarItem('pocao', 3);
                     adicionarItem('mega', 1);
+                    ganharCintilas(15);
                     mostrarRecompensa({
                         icone: 'assets/icones/big_potion.png',
                         nome: 'Poção Lunar',
                         descricao: '×3 Elixir de Cura  +  ×1 Elixir Maior',
+                        cintilas: 15,
                     });
                     hidePrompt();
                 }
@@ -1572,15 +1477,7 @@ function animateQuarto(deltaTime) {
     playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
     playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
 
-    // Actualizar spotlight (lanterna mágica do herói)
-    // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-    const luzNecessaria = (estado.cena !== 'mundo');
-    playerSpot.visible = luzNecessaria;
-    if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-        playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-    }
+    updatePlayerSpot(player, estado.cena);
 
     // Shadow map: throttled por distância (quarto pequeno e quase estático).
     // No modo ALTO, garantimos fluidez total.
@@ -1609,15 +1506,7 @@ function animateCombate(deltaTime) {
     const border = document.getElementById('minimap-border');
     if (border) border.style.display = 'none';
 
-    // Actualizar spotlight (lanterna mágica do herói)
-    // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-    const luzNecessaria = (estado.cena !== 'mundo');
-    playerSpot.visible = luzNecessaria;
-    if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-        playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-    }
+    updatePlayerSpot(player, estado.cena);
 
     // No modo ALTO, as sombras do combate (movimento do boss/player) devem ser a 60fps
     if (settings.quality === 'alta') {
@@ -1648,16 +1537,6 @@ function animateBossDebug(deltaTime) {
 
 // --- LOGICA DE RENDERIZAÇÃO ---
 
-function _updatePlayerSpot() {
-    // Só visível de NOITE no mundo exterior; sempre visível noutras cenas (combate/interiores).
-    // playerSpot só em interiores. À noite no mundo é a tocha do herói que ilumina.
-    const luzNecessaria = (estado.cena !== 'mundo');
-    playerSpot.visible = luzNecessaria;
-    if (luzNecessaria) {
-        playerSpot.position.set(player.position.x, player.position.y + 15.0, player.position.z);
-        playerSpot.target.position.set(player.position.x, player.position.y, player.position.z);
-    }
-}
 
 let _prevCena = null;
 function animate() {
@@ -1698,7 +1577,7 @@ function animate() {
         matWater.uniforms.uTime.value      += deltaTime;
         matBattleGrass.uniforms.uTime.value += deltaTime;
         matCorruptHalo.uniforms.uTime.value += deltaTime;
-        _updatePlayerSpot();
+        updatePlayerSpot(player, estado.cena);
         renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
         renderer.setScissorTest(false);
         renderer.clear();
@@ -1728,7 +1607,7 @@ function animate() {
         }
     }
 
-    _updatePlayerSpot();
+    updatePlayerSpot(player, estado.cena);
 
     if (isPauseAberto()) {
         if (estado.cena === 'mundo')        renderer.render(scene, mainCamera);

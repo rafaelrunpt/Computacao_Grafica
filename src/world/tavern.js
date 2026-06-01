@@ -142,7 +142,7 @@ export const tavernSpawnPos = new THREE.Vector3(-5.0, 0, 8.0);
 // NPCs goblin (entidades em src/entities/) — Estalajadeiro + Bartender
 // ----------------------------------------------------------------------
 const BARTENDER_DOOR_POS   = new THREE.Vector3(5.27, 0, 5.8);
-const BARTENDER_VENDOR_POS = new THREE.Vector3(-6.38, 0, -7.46);
+const BARTENDER_VENDOR_POS = new THREE.Vector3(-6, 0, -8);
 
 export function bartenderIntroFeita() { return _bartenderIntroFeita(); }
 export function marcarBartenderIntroFeita() { _marcarBartenderIntroFeita(); }
@@ -153,8 +153,8 @@ export const bartenderIntroBox = new THREE.Box3(
     new THREE.Vector3(6.1, 3, 6.6),
 );
 export let bartenderVendorBox = new THREE.Box3(
-    new THREE.Vector3(-5.77 - 2.5, 0, -4.54 - 2.5),
-    new THREE.Vector3(-5.77 + 2.5, 2.4, -4.54 + 2.5),
+    new THREE.Vector3(-6 - 2.5, 0, -8 - 2.5),
+    new THREE.Vector3(-6 + 2.5, 2.4, -8 + 2.5),
 );
 
 criarEstalajadeiro(tavernScene, tavernBarmanPos);

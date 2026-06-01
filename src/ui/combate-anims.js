@@ -6,6 +6,7 @@ import { posPlayerCombate, posInimigoCombate, getInimigoActivo, isBossMode } fro
 import { combateCamera, combateBossCamera } from '../core/renderer.js';
 import { settings } from '../systems/settings.js';
 import { playSFX, tocarSomTrovaoPlayer } from '../systems/audio.js';
+import { getSfxTargetVolume } from '../systems/settings.js';
 
 // ---- VFX DEBUG UI ----
 let _debugAnims = new Set();
@@ -622,7 +623,7 @@ export function lancarAnimacaoAtaque(at, falhou, callbacks = {}) {
         // som da lâmina
         setTimeout(() => {
             const a = new Audio('assets/sounds/Attacks/player/lamina.mp3');
-            a.volume = 0.7;
+            a.volume = getSfxTargetVolume() * 0.35;
             a.play().catch(() => {});
         }, 80);
         

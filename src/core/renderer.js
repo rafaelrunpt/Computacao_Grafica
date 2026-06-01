@@ -7,7 +7,7 @@ export const renderer = new THREE.WebGLRenderer({
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 // Cap agressivo + escala configurável: HiDPI dá pouquíssima diferença visual
-// mas custa 2-4× mais pixels. O renderScale (0.5-1.0) permite ao jogador
+// mas custa 2-4× mais pixels. O renderScale (0.5-1.0) permite ao jogado
 // baixar ainda mais a resolução em GPUs fracas.
 function _applyPixelRatio() {
     const scale = settings.renderScale ?? 1.0;
@@ -47,22 +47,16 @@ renderer.clippingPlanes = [ new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.3) ];
 
 // ---- configurações de cor para GLB ----
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-// Removemos o toneMapping que estava a escurecer o jogo todo
 renderer.toneMapping = THREE.NoToneMapping; 
 
 document.body.appendChild(renderer.domElement);
 
 export const mainCamera = new THREE.PerspectiveCamera(settings.fov, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-// ----------------------------------------------------------------------
-// CÂMARA ORTOGRÁFICA DO MUNDO (Req. 2 — alternância perspetiva/ortográfica)
-// Espelha a posição/orientação da mainCamera; só muda a projeção.
-// Tecla C alterna. Custo nulo quando inactiva (só se sincroniza quando ON).
-// ----------------------------------------------------------------------
+
 export const worldOrthoCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 2000);
 
-// Modo de câmara: 0 = perspetiva | 1 = ortográfica de topo (C) |
-//                 2 = ortográfica em ângulo (Z, estilo perspetiva)
+
 let _camMode = 0;
 export function isOrthoMode() { return _camMode !== 0; }
 export function getCameraMode() { return _camMode; }
@@ -76,8 +70,7 @@ export function setCameraMode(mode) {
 // Vista de topo (C): ângulo picado, enquadramento mais apertado.
 const _orthoTopo = { offset: new THREE.Vector3(0, 48, 22), view: 13 };
 // Vista em ângulo (Z): mesmo ângulo da perspetiva (~24°) mas na altura
-// MÍNIMA (y=15) para o fundo do frustum (view 14) não ficar enterrado —
-// abaixo disto reaparece a faixa de céu. Fica à frente da montanha do sul.
+
 const _orthoAngulo = { offset: new THREE.Vector3(0, 15, 34), view: 14 };
 
 function _cfgAtual() { return _camMode === 1 ? _orthoTopo : _orthoAngulo; }
@@ -107,9 +100,6 @@ export function getActiveWorldCamera(target = null) {
 
 // ----------------------------------------------------------------------
 // CÂMARA ORTOGRÁFICA DE COMBATE — espelha a câmara de combate activa
-// (normal ou boss) e aplica projeção ortográfica. As câmaras de combate já
-// estão em ângulos cinematográficos fixos, por isso basta copiar a sua
-// transformação e enquadrar a arena. `viewSize` controla o zoom.
 // ----------------------------------------------------------------------
 export const combatOrthoCamera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 200);
 
@@ -172,10 +162,7 @@ combateCamera.position.set(-5.6, 3.4, 10.2);
 combateCamera.lookAt(0.2, 1.0, 0);
 
 // câmara do boss — boss em (0,0,-3.5), player em (0,0,2.0).
-// Centrada (x=0) e com pouca inclinação vertical (~12°) para preservar
-// a distinção altura/chão: aéreos vêm de cima, rasantes do chão e
-// laterais/varreduras ao nível do peito ficam todos visivelmente
-// separados em Y.
+
 combateBossCamera.fov = 62;
 combateBossCamera.position.set(0, 4.0, 11.0);
 combateBossCamera.lookAt(0, 1.4, -1.5);

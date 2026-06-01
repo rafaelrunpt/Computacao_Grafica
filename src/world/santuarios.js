@@ -201,6 +201,16 @@ export function resetSantuarios() {
 
 export function updateSantuarios(dt) {
     for (const s of _lista) {
+        // Quando o debug desliga a luz, apaga também o emissive da runa.
+        if (!s._light.visible) {
+            s._runa.material.emissiveIntensity = 0;
+            continue;
+        }
+        // Restaurar emissive base para santuários disponíveis (não activados, fora do burst).
+        if (!s.ativado && !(s._burst && s._burst.userData.active)) {
+            s._runa.material.emissiveIntensity = 2.8;
+        }
+
         // burst de activação (2s) — fade-in rápido, fade-out longo
         const b = s._burst;
         if (b && b.userData.active) {

@@ -6,7 +6,7 @@ import { notificarVitoria as notificarVitoriaQuest } from './merchant-quest.js';
 import { setBossMode, isBossMode, setTipoInimigo, getInimigoActivo } from '../world/combate-scene.js';
 import { getBossRoot } from '../entities/boss.js';
 import { iniciarFaseDesvio, pararFaseDesvio, atualizarFaseDesvio, isFaseDesvioActiva, setOnPlayerDerrotado, setBossHpFrac, pararRageEfeitos } from './boss-attacks.js';
-import { settings } from './settings.js';
+import { settings, getSfxTargetVolume } from './settings.js';
 
 // quando o player morre durante a fase de desvio, encerrar o combate
 setOnPlayerDerrotado(() => {
@@ -318,6 +318,12 @@ function novoInimigo() {
     setNivelInimigo(nivelDificuldade());
     const base = _tipoEncontro === 'nucleo' ? nucleoBase : inimigoBase;
     inimigoAtual = escalarStats(base);
+    // Modo dia (fácil): wraith fica ~20% mais fraco em HP e ATK.
+    if (!settings.nightMode && _tipoEncontro === 'wraith') {
+        inimigoAtual.hp    = Math.round(inimigoAtual.hp * 0.80);
+        inimigoAtual.maxHp = inimigoAtual.hp;
+        inimigoAtual.atk   = Math.max(1, Math.round(inimigoAtual.atk * 0.80));
+    }
     _escudoTurnos = 0;
     _escudoValor = 0;
     _setEnfraquecido(false);
@@ -650,7 +656,7 @@ function turnoInimigo() {
             setTimeout(() => {
                 if (somFile) {
                     const a = new Audio(`assets/sounds/Attacks/wraith/${somFile}`);
-                    a.volume = 0.75;
+                    a.volume = getSfxTargetVolume() * 0.75;
                     a.play().catch(() => {});
                 }
             }, SLASH_DELAY);
@@ -702,7 +708,7 @@ function turnoInimigo() {
 
             // 1. Áudio Glifos
             const glifosAudio = new Audio('assets/sounds/Attacks/nucleo/glifos.mp3');
-            glifosAudio.volume = 0.6;
+            glifosAudio.volume = getSfxTargetVolume() * 0.3;
             glifosAudio.play().catch(() => {});
 
             // Container para a órbita
@@ -754,7 +760,7 @@ function turnoInimigo() {
                 setTimeout(() => container.remove(), 300);
 
                 const explAudio = new Audio('assets/sounds/Attacks/nucleo/explosion.mp3');
-                explAudio.volume = 0.7;
+                explAudio.volume = getSfxTargetVolume() * 0.35;
                 explAudio.play().catch(() => {});
 
                 playSpriteFX({
@@ -767,7 +773,7 @@ function turnoInimigo() {
                 setTimeout(() => {
                     // 3. Debuff (Setas)
                     const debuffAudio = new Audio('assets/sounds/Attacks/nucleo/defuff.mp3');
-                    debuffAudio.volume = 0.6;
+                    debuffAudio.volume = getSfxTargetVolume() * 0.3;
                     debuffAudio.play().catch(() => {});
 
                     const arrowContainer = document.createElement('div');
@@ -911,7 +917,8 @@ function pulsarPlayer(rgb = '255,40,80') {
 function finalizarVitoria() {
     const boss = isBossMode();
     const cintilasGanhas = inimigoAtual.cintilasDrop || 0;
-    const xpGanho = inimigoAtual.xpDrop || 0;
+    const _xpMult = settings.nightMode ? 1.0 : 1.8;
+    const xpGanho = Math.round((inimigoAtual.xpDrop || 0) * _xpMult);
     setLog(`Venceste! ${inimigoAtual.nome} foi destruído. (+${xpGanho} XP, +${cintilasGanhas} ✦)`);
     setBotoesAtivos(false);
     if (boss) { pararFaseDesvio(); pararRageEfeitos(); }
@@ -929,7 +936,7 @@ function finalizarVitoria() {
             if (root) root.scale.setScalar(Math.max(0.01, f));
             if (f <= 0) {
                 clearInterval(fadeId);
-                ganharXP(inimigoAtual.xpDrop);
+                ganharXP(xpGanho);
                 if (cintilasGanhas > 0) ganharCintilas(cintilasGanhas);
                 setTimeout(() => {
                     mostrarEcraVitoriaFinal();
@@ -949,7 +956,7 @@ function finalizarVitoria() {
         inimigoMesh.scale.setScalar(Math.max(0.01, f));
         if (f <= 0) {
             clearInterval(fadeId);
-            ganharXP(inimigoAtual.xpDrop);
+            ganharXP(xpGanho);
             if (cintilasGanhas > 0) ganharCintilas(cintilasGanhas);
             // Cura pós-vitória (Auréola dos Caídos)
             const cura = getCuraPosCombate();
@@ -1079,6 +1086,12 @@ function iniciarCombate() {
 export function recuperarPlayer() {
     recuperarTotal();
     setLog && setLog('Recuperaste totalmente.');
+}
+
+export function skipTurnoPlayer() {
+    if (!estadoJogo.emCombate || turnoBloqueado) return;
+    setLog('⏭ Turno saltado (debug).');
+    turnoInimigo();
 }
 
 // ----------------------------------------------------------------------

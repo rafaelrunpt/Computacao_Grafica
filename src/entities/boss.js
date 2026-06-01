@@ -2,24 +2,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { registerLight } from '../systems/moderator.js';
 
-// ======================================================================
-// BOSS FINAL — modelo procedural em three.js.
-// ----------------------------------------------------------------------
-// • Constrói uma figura humanóide imponente e robusta (~4 unidades de altura).
-// • Usa o módulo `acessorios.js` para vestir os 5 acessórios que
-//   aparecem nos pedestais do castelo (coroa, brincos, auréola,
-//   óculos, máscara). Por defeito veste só a coroa.
-//   Podes mudar com `vestirAcessoriosBoss([ids...])`.
-// • Cada material está marcado como "TEXTURE SLOT" — substitui o `.map`
-//   ou usa `aplicarTexturaBoss(slot, url)` para trocar a textura.
-// ======================================================================
 import { criarAcessorio } from '../world/acessorios.js';
 
 const _texLoader = new THREE.TextureLoader();
 
-// ----------------------------------------------------------------------
-// TEXTURE SLOTS — materiais com placeholders.
-// ----------------------------------------------------------------------
 
 // === TEXTURE SLOT: armor === (peitoral / placas / pernas)
 export const matBossArmor = new THREE.MeshStandardMaterial({
@@ -117,7 +103,6 @@ export const matBossRune = new THREE.MeshStandardMaterial({
     metalness: 0.0,
 });
 
-// registo central para o helper aplicarTexturaBoss
 const _SLOTS = {
     armor:        matBossArmor,
     armor_dark:   matBossArmorDark,
@@ -132,9 +117,6 @@ const _SLOTS = {
     rune:         matBossRune,
 };
 
-/**
- * Aplica uma textura a um slot do boss.
- */
 export function aplicarTexturaBoss(slot, url, opts = {}) {
     const mat = _SLOTS[slot];
     if (!mat) { console.warn('[Boss] slot desconhecido:', slot); return; }
@@ -174,10 +156,6 @@ export function aplicarTexturaBoss(slot, url, opts = {}) {
     }
 }
 
-// ----------------------------------------------------------------------
-// Texturas iniciais — uma textura DISTINTA por slot, com cor a branco e
-// emissivo a zero, para se ver claramente o limite de cada parte do corpo.
-// ----------------------------------------------------------------------
 const _T = 'assets/textures/';
 const _B = _T + 'boss/';
 
@@ -237,9 +215,7 @@ aplicarTexturaBoss('claws', _B + 'Rock020_Claws/Rock020_1K-PNG_Color.png', {
     roughnessUrl: _B + 'Rock020_Claws/Rock020_1K-PNG_Roughness.png',
 });
 
-// ----------------------------------------------------------------------
-// BOSS — construção e animação
-// ----------------------------------------------------------------------
+// === BOSS — construção e animação ===
 const _anchors = {
     coroa:    null,
     aureola:  null,
@@ -250,7 +226,6 @@ const _anchors = {
 
 let _boss = null;
 let _t = 0;
-// escala base do boss — aumenta presença/altura (1 = tamanho original)
 const _BOSS_BASE_SCALE = 1.12;
 const _anim = {
     eyeLeft:  null,
@@ -272,7 +247,6 @@ const _anim = {
     }
 };
 
-// ---- curvas de easing para dar "game feel" às animações de ataque ----
 function _smooth(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
 
 // Curva de golpe: antecipação (recua a -1), golpe rápido com overshoot
@@ -284,20 +258,13 @@ function _strike(p) {
     return 1.15 * (1 - _smooth((p - 0.46) / 0.54));
 }
 
-// Curva de salto: agacha (-) na antecipação, sobe forte no golpe, cai e
-// assenta. Pico em ~0.5.
+// Curva de salto: agacha na antecipação, sobe forte no golpe, cai e assenta. Pico em ~0.5.
 function _leap(p) {
     if (p < 0.26) return -0.35 * _smooth(p / 0.26);      // agacha
     if (p < 0.55) return -0.35 + _smooth((p - 0.26) / 0.29) * 1.35; // sobe a +1.0
     return 1.0 * (1 - _smooth((p - 0.55) / 0.45));       // desce
 }
 
-/**
- * Dispara uma animação de ataque no boss.
- * @param {string} type Tipo de ataque ('aereo', 'rasante', 'lateral', 'varredura')
- * @param {number} duration Duração total da animação
- * @param {object} opts Opções extras (ex: { side: -1 })
- */
 export function triggerBossAttackAnim(type, duration = 1.0, opts = {}) {
     if (!_boss) return;
     _anim.attack.active = true;
@@ -323,13 +290,11 @@ export function criarBoss(scene, posicao = new THREE.Vector3(0, 0, 0), {
     _boss.position.copy(posicao);
     _anim.attack.active = false;
 
-    // BASE
     const baseDisc = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.35, 0.10, 24), matBossArmorDark);
     baseDisc.position.y = 0.05;
     baseDisc.receiveShadow = true;
     _boss.add(baseDisc);
 
-    // PERNAS
     function perna(side) {
         const g = new THREE.Group();
         const coxa = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.18, 0.74, 8), matBossArmor);
@@ -351,7 +316,6 @@ export function criarBoss(scene, posicao = new THREE.Vector3(0, 0, 0), {
     }
     perna(-1); perna(1);
 
-    // TRONCO
     const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.66, 0.52, 1.10, 12), matBossArmor);
     torso.position.y = 1.95;
     torso.castShadow = true;
@@ -380,7 +344,6 @@ export function criarBoss(scene, posicao = new THREE.Vector3(0, 0, 0), {
         _anim.runes.push(r);
     }
 
-    // OMBROS
     for (const side of [-1, 1]) {
         const pauldron = new THREE.Mesh(new THREE.SphereGeometry(0.40, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2), matBossArmorDark);
         pauldron.position.set(side * 0.80, 2.42, 0);
@@ -392,7 +355,6 @@ export function criarBoss(scene, posicao = new THREE.Vector3(0, 0, 0), {
         _boss.add(spike);
     }
 
-    // BRAÇOS
     function braco(side) {
         const g = new THREE.Group();
         g.position.set(side * 0.82, 2.32, 0);
@@ -423,7 +385,6 @@ export function criarBoss(scene, posicao = new THREE.Vector3(0, 0, 0), {
     _anim.armL = braco(-1);
     _anim.armR = braco(1);
 
-    // CABEÇA
     const pescoco = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 0.22, 10), matBossSkin);
     pescoco.position.y = 2.62;
     _boss.add(pescoco);
@@ -449,25 +410,23 @@ export function criarBoss(scene, posicao = new THREE.Vector3(0, 0, 0), {
     _boss.add(eyeLight);
     registerLight('Boss', 'Luz dos Olhos', eyeLight);
 
-    // CAPA — pendurada a partir dos ombros/parte de cima das costas, num
-    // pivô inclinado para trás para não entrar dentro da armadura.
+    // Capa com pivô inclinado para trás para não entrar dentro da armadura.
     const capePivot = new THREE.Group();
     capePivot.position.set(0, 2.58, -0.72);
     capePivot.rotation.x = 0.24;
     _boss.add(capePivot);
 
     const cape = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 2.7, 6, 10), matBossCape);
-    cape.position.y = -1.30; // topo da capa fica junto ao pivô (ombros)
+    cape.position.y = -1.30;
     cape.castShadow = true;
     capePivot.add(cape);
     _anim.cape = cape;
     _anim.capePivot = capePivot;
 
     const lining = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.45), matBossCapeLining);
-    lining.position.set(0, -2.32, 0.03); // forro interior, junto à base da capa
+    lining.position.set(0, -2.32, 0.03);
     capePivot.add(lining);
 
-    // ANCORAS
     const headY = 2.96;
     _anchors.coroa   = new THREE.Group(); _anchors.coroa.position.set(0, headY + 0.42, 0); _boss.add(_anchors.coroa);
     _anchors.aureola = new THREE.Group(); _anchors.aureola.position.set(0, headY + 0.66, -0.02); _boss.add(_anchors.aureola);
@@ -495,8 +454,6 @@ export function vestirAcessoriosBoss(ids = []) {
             case 'aureola_caidos': ac.scale.setScalar(2.0); ac.position.y = 0; _anchors.aureola.add(ac); _anim.halo = ac; break;
             case 'brincos_vida': ac.scale.setScalar(1.5); ac.position.y = -0.02; for (const child of ac.children) child.position.x *= 2.8; _anchors.brincos.add(ac); break;
             case 'oculos_carga': ac.scale.setScalar(1.9); _anchors.oculos.add(ac); break;
-            // máscara — banda fina ao nível dos olhos: deixa a testa e a
-            // parte de baixo do rosto à mostra. raio ≈ raio da cabeça (0.40).
             case 'mascara_eclipse': ac.scale.setScalar(2.5); ac.position.y = 0; _anchors.mascara.add(ac); break;
         }
     }
@@ -512,19 +469,16 @@ export function updateBoss(deltaTime) {
     if (!_boss) return;
     _t += deltaTime;
 
-    // Reset base transformations
     _boss.position.y = 0;
     _boss.rotation.set(0, 0, 0);
     if (_anim.armL) _anim.armL.rotation.set(0, 0, -0.12);
     if (_anim.armR) _anim.armR.rotation.set(0, 0, 0.12);
 
-    // FLUTUAÇÃO IDLE
     const idleFloat = Math.sin(_t * 1.4) * 0.05;
     _boss.position.y += idleFloat;
     const b = 1 + Math.sin(_t * 1.8) * 0.015;
     _boss.scale.set(_BOSS_BASE_SCALE, _BOSS_BASE_SCALE * b, _BOSS_BASE_SCALE);
 
-    // Outras animações idle
     if (_anim.eyeLeft && _anim.eyeRight) {
         matBossEye.emissiveIntensity = 2.2 + Math.sin(_t * 6) * 0.6 + Math.sin(_t * 17) * 0.25;
     }
@@ -536,40 +490,32 @@ export function updateBoss(deltaTime) {
     }
     matBossRune.emissiveIntensity = 1.8 + Math.sin(_t * 3.2) * 0.6;
 
-    // reset da cabeça (animada só nos ataques)
     if (_anim.head) _anim.head.rotation.set(0, 0, 0);
 
-    // ANIMAÇÕES DE ATAQUE — com antecipação, golpe rápido (overshoot) e
-    // recuperação + movimento secundário (lean do corpo, cabeça, capa).
     if (_anim.attack.active) {
         _anim.attack.timer += deltaTime;
         const p = Math.min(1, _anim.attack.timer / _anim.attack.duration);
-        const s = _strike(p);                 // -1 → +1.15 → 0 (snap)
-        const sPos = Math.max(0, s);           // só a parte positiva do golpe
+        const s = _strike(p);
+        const sPos = Math.max(0, s);
         const armL = _anim.armL, armR = _anim.armR;
         const head = _anim.head, cape = _anim.capePivot;
 
         switch (_anim.attack.type) {
             case 'aereo': {
-                // Recua, agacha e dispara num salto com os dois braços a
-                // descer num smash sobre a cabeça.
                 const j = _leap(p);
                 _boss.position.y += j * 1.7;
-                _boss.rotation.x = -s * 0.12;                 // inclina ao saltar/cair
-                // braços: recuam para cima (antecipação) e batem para baixo
+                _boss.rotation.x = -s * 0.12;
                 if (armL) { armL.rotation.x = -2.6 + sPos * 3.4; armL.rotation.z = -0.12; }
                 if (armR) { armR.rotation.x = -2.6 + sPos * 3.4; armR.rotation.z = 0.12; }
-                if (head) head.rotation.x = -s * 0.35;          // olha para cima e baixa
-                if (cape) cape.rotation.x = 0.24 - j * 0.5;     // capa esvoaça no salto
+                if (head) head.rotation.x = -s * 0.35;
+                if (cape) cape.rotation.x = 0.24 - j * 0.5;
                 break;
             }
 
             case 'rasante': {
-                // Carga: recua o tronco, mergulha em frente e dá um slam
-                // baixo com ambas as garras.
-                _boss.position.z = _anim.attack.baseZ + sPos * 0.7; // avança (+z = para o player)
+                _boss.position.z = _anim.attack.baseZ + sPos * 0.7;
                 _boss.position.y -= sPos * 0.35;
-                _boss.rotation.x = s * 0.45;                    // mergulho para a frente
+                _boss.rotation.x = s * 0.45;
                 if (armL) { armL.rotation.x = -0.5 + sPos * 1.9; armL.rotation.z = -0.12 - sPos * 0.35; }
                 if (armR) { armR.rotation.x = -0.5 + sPos * 1.9; armR.rotation.z = 0.12 + sPos * 0.35; }
                 if (head) head.rotation.x = s * 0.4;
@@ -578,9 +524,7 @@ export function updateBoss(deltaTime) {
             }
 
             case 'varredura': {
-                // Wind-up rotacional para um lado e varrimento horizontal
-                // largo com os dois braços abertos em cruz.
-                _boss.rotation.y = -s * 0.55;                   // roda o torso no swing
+                _boss.rotation.y = -s * 0.55;
                 if (armL) { armL.rotation.x = -0.6; armL.rotation.z = -0.12 - sPos * 1.7; }
                 if (armR) { armR.rotation.x = -0.6; armR.rotation.z = 0.12 + sPos * 1.7; }
                 if (head) head.rotation.y = -s * 0.5;
@@ -590,7 +534,6 @@ export function updateBoss(deltaTime) {
 
             case 'lateral': {
                 const side = _anim.attack.side;
-                // Recolhe o braço (antecipação) e desfere um jab lateral.
                 _boss.rotation.y = -side * s * 0.5;
                 const arm = side === -1 ? armL : armR;
                 if (arm) {
@@ -598,7 +541,6 @@ export function updateBoss(deltaTime) {
                     arm.rotation.y = side * (-0.3 + sPos * 2.0);
                     arm.rotation.z = side * -0.12;
                 }
-                // braço oposto contrabalança
                 const other = side === -1 ? armR : armL;
                 if (other) other.rotation.x = -sPos * 0.5;
                 if (head) head.rotation.y = side * s * 0.4;
@@ -609,7 +551,6 @@ export function updateBoss(deltaTime) {
 
         if (p >= 1) {
             _anim.attack.active = false;
-            // repõe a capa e a posição base (a carga move o z)
             if (cape) cape.rotation.set(0.24, 0, 0);
             _boss.position.z = _anim.attack.baseZ;
         }

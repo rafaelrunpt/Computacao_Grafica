@@ -658,15 +658,10 @@ export const caseloMiniCam = new THREE.OrthographicCamera(
 caseloMiniCam.position.set(0, 25, 0);
 caseloMiniCam.lookAt(0, 0, 0);
 
-// ============================================================
-// ATMOSFERA — partículas, feixes e flicker para benchmark visual
-// ============================================================
-// Nenhum dos elementos abaixo toca em colliders, pedestais ou no totem.
-// Tudo é decorativo + animado por shader; o custo CPU em update é trivial.
 
 const _atmosTime = { t: 0, mist: 0 };
 
-// ---- 1) Brasas a subir das 4 tochas (THREE.Points + vertex shader) ----
+
 function _criarEmbers() {
     const PER = 14;
     const N   = _torches.length * PER;
@@ -738,7 +733,7 @@ function _criarEmbers() {
 }
 const _embersMat = _criarEmbers();
 
-// ---- 2) Motes de pó/luz a flutuar pela sala (lilás suave) ----
+
 function _criarMotes() {
     const N = 90;
     const positions = new Float32Array(N * 3);

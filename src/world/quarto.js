@@ -1,20 +1,13 @@
-// Quarto inicial — cena 100% procedural em three.js.
-// Estilo artístico igual à taverna: pedra fria nas paredes, tábuas
-// quentes no chão, mobília low-poly em madeira e iluminação dramática
-// dominada por uma vela/lanterna ao lado da cama, com luz fria a entrar
-// pela janela.
 import * as THREE from 'three';
 import { registerLight } from '../systems/moderator.js';
 
-// ---- dimensões ----
-const W = 7.0;   // largura (x)
-const D = 6.0;   // profundidade (z)
-const H = 3.2;   // pé-direito
+const W = 7.0;
+const D = 6.0;
+const H = 3.2;
 
 export const quartoScene = new THREE.Scene();
 quartoScene.background = new THREE.Color(0x0a0806);
 
-// ---- materiais ----
 const matStone     = new THREE.MeshStandardMaterial({ color: 0x7a7068, roughness: 0.95, flatShading: true });
 const matStoneDark = new THREE.MeshStandardMaterial({ color: 0x554d46, roughness: 0.95, flatShading: true });
 const matMortar    = new THREE.MeshStandardMaterial({ color: 0x2a2520, roughness: 1.0 });
@@ -38,7 +31,6 @@ const matGlass     = new THREE.MeshStandardMaterial({ color: 0x223344, roughness
 const matLantern   = new THREE.MeshStandardMaterial({ color: 0x2a1810, roughness: 0.9, flatShading: true });
 const matLanternGlow = new THREE.MeshStandardMaterial({ color: 0xffb060, emissive: 0xff7a20, emissiveIntensity: 2.2, transparent: true, opacity: 0.85 });
 
-// colliders (Box3) para colisões simples
 export const quartoColliders = [];
 
 function box(w, h, d, mat, x, y, z, rotY = 0, addCollider = false) {
@@ -56,9 +48,7 @@ function box(w, h, d, mat, x, y, z, rotY = 0, addCollider = false) {
     return m;
 }
 
-// ---------------------------------------------------------------
-// CHÃO — tábuas alternadas
-// ---------------------------------------------------------------
+// === CHÃO ===
 box(W + 0.4, 0.08, D + 0.4, matMortar, 0, -0.04, 0);
 const plankW = 0.55;
 const nPlanks = Math.ceil(W / plankW);
@@ -71,7 +61,6 @@ for (let i = 0; i < nPlanks; i++) {
     quartoScene.add(m);
 }
 
-// tapete junto à cama
 const rug = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.02, 1.4), matRug);
 rug.position.set(0.6, 0.055, 1.2);
 rug.receiveShadow = true;
@@ -81,10 +70,7 @@ rugBorder.position.set(0.6, 0.05, 1.2);
 rugBorder.receiveShadow = true;
 quartoScene.add(rugBorder);
 
-// ---------------------------------------------------------------
-// PAREDES — blocos de pedra com variação
-// ---------------------------------------------------------------
-// painel base sólido (para vedar buracos entre blocos)
+// === PAREDES ===
 function wallSlab(w, h, d, x, y, z) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matStoneDark);
     m.position.set(x, y, z);
@@ -92,18 +78,14 @@ function wallSlab(w, h, d, x, y, z) {
     quartoScene.add(m);
 }
 
-// blocos de pedra individuais cobrindo uma parede
+// orient: 'x' (parede ao longo de X) ou 'z'; faceNormal: 1 ou -1 (offset visual).
 function stoneCourse(orient, length, height, baseX, baseZ, faceNormal, gapY = 0) {
-    // orient: 'x' (parede orientada ao longo do eixo X) ou 'z'
-    // faceNormal: direção para dentro da sala (1 ou -1) — só para offset visual
     const blockH = 0.42;
     const rows = Math.ceil(height / blockH);
     const halfL = length / 2;
     
-    // Número INTEIRO de blocos por fila: derivamos a largura do bloco a
-    // partir do comprimento real da parede. Assim o padrão "running bond"
-    // fecha sempre exactamente nas extremidades — sem fatias finas nem
-    // blocos a "sair" da parede como acontecia com um blockW fixo.
+    // Número inteiro de blocos derivado do comprimento da parede para o
+    // "running bond" fechar exactamente — sem fatias finas nas extremidades.
     const nFull  = Math.max(1, Math.round(length / 0.70));
     const blockW = length / nFull;
     const halfW  = blockW / 2;
@@ -111,17 +93,14 @@ function stoneCourse(orient, length, height, baseX, baseZ, faceNormal, gapY = 0)
     for (let r = 0; r < rows; r++) {
         const y = r * blockH + blockH / 2 + gapY;
         if (y > height) continue;
-        // Padrão "running bond" — filas ímpares começam e acabam com meio bloco
         const startsWithHalf = (r % 2) === 1;
         let used = 0;
         let i = 0;
         while (used < length - 0.001) {
-            // largura deste bloco: meio nas extremidades das filas ímpares
             let bw = blockW;
             if (startsWithHalf && (used < 0.001 || used + blockW > length - 0.001)) {
                 bw = halfW;
             }
-            // Garante que o bloco não ultrapassa a extremidade da parede
             if (used + bw > length + 0.001) {
                 bw = length - used;
             }
@@ -148,75 +127,59 @@ function stoneCourse(orient, length, height, baseX, baseZ, faceNormal, gapY = 0)
     }
 }
 
-// Apenas paredes "de fundo" (norte + oeste) para a câmara conseguir
-// olhar para dentro do quarto. As paredes este e sul foram removidas
-// visualmente; os colliders mantêm-se para o jogador não sair.
-// parede traseira (norte, z = -D/2)
+// Paredes norte e oeste visíveis; este/sul removidas visualmente (colliders mantêm-se).
 wallSlab(W + 0.4, H, 0.2, 0, H / 2, -D / 2 - 0.1);
 stoneCourse('x', W, H, 0, -D / 2, 1);
-// parede esquerda (oeste, x = -W/2) — janela
 wallSlab(0.25, H, D + 0.4, -W / 2 - 0.13, H / 2, 0);
 stoneCourse('z', D, H, -W / 2, 0, 1);
 
-// pequenos cotos de pedra nas paredes removidas — só a base, dão a
-// ideia de "corte" no mesmo estilo da taverna
+// Cotos nas paredes removidas — dão a ideia de "corte" no mesmo estilo da taverna.
 const stubH = 0.5;
 wallSlab(W + 0.4, stubH, 0.2, 0, stubH / 2,  D / 2 + 0.1);
 stoneCourse('x', W, stubH, 0,  D / 2, -1);
 wallSlab(0.2, stubH, D + 0.4,  W / 2 + 0.1, stubH / 2, 0);
 stoneCourse('z', D, stubH,  W / 2, 0, -1);
 
-// colliders nas paredes (planos finos)
 quartoColliders.push(
-    new THREE.Box3(new THREE.Vector3(-W/2 - 0.3, 0, -D/2 - 0.3), new THREE.Vector3( W/2 + 0.3, H, -D/2 + 0.05)), // norte
-    new THREE.Box3(new THREE.Vector3(-W/2 - 0.3, 0,  D/2 - 0.05), new THREE.Vector3(W/2 + 0.3, H,  D/2 + 0.3)), // sul
-    new THREE.Box3(new THREE.Vector3(-W/2 - 0.3, 0, -D/2 - 0.3), new THREE.Vector3(-W/2 + 0.05, H,  D/2 + 0.3)), // oeste
-    new THREE.Box3(new THREE.Vector3( W/2 - 0.05, 0, -D/2 - 0.3), new THREE.Vector3(W/2 + 0.3, H,  D/2 + 0.3)), // este
+    new THREE.Box3(new THREE.Vector3(-W/2 - 0.3, 0, -D/2 - 0.3), new THREE.Vector3( W/2 + 0.3, H, -D/2 + 0.05)),
+    new THREE.Box3(new THREE.Vector3(-W/2 - 0.3, 0,  D/2 - 0.05), new THREE.Vector3(W/2 + 0.3, H,  D/2 + 0.3)),
+    new THREE.Box3(new THREE.Vector3(-W/2 - 0.3, 0, -D/2 - 0.3), new THREE.Vector3(-W/2 + 0.05, H,  D/2 + 0.3)),
+    new THREE.Box3(new THREE.Vector3( W/2 - 0.05, 0, -D/2 - 0.3), new THREE.Vector3(W/2 + 0.3, H,  D/2 + 0.3)),
 );
 
-// ---------------------------------------------------------------
-// CAMA — encostada à parede norte, viragem para sul
-// ---------------------------------------------------------------
+// === CAMA ===
 const bedGroup = new THREE.Group();
 const bedW = 1.7, bedL = 2.4, bedH = 0.5;
-// estrado
 const bedBase = new THREE.Mesh(new THREE.BoxGeometry(bedW, 0.12, bedL), matWoodDark);
 bedBase.position.set(0, bedH - 0.06, 0);
 bedBase.castShadow = true; bedBase.receiveShadow = true;
 bedGroup.add(bedBase);
-// pés
 for (const [sx, sz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) {
     const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, bedH, 0.16), matWoodDark);
     leg.position.set(sx * (bedW / 2 - 0.1), bedH / 2, sz * (bedL / 2 - 0.1));
     leg.castShadow = true;
     bedGroup.add(leg);
 }
-// cabeceira (norte)
 const headBoard = new THREE.Mesh(new THREE.BoxGeometry(bedW + 0.1, 1.0, 0.12), matWood);
 headBoard.position.set(0, bedH + 0.5, -bedL / 2 + 0.06);
 headBoard.castShadow = true;
 bedGroup.add(headBoard);
-// rodapé (sul)
 const footBoard = new THREE.Mesh(new THREE.BoxGeometry(bedW + 0.1, 0.55, 0.12), matWood);
 footBoard.position.set(0, bedH + 0.27, bedL / 2 - 0.06);
 footBoard.castShadow = true;
 bedGroup.add(footBoard);
-// colchão
 const mattress = new THREE.Mesh(new THREE.BoxGeometry(bedW - 0.08, 0.18, bedL - 0.2), matMattress);
 mattress.position.set(0, bedH + 0.09, 0);
 mattress.castShadow = true;
 bedGroup.add(mattress);
-// almofada
 const pillow = new THREE.Mesh(new THREE.BoxGeometry(bedW - 0.3, 0.12, 0.5), matPillow);
 pillow.position.set(0, bedH + 0.22, -bedL / 2 + 0.5);
 pillow.castShadow = true;
 bedGroup.add(pillow);
-// manta (dobrada) — cobre 2/3
 const blanket = new THREE.Mesh(new THREE.BoxGeometry(bedW - 0.06, 0.06, bedL * 0.55), matBlanket);
 blanket.position.set(0, bedH + 0.21, bedL * 0.18);
 blanket.castShadow = true;
 bedGroup.add(blanket);
-// orla da manta
 const blanketEdge = new THREE.Mesh(new THREE.BoxGeometry(bedW - 0.06, 0.07, 0.15), matBlanket2);
 blanketEdge.position.set(0, bedH + 0.215, bedL * 0.18 - bedL * 0.55 / 2 + 0.075);
 bedGroup.add(blanketEdge);
@@ -224,30 +187,24 @@ bedGroup.add(blanketEdge);
 bedGroup.position.set(1.4, 0, -D / 2 + bedL / 2 + 0.3);
 quartoScene.add(bedGroup);
 
-// collider da cama
 {
     bedGroup.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(bedGroup);
     quartoColliders.push(b);
 }
 
-// ---------------------------------------------------------------
-// MESA DE CABECEIRA + VELA (luz principal)
-// ---------------------------------------------------------------
-const nsX = 1.4 - bedW / 2 - 0.45;   // à esquerda da cama (lado da janela)
+// === MESA DE CABECEIRA + VELA ===
+const nsX = 1.4 - bedW / 2 - 0.45;
 const nsZ = -D / 2 + 0.6;
 const nightG = new THREE.Group();
-// tampo
 const topNS = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.08, 0.55), matWood);
 topNS.position.set(0, 0.78, 0);
 topNS.castShadow = true;
 nightG.add(topNS);
-// estrutura
 const bodyNS = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.74, 0.5), matWoodDark);
 bodyNS.position.set(0, 0.37, 0);
 bodyNS.castShadow = true;
 nightG.add(bodyNS);
-// gaveta
 const drawer = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.18, 0.04), matWood);
 drawer.position.set(0, 0.55, 0.25);
 nightG.add(drawer);
@@ -255,7 +212,6 @@ const knob = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), matMetal);
 knob.position.set(0, 0.55, 0.275);
 nightG.add(knob);
 
-// castiçal + vela
 const holder = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.04, 12), matMetal);
 holder.position.set(-0.15, 0.82, -0.1);
 nightG.add(holder);
@@ -266,7 +222,6 @@ const flame = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 8), matFlame);
 flame.position.set(-0.15, 1.10, -0.1);
 nightG.add(flame);
 
-// livro pousado
 const book1 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.22), new THREE.MeshStandardMaterial({ color: 0x4a1a1a, roughness: 0.95 }));
 book1.position.set(0.12, 0.82, 0.05);
 book1.rotation.y = 0.2;
@@ -275,8 +230,7 @@ nightG.add(book1);
 nightG.position.set(nsX, 0, nsZ);
 quartoScene.add(nightG);
 
-// luz da vela — quente e intensa, com leve flicker no animate.
-// É também o único pointlight com sombras (raio pequeno, custo baixo).
+// Único pointlight com sombras (raio pequeno, custo baixo).
 export const candleLight = new THREE.PointLight(0xff8a44, 18, 7, 1.6);
 candleLight.position.set(nsX - 0.15, 1.2, nsZ - 0.1);
 candleLight.castShadow = true;
@@ -287,32 +241,27 @@ candleLight.shadow.camera.far = 7;
 quartoScene.add(candleLight);
 registerLight('Quarto', 'Luz da Vela', candleLight);
 
-// collider mesa-de-cabeceira
 quartoColliders.push(new THREE.Box3(
     new THREE.Vector3(nsX - 0.35, 0, nsZ - 0.27),
     new THREE.Vector3(nsX + 0.35, 0.85, nsZ + 0.27),
 ));
 
-// ---------------------------------------------------------------
-// BAÚ ao pé da cama — interactivo, dá poções iniciais
-// ---------------------------------------------------------------
+// === BAÚ (interactivo) ===
 const chestG = new THREE.Group();
 const chestBody = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, 0.55), matWood);
 chestBody.position.set(0, 0.25, 0);
 chestBody.castShadow = true;
 chestG.add(chestBody);
-// bandas metálicas no corpo
 for (const x of [-0.35, 0.35]) {
     const band = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.57), matMetal);
     band.position.set(x, 0.25, 0);
     chestG.add(band);
 }
-// fechadura no corpo
 const lock = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.05), matMetal);
 lock.position.set(0, 0.42, 0.29);
 chestG.add(lock);
 
-// tampa articulada — pivot no rebordo traseiro (z = -0.275)
+// Tampa com pivot no rebordo traseiro para abrir correctamente.
 const lidPivot = new THREE.Group();
 lidPivot.position.set(0, 0.5, -0.275);
 const chestLid = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.18, 0.57), matWoodDark);
@@ -331,12 +280,11 @@ quartoScene.add(chestG);
 chestG.updateMatrixWorld(true);
 quartoColliders.push(new THREE.Box3().setFromObject(chestG));
 
-// estado + interacção do baú
 let _bauAberto = false;
 let _bauColetado = false;
-let _lidAnimT = 0; // 0..1 — animação a abrir
-let _itemsAnimT = 0; // 0..1 — animação de subida dos itens
-let _itemsFadeOut = 0; // 0..1 — quando coletado, desvanece
+let _lidAnimT = 0;
+let _itemsAnimT = 0;
+let _itemsFadeOut = 0;
 export function bauQuartoAberto()  { return _bauAberto; }
 export function bauQuartoColetado() { return _bauColetado; }
 export function abrirBauQuarto() {
@@ -349,7 +297,6 @@ export function coletarBauQuarto() {
     return true;
 }
 
-// ---- itens flutuantes sobre o baú (poções a rodar) ----
 const itensPivot = new THREE.Group();
 itensPivot.visible = false;
 chestG.add(itensPivot);
@@ -384,7 +331,6 @@ function criarPocaoMesh(corVidro, corLiquido, corRolha) {
     return g;
 }
 
-// 3 poções normais + 1 maior
 const pocoes = [];
 for (let i = 0; i < 3; i++) {
     const p = criarPocaoMesh(0xa8e0ff, 0xff4a6a, 0x5a3a18);
@@ -400,39 +346,32 @@ mega.position.set(0, 0.22, 0);
 itensPivot.add(mega);
 pocoes.push(mega);
 
-// glow suave por cima do baú quando aberto
 const glow = new THREE.PointLight(0xffaaff, 0, 2.2, 2);
 glow.position.set(0, 0.7, 0);
 chestG.add(glow);
 
-// caixa de interacção em frente ao baú
 export const quartoBauBox = new THREE.Box3(
     new THREE.Vector3(0.7, 0, -D / 2 + bedL + 0.95),
     new THREE.Vector3(2.1, 1.4, -D / 2 + bedL + 1.6),
 );
 
-// ---------------------------------------------------------------
-// GUARDA-ROUPA — parede este
-// ---------------------------------------------------------------
+// === GUARDA-ROUPA ===
 const wardG = new THREE.Group();
 const wardBody = new THREE.Mesh(new THREE.BoxGeometry(1.3, 2.3, 0.7), matWood);
 wardBody.position.set(0, 1.15, 0);
 wardBody.castShadow = true;
 wardG.add(wardBody);
-// portas
 const doorL = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.1, 0.04), matWoodDark);
 doorL.position.set(-0.32, 1.15, 0.36);
 wardG.add(doorL);
 const doorR = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.1, 0.04), matWoodDark);
 doorR.position.set(0.32, 1.15, 0.36);
 wardG.add(doorR);
-// puxadores
 for (const x of [-0.05, 0.05]) {
     const k = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), matMetal);
     k.position.set(x, 1.15, 0.4);
     wardG.add(k);
 }
-// rodapé
 const wardBase = new THREE.Mesh(new THREE.BoxGeometry(1.34, 0.12, 0.74), matWoodDark);
 wardBase.position.set(0, 0.06, 0);
 wardG.add(wardBase);
@@ -442,9 +381,7 @@ quartoScene.add(wardG);
 wardG.updateMatrixWorld(true);
 quartoColliders.push(new THREE.Box3().setFromObject(wardG));
 
-// ---------------------------------------------------------------
-// MESA + CADEIRA
-// ---------------------------------------------------------------
+// === MESA + CADEIRA ===
 const tableG = new THREE.Group();
 const tabTop = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.7), matWood);
 tabTop.position.set(0, 0.82, 0);
@@ -456,7 +393,6 @@ for (const [sx, sz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) {
     leg.castShadow = true;
     tableG.add(leg);
 }
-// papel + pena
 const paper = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.005, 0.22), new THREE.MeshStandardMaterial({ color: 0xe6d8a8, roughness: 1.0 }));
 paper.position.set(-0.15, 0.865, 0.05);
 paper.rotation.y = 0.1;
@@ -464,7 +400,6 @@ tableG.add(paper);
 const inkpot = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.1, 8), new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }));
 inkpot.position.set(0.2, 0.91, 0.08);
 tableG.add(inkpot);
-// caneca
 const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.16, 10), new THREE.MeshStandardMaterial({ color: 0x7a5030, roughness: 0.9 }));
 mug.position.set(0.35, 0.94, -0.12);
 tableG.add(mug);
@@ -474,7 +409,6 @@ quartoScene.add(tableG);
 tableG.updateMatrixWorld(true);
 quartoColliders.push(new THREE.Box3().setFromObject(tableG));
 
-// cadeira
 const chairG = new THREE.Group();
 const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.5), matWood);
 seat.position.set(0, 0.5, 0);
@@ -492,9 +426,7 @@ chairG.position.set(-W / 2 + 0.8, 0, D / 2 - 2.3);
 chairG.rotation.y = Math.PI;
 quartoScene.add(chairG);
 
-// ---------------------------------------------------------------
-// LANTERNA na parede este — luz secundária quente
-// ---------------------------------------------------------------
+// === LANTERNA ===
 const lantG = new THREE.Group();
 const lantBracket = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.3), matMetal);
 lantBracket.position.set(0, 0, 0);
@@ -514,15 +446,9 @@ lantLight.position.set(W / 2 - 0.3, 2.1, -1.0);
 quartoScene.add(lantLight);
 registerLight('Quarto', 'Luz da Lanterna', lantLight);
 
-// ---------------------------------------------------------------
-// ILUMINAÇÃO GLOBAL
-// ---------------------------------------------------------------
-// ambiente um pouco mais elevado para compensar a falta da luz da lua
+// === ILUMINAÇÃO GLOBAL ===
 quartoScene.add(new THREE.AmbientLight(0xffc89a, 0.35));
 
-// ---------------------------------------------------------------
-// ANIMAÇÃO — flicker da vela/lanterna
-// ---------------------------------------------------------------
 let _t = 0;
 export function updateQuarto(deltaTime) {
     _t += deltaTime;
@@ -531,15 +457,12 @@ export function updateQuarto(deltaTime) {
     const s = 0.92 + Math.sin(_t * 12) * 0.08;
     flame.scale.set(s, 0.9 + Math.sin(_t * 9.0) * 0.1, s);
 
-    // animação da tampa do baú a abrir
     if (_bauAberto && _lidAnimT < 1) {
         _lidAnimT = Math.min(1, _lidAnimT + deltaTime * 1.8);
-        // ease-out: começa rápido, desacelera no fim
         const e = 1 - (1 - _lidAnimT) * (1 - _lidAnimT);
         lidPivot.rotation.x = -e * 1.35;
     }
 
-    // animação dos itens — sobem do interior do baú e ficam a rodar
     if (_bauAberto && !_bauColetado) {
         if (_itemsAnimT < 1) _itemsAnimT = Math.min(1, _itemsAnimT + deltaTime * 1.2);
         const e = 1 - Math.pow(1 - _itemsAnimT, 3);
@@ -548,12 +471,10 @@ export function updateQuarto(deltaTime) {
         itensPivot.position.y = baseY + bob;
         itensPivot.rotation.y += deltaTime * 1.4;
         itensPivot.visible = true;
-        // pequena rotação individual em torno do eixo
         for (let i = 0; i < pocoes.length; i++) {
             pocoes[i].rotation.y -= deltaTime * 0.8;
             pocoes[i].position.y = (i === pocoes.length - 1 ? 0.22 : 0) + Math.sin(_t * 2 + i) * 0.03;
         }
-        // escala que arranca em zero
         const s = e;
         itensPivot.scale.setScalar(s);
         glow.intensity = e * 2.4 + Math.sin(_t * 6) * 0.3;
@@ -567,9 +488,7 @@ export function updateQuarto(deltaTime) {
     }
 }
 
-// ---------------------------------------------------------------
-// COLISÕES + CHÃO
-// ---------------------------------------------------------------
+// === COLISÕES + CHÃO ===
 export const QUARTO_FLOOR_Y = 0.06;
 
 export function verificaColisaoQuarto(nx, ny, nz) {
@@ -591,10 +510,7 @@ export function tryMoveQuarto(currentY, nextX, nextZ) {
 
 export function getQuartoHeight(_x, _z) { return QUARTO_FLOOR_Y; }
 
-// ---------------------------------------------------------------
-// SAÍDA (porta sul) + SPAWN
-// ---------------------------------------------------------------
-// Porta visual na parede sul
+// === SAÍDA (porta sul) + SPAWN ===
 const doorMat = new THREE.MeshStandardMaterial({ color: 0x4a2510, roughness: 0.9, flatShading: true });
 const doorMatDark = new THREE.MeshStandardMaterial({ color: 0x2a140a, roughness: 1.0 });
 const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.4, 0.16), doorMatDark);
@@ -612,7 +528,6 @@ export const quartoSaidaBox = new THREE.Box3(
     new THREE.Vector3( W / 2, 2.4, D / 2 + 0.5),
 );
 
-// caixa de interacção com a cama — em frente ao colchão (lado sul)
 export const quartoCamaBox = new THREE.Box3(
     new THREE.Vector3(0.4, 0, -D / 2 + bedL / 2 + 0.3 + bedL / 2 - 0.2),
     new THREE.Vector3(2.4, 1.8, -D / 2 + bedL / 2 + 0.3 + bedL / 2 + 0.9),

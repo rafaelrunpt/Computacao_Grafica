@@ -417,7 +417,7 @@ function _modoPill(label, hint, ativo) {
 let _modoNocturno = !!settings.nightMode;
 
 const pillDia   = _modoPill('☀ DIA',   'Rápido',   !_modoNocturno);
-const pillNoite = _modoPill('🌙 NOITE', 'Benchmark', _modoNocturno);
+const pillNoite = _modoPill('🌙 NOITE', 'Difícil', _modoNocturno);
 modoRow.appendChild(pillDia);
 modoRow.appendChild(pillNoite);
 
@@ -453,7 +453,7 @@ function _refrescarPills() {
     pillNoite.style.cssText = cssAtivo(_modoNocturno, true);
     pillNoite.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:6px;">${_icone(MOON_URL)}<span>NOITE</span></div>
         <div style="font-size:13px;letter-spacing:1px;color:${_modoNocturno ? '#c8a85a' : '#7a6850'};
-            margin-top:3px;font-family:'VT323',monospace;text-shadow:none;">Benchmark</div>`;
+            margin-top:3px;font-family:'VT323',monospace;text-shadow:none;">Difícil</div>`;
 
     // Atualizar os emojis do título do seletor (pixel SVG)
     const _ic = (url) => `<span style="display:inline-block;width:10px;height:10px;vertical-align:-1px;background:${url} center/contain no-repeat;image-rendering:pixelated;"></span>`;

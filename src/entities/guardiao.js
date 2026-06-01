@@ -1,10 +1,4 @@
-// ======================================================================
-// GUARDIÃO DA PONTE — entidade que bloqueia o acesso ao norte do mapa
-// até o jogador ter nível suficiente / convencê-lo.
-// ----------------------------------------------------------------------
-// O módulo gere a malha procedural, a animação de caminhada quando
-// concede passagem, e expõe a interact-box para o sistema de diálogo.
-// ======================================================================
+
 import * as THREE from 'three';
 
 let _mesh = null;
@@ -29,13 +23,7 @@ function _atualizarInteractBoxPos() {
     );
 }
 
-/**
- * Constrói o guardião e adiciona-o à cena.
- *   scene      — THREE.Scene
- *   options.addCollider(box)        — registar collider no sistema do mapa
- *   options.fadeables               — array de fadeables (para fade quando tapa o jogador)
- *   options.cullables               — array de cullables (frontal culling)
- */
+
 export function criarGuardiao(scene, { addCollider, fadeables, cullables } = {}) {
     const GX = 0, GZ = 4.5;
 

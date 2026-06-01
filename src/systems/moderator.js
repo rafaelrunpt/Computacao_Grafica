@@ -1,4 +1,5 @@
 import { playerStats, ganharXP, receberDano, curar, recuperarTotal } from './player-stats.js';
+import { skipTurnoPlayer, estadoJogo } from './combate.js';
 import { player } from '../entities/jogador.js';
 import { battleZoneObjects, limparZonaBatalha } from '../world/mapa.js';
 import { atualizarHUD } from '../ui/hud.js';
@@ -303,6 +304,14 @@ function setupEvents() {
     _on('mod-maxhp-btn', () => moderator.setMaxHP(document.getElementById('mod-maxhp-val').value));
     _on('mod-heal-btn',   () => moderator.fullHeal());
     _on('mod-defeat-btn', () => moderator.derrotar());
+    _on('mod-skip-turno-btn', () => {
+        const btn = document.getElementById('mod-skip-turno-btn');
+        if (!estadoJogo.emCombate) {
+            if (btn) { btn.textContent = '⏭ SEM COMBATE ACTIVO'; setTimeout(() => { btn.textContent = '⏭ SKIP TURNO'; }, 1200); }
+            return;
+        }
+        skipTurnoPlayer();
+    });
 
     // --- cintilas ---
     _on('mod-cint-btn', () => {
@@ -462,6 +471,9 @@ function _buildPanel() {
             <button id="mod-heal-btn"   style="background:#3ac850;color:#000;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">CURA TOTAL</button>
             <button id="mod-defeat-btn" style="background:#9e3b45;color:#fff;border:none;cursor:pointer;padding:5px 2px;font-size:10px;font-weight:bold;">DERROTAR</button>
         </div>
+
+        <div style="font-size:10px;color:#ff8040;margin:10px 0 4px 0;letter-spacing:1px;">COMBATE</div>
+        <button id="mod-skip-turno-btn" style="width:100%;background:#3a3a4a;color:#ff8040;border:1px solid #ff8040;cursor:pointer;padding:6px;font-weight:bold;margin-bottom:8px;">⏭ SKIP TURNO</button>
 
         <div style="font-size:10px;color:#80c8ff;margin:10px 0 4px 0;letter-spacing:1px;">MOEDA</div>
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:4px;margin-bottom:4px;">

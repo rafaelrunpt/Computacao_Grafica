@@ -130,13 +130,17 @@ export function criarCogumelos(scene) {
 
 export function updateCogumelos(_dt) {
     const t = performance.now() * 0.001;
-    // Infelizmente o InstancedMesh não permite mudar emissiveIntensity por instância 
-    // sem shaders customizados, por isso pulsamos o material inteiro (afeta todos daquela cor).
+    // Se todos os cluster lights estiverem desligados no debug, apaga também o emissive.
+    const anyVisible = _lights.some(l => l.light.visible);
     for (const [cor, im] of _instCapsByColor) {
-        im.material.emissiveIntensity = 0.75 * (0.78 + 0.28 * Math.sin(t * 1.3 + cor));
+        im.material.emissiveIntensity = anyVisible
+            ? 0.75 * (0.78 + 0.28 * Math.sin(t * 1.3 + cor))
+            : 0;
     }
     for (let i = 0; i < _lights.length; i++) {
         const l = _lights[i];
-        l.light.intensity = l.baseInt * (0.78 + 0.30 * Math.sin(t * 1.5 + l.fase));
+        if (l.light.visible) {
+            l.light.intensity = l.baseInt * (0.78 + 0.30 * Math.sin(t * 1.5 + l.fase));
+        }
     }
 }

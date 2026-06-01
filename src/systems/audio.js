@@ -392,9 +392,9 @@ export function tocarSomAtaquePlayer(ataqueId) {
     const { ctx, master, now } = s;
     switch (ataqueId) {
         case 'golpe_rapido':       // estocada veloz — swish curto e agudo
-            _whoosh(ctx, master, now, { dur: 0.22, f0: 2600, f1: 700, q: 1.4, vol: 0.55 });
-            _tone(ctx, master, now + 0.15, { dur: 0.10, f0: 3100, type: 'triangle', vol: 0.18 });
-            playSFX('swipe', 0, true, false, 0.4);
+            _whoosh(ctx, master, now, { dur: 0.22, f0: 2600, f1: 700, q: 1.4, vol: 0.15 });
+            _tone(ctx, master, now + 0.15, { dur: 0.10, f0: 3100, type: 'triangle', vol: 0.05 });
+            playSFX('swipe', 0, true, false, 0.11);
             break;
         case 'golpe_pesado':       // talho profundo — whoosh grave + explosão no impacto
             _whoosh(ctx, master, now, { dur: 0.40, f0: 900, f1: 160, q: 0.8, vol: 0.6 });

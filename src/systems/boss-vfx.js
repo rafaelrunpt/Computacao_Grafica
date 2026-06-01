@@ -54,6 +54,10 @@ const SHEETS_AEREO = [
 ];
 const SHEET_LATERAL_DIR = 'assets/vfx/boss/bola_direita.png';
 const SHEET_LATERAL_ESQ = 'assets/vfx/boss/bola_esquerda.png';
+const SHEET_VARREDURA   = 'assets/vfx/boss/explosaoboss.png';
+
+// Offsets X das 3 lanes do player (espelhado de boss-attacks.js)
+const LANE_OFFSETS_VFX = [-1.8, 0, 1.8];
 
 // 4 frames separados (não-sheet) — animação dos espinhos a brotar do chão.
 const SPIKE_FRAME_URLS = [
@@ -204,9 +208,18 @@ export const BossVFX = {
             pr.light = new THREE.PointLight(0xc080ff, 0, 5, 2);
             tocarSomShockBoss(); // Som quando o projéctil entra em cena
         } else if (pr.type === 'varredura') {
-            pr.proj = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.65, 0.7), matProjVarredura);
-            pr.proj.position.set(pr.x, pr.beamY, pr.z - 4);
-            pr.light = new THREE.PointLight(0x70ffaa, 0, 6, 2);
+            // 3 explosões — uma por lane (todas as posições possíveis do player)
+            pr.sprites = [];
+            for (let i = 0; i < 3; i++) {
+                const s = makeSheetSprite(SHEET_VARREDURA, 4, 4, 13);
+                s.position.set(pr.x + LANE_OFFSETS_VFX[i], pr.beamY + 0.5, pr.z);
+                s.scale.set(4.2, 4.2, 1);
+                s.visible = false;
+                combateScene.add(s);
+                pr.sprites.push(s);
+            }
+            pr.light = new THREE.PointLight(0x70ffaa, 0, 8, 2);
+            tocarSomShockBoss();
         }
 
         if (pr.proj) {
@@ -277,8 +290,11 @@ export const BossVFX = {
             if (pr.col)   pr.col.material.opacity   = 0.6 * (1 - u);
             if (pr.arrow) pr.arrow.material.opacity = 0.6 * (1 - u);
         } else if (pr.type === 'varredura') {
-            pr.proj.position.z = pr.z - 4 + 7 * u;
-            pr.proj.position.y = pr.beamY;
+            for (const s of pr.sprites) {
+                s.visible = true;
+                setSheetFrame(s, Math.floor(u * (s.userData.totalFrames - 0.001)));
+                s.material.opacity = u < 0.85 ? 1.0 : (1 - u) / 0.15;
+            }
             if (pr.bar) pr.bar.material.opacity = 0.6 * (1 - u);
         }
     },
@@ -298,11 +314,11 @@ export const BossVFX = {
             pr.sprite.material.dispose();
         }
         if (pr.sprites) {
-            // Sprites de rasante: partilham os frames cacheados em _spikeFramesCache,
-            // por isso só descartamos o material — NÃO as texturas (matá-las-ia para
-            // o próximo rasante).
             for (const s of pr.sprites) {
                 combateScene.remove(s);
+                // rasante: texturas partilhadas (cache) — não destruir o map
+                // varredura: clone de textura por sprite — destruir o map
+                if (pr.type === 'varredura' && s.material.map) s.material.map.dispose();
                 s.material.dispose();
             }
         }
